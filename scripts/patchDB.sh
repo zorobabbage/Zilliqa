@@ -19,6 +19,7 @@
 
 binaryPath=""
 patchDBPath="patchDB"
+bucketName="zilliqa-persistence"
 mbHash="" ##Fill in
 tarFileName="" ##Fill in
 
@@ -30,7 +31,8 @@ if [ -z "$binaryPath" ] || ([ ! -x $binaryPath/build/src/cmd/patchDB ] && [ ! -x
 fi
 
 
-##to do fetch from s3
+aws s3 cp s3://${bucketName}/${tarFileName} .
+
 
 (mkdir "${patchDBPath}" ; cd "${patchDBPath}"; tar -xvzf ../"${tarFileName}")
 
