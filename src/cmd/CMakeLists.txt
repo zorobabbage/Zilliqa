@@ -76,3 +76,11 @@ add_custom_command(TARGET zilliqa
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:validateDB> ${CMAKE_BINARY_DIR}/tests/Zilliqa)
 target_include_directories(validateDB PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(validateDB PUBLIC  Node Mediator Validator)
+
+add_executable(patchDB patchDB.cpp)
+add_custom_command(TARGET patchDB
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:patchDB> ${CMAKE_BINARY_DIR}/tests/Zilliqa)
+target_include_directories(patchDB PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
+target_link_libraries(patchDB PUBLIC   Zilliqa  Node)
