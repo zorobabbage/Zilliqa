@@ -83,4 +83,5 @@ add_custom_command(TARGET patchDB
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:patchDB> ${CMAKE_BINARY_DIR}/tests/Zilliqa)
 target_include_directories(patchDB PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
-target_link_libraries(patchDB PUBLIC   Zilliqa  Node)
+target_link_libraries(patchDB PUBLIC Zilliqa  Node)
+
