@@ -14,23 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# [MUST BE FILLED IN] User configuration settings
-
-
-binaryPath="/usr/local"
+bucketName="zilliqa-persistence"
+tarFileName="" ##Fill in
 patchDBPath="patchDB"
-mbHash="" ##Fill in
 
-echo -n "Enter the full path of your zilliqa source code directory: " && read path_read && [ -n "$path_read" ] && binaryPath=$path_read
+aws s3 cp s3://${bucketName}/${tarFileName} .
 
-if [ -z "$binaryPath" ] || ([ ! -x $binaryPath/build/src/cmd/patchDB ] && [ ! -x $binaryPath/src/cmd/patchDB ]); then
-    echo "Cannot find patchDB binary on the path you specified"
-    exit 1
-fi
-
-if [ -x $binaryPath/build/src/cmd/patchDB ]; then
-    $binaryPath/build/src/cmd/patchDB "${patchDBPath}/persistence" "$mbHash"
-elif [ -x  $binaryPath/src/cmd/patchDB ]; then
-   $binaryPath/src/cmd/patchDB "${patchDBPath}/persistence" "$mbHash"
-fi
-
+(mkdir "${patchDBPath}" ; cd "${patchDBPath}"; tar -xvzf ../"${tarFileName}")
