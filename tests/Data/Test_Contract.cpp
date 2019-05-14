@@ -53,6 +53,7 @@ BOOST_AUTO_TEST_SUITE(contracttest)
 
 PrivKey priv1, priv2, priv3, priv4;
 
+#if 0
 void setup() {
   bytes priv1bytes, priv2bytes, priv3bytes;
   DataConversion::HexStrToUint8Vec(
@@ -654,6 +655,7 @@ BOOST_AUTO_TEST_CASE(testChainCalls) {
 
   /* ------------------------------------------------------------------- */
 }
+#endif
 
 bool mapHandler(const std::string& index, const Json::Value& s,
                 std::map<std::string, bytes> state_entries) {
@@ -682,7 +684,7 @@ BOOST_AUTO_TEST_CASE(testStoragePerf) {
   Address ownerAddr = Account::GetAddressFromPublicKey(ownerKeyPair.second);
   const uint128_t bal{std::numeric_limits<uint128_t>::max()};
   uint64_t nonce = 0;
-  const unsigned int numDeployments = 10000;
+  const unsigned int numDeployments = 100;
   const unsigned int numMapEntries = 1000;
 
   ofstream report;
@@ -806,6 +808,7 @@ BOOST_AUTO_TEST_CASE(testStoragePerf) {
   report.close();
 }
 
+#if 0
 BOOST_AUTO_TEST_CASE(testFungibleToken) {
   INIT_STDOUT_LOGGER();
   LOG_MARKER();
@@ -1618,5 +1621,6 @@ BOOST_AUTO_TEST_CASE(testCreateContractJsonOutput) {
     return;
   }
 }
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()
