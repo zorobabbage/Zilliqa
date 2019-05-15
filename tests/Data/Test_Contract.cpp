@@ -53,7 +53,6 @@ BOOST_AUTO_TEST_SUITE(contracttest)
 
 PrivKey priv1, priv2, priv3, priv4;
 
-#if 0
 void setup() {
   bytes priv1bytes, priv2bytes, priv3bytes;
   DataConversion::HexStrToUint8Vec(
@@ -70,6 +69,7 @@ void setup() {
   priv3.Deserialize(priv3bytes, 0);
 }
 
+#if 0
 // Create Transaction to create contract
 BOOST_AUTO_TEST_CASE(testCrowdfunding) {
   INIT_STDOUT_LOGGER();
@@ -684,8 +684,8 @@ BOOST_AUTO_TEST_CASE(testStoragePerf) {
   Address ownerAddr = Account::GetAddressFromPublicKey(ownerKeyPair.second);
   const uint128_t bal{std::numeric_limits<uint128_t>::max()};
   uint64_t nonce = 0;
-  const unsigned int numDeployments = 100;
-  const unsigned int numMapEntries = 1000;
+  const unsigned int numDeployments = 1;
+  const unsigned int numMapEntries = 500000;
 
   ofstream report;
   report.open("perf_report.csv");
