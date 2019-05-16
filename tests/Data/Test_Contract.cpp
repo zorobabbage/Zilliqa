@@ -684,8 +684,8 @@ BOOST_AUTO_TEST_CASE(testStoragePerf) {
   Address ownerAddr = Account::GetAddressFromPublicKey(ownerKeyPair.second);
   const uint128_t bal{std::numeric_limits<uint128_t>::max()};
   uint64_t nonce = 0;
-  const unsigned int numDeployments = 100;
-  const unsigned int numMapEntries = 1000;
+  const unsigned int numDeployments = 1;
+  const unsigned int numMapEntries = 500000;
 
   ofstream report;
   report.open("perf_report.csv");
