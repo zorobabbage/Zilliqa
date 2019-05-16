@@ -15,10 +15,10 @@ include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 
 ##Supress deprecated warning
  
-set(JSONRPC_CXX_FLAGS "-Wno-deprecated") 
+set(JSONRPC_CXX_FLAGS "-Wno-deprecated;-fno-omit-frame-pointer")
 
 set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-               -DCMAKE_BUILD_TYPE=Release
+               -DCMAKE_BUILD_TYPE=Debug
                # Build static lib but suitable to be included in a shared lib.
                -DCMAKE_POSITION_INDEPENDENT_CODE=On
                -DBUILD_STATIC_LIBS=On
