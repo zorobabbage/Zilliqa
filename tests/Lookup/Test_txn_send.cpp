@@ -101,6 +101,9 @@ BOOST_AUTO_TEST_CASE(rectify_txns_perf) {
       }
     }
   }
+
+  while (true) {
+  }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -15,6 +15,8 @@ add_subdirectory (POW)
 add_subdirectory (RumorSpreading)
 add_subdirectory (Utils)
 add_subdirectory (Zilliqa)
+add_subdirectory (State)
+
 
 file(COPY ${CMAKE_SOURCE_DIR}/constants_local.xml DESTINATION ${CMAKE_BINARY_DIR})
 #FIXME: constants.xml is not used for local_run, thus shouldn't be copied
