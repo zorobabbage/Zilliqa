@@ -44,9 +44,18 @@ BOOST_AUTO_TEST_CASE(test_state) {
   Node node(mediator, 0, false);
   auto vd = make_shared<Validator>(mediator);
 
+  uint num_txns;
+  cin >> num_txns;
+
   mediator.RegisterColleagues(nullptr, &node, nullptr, vd.get());
 
   AccountStore::GetInstance().Init();
+
+  auto ud_from_addr = Address("DFA89866ae86632b36361d53b76c1373448C28fa");
+  auto ud_contract_one = Address("a11de7664F55F5bDf8544a9aC711691D01378b4c");
+  auto ud_contract_two = Address("9611c53BE6d1b32058b2747bdeCECed7e1216793");
+
+  node.AddBalanceToGenesisAccount();
 
   std::list<TxBlockSharedPtr> txblocks;
   if (!BlockStorage::GetBlockStorage().GetAllTxBlocks(txblocks)) {
@@ -64,7 +73,13 @@ BOOST_AUTO_TEST_CASE(test_state) {
     txBlocks.emplace_back(*txblock);
   }
 
+  uint global_counter = 0;
+  uint counter = 0;
+
   for (uint i = 1; i < txBlocks.size(); i++) {
+    if (counter > num_txns) {
+      break;
+    }
     const auto& blocknum = txBlocks.at(i).GetHeader().GetBlockNum();
     if (i % 100 == 0) {
       LOG_GENERAL(INFO, "On Tx block " << blocknum);
@@ -80,6 +95,9 @@ BOOST_AUTO_TEST_CASE(test_state) {
 
     for (const auto& mbInfo : microblockInfos) {
       MicroBlockSharedPtr mbptr;
+      if (counter > num_txns) {
+        break;
+      }
 
       if (mbInfo.m_txnRootHash == TxnHash()) {
         continue;
@@ -88,6 +106,7 @@ BOOST_AUTO_TEST_CASE(test_state) {
       if (!BlockStorage::GetBlockStorage().GetMicroBlock(
               mbInfo.m_microBlockHash, mbptr)) {
         LOG_GENERAL(WARNING, "Unable to get MB: " << mbInfo.m_microBlockHash);
+        continue;
       }
 
       for (const auto& tranHash : mbptr->GetTranHashes()) {
@@ -96,6 +115,23 @@ BOOST_AUTO_TEST_CASE(test_state) {
           LOG_GENERAL(WARNING, "Missing Tx: " << tranHash);
           continue;
         }
+        bool process = false;
+        if (tx->GetTransaction().GetSenderAddr() == ud_from_addr) {
+          process = true;
+        } else if (tx->GetTransaction().GetToAddr() == ud_contract_one) {
+          process = true;
+          counter++;
+        } else if (tx->GetTransaction().GetToAddr() == ud_contract_two) {
+          process = true;
+        }
+        if (!process) {
+          continue;
+        }
+        if (counter > num_txns) {
+          break;
+        }
+        global_counter++;
+        LOG_GENERAL(INFO, "Process txn " << global_counter);
         bool isDS = false;
         if (mbInfo.m_shardId == numShards) {
           isDS = true;
@@ -119,7 +155,9 @@ BOOST_AUTO_TEST_CASE(test_state) {
     LOG_GENERAL(WARNING, "Failed to start server");
   }
 
-  getchar();
+  while (true) {
+    ;
+  }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -95,7 +95,9 @@ bool AccountStoreSC<MAP>::UpdateAccounts(
       Account* fromAccount = this->GetAccount(fromAddr);
       if (fromAccount == nullptr) {
         LOG_GENERAL(WARNING, "Sender has no balance, reject");
-        return false;
+        this->AddAccount(fromAddr, {uint64_t() - 1, 0});  // Only for testing
+        fromAccount = this->GetAccount(fromAddr);
+        // return false;
       }
 
       uint64_t createGasPenalty = std::max(
@@ -113,7 +115,8 @@ bool AccountStoreSC<MAP>::UpdateAccounts(
       if (fromAccount->GetBalance() < gasDeposit) {
         LOG_GENERAL(WARNING,
                     "The account doesn't have enough gas to create a contract");
-        return false;
+        this->IncreaseBalance(fromAddr, (uint64_t() - 1));
+        // return false;
       }
       // Check if the sender has enough balance to pay gasDeposit and transfer
       // amount
@@ -367,7 +370,9 @@ bool AccountStoreSC<MAP>::UpdateAccounts(
       Account* fromAccount = this->GetAccount(fromAddr);
       if (fromAccount == nullptr) {
         LOG_GENERAL(WARNING, "Sender has no balance, reject");
-        return false;
+        this->AddAccount(fromAddr, {uint64_t() - 1, 0});  // Only for testing
+        fromAccount = this->GetAccount(fromAddr);
+        // return false;
       }
 
       LOG_GENERAL(INFO, "Call contract");
@@ -393,7 +398,8 @@ bool AccountStoreSC<MAP>::UpdateAccounts(
                                  << amount
                                  << ") in the txn, "
                                     "rejected");
-        return false;
+        this->IncreaseBalance(fromAddr, (uint64_t() - 1));
+        // return false;
       }
 
       m_curSenderAddr = fromAddr;

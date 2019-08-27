@@ -64,7 +64,9 @@ bool AccountStoreBase<MAP>::UpdateAccounts(const Transaction& transaction,
   Account* fromAccount = this->GetAccount(fromAddr);
   if (fromAccount == nullptr) {
     LOG_GENERAL(WARNING, "sender " << fromAddr.hex() << " not exist");
-    return false;
+    LOG_GENERAL(INFO, "adding " << (uint64_t() - 1) << " QA");
+    this->AddAccount(fromAddr, {uint64_t() - 1, 0});  // Only for testing
+    fromAccount = this->GetAccount(fromAddr);
   }
 
   if (transaction.GetGasLimit() < NORMAL_TRAN_GAS) {
@@ -95,7 +97,9 @@ bool AccountStoreBase<MAP>::UpdateAccounts(const Transaction& transaction,
                     << ") "
                        "with amount ("
                     << transaction.GetAmount() << ") in the transaction");
-    return false;
+    LOG_GENERAL(INFO, "Add " << (uint64_t() - 1));
+    IncreaseBalance(fromAddr, (uint64_t() - 1));
+    // return false;
   }
 
   if (!DecreaseBalance(fromAddr, gasDeposit)) {
