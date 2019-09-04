@@ -16,6 +16,9 @@
  */
 
 #include "Message/ZilliqaTest.pb.h"
+#include "libMessage/Messenger.h"
+#include "libMessage/ZilliqaMessage.pb.h"
+#include "libTestUtils/TestUtils.h"
 #include "libUtils/Logger.h"
 
 #define BOOST_TEST_MODULE message
@@ -56,6 +59,22 @@ BOOST_AUTO_TEST_CASE(test_optionalfield) {
   BOOST_CHECK(twoFields.field2() == 0);
   BOOST_CHECK(twoFields.field1() == oneField.field1());
   LOG_GENERAL(INFO, "twoFields.field1 = " << twoFields.field1());
+}
+
+BOOST_AUTO_TEST_CASE(test_DSBlock_Header) {
+  DSBlockHeader dsBlockHeader = TestUtils::GenerateRandomDSBlockHeader();
+
+  bytes bytesOfHeader;
+  Messenger::SetDSBlockHeader(bytesOfHeader, 0, dsBlockHeader);
+
+  bytes bytesOfHeaderV1;
+  Messenger::SetDSBlockHeaderV1(bytesOfHeaderV1, 0, dsBlockHeader);
+
+  if (bytesOfHeader == bytesOfHeaderV1) {
+    LOG_GENERAL(INFO, "The bytes of V1 and V2 is the same");
+  } else {
+    LOG_GENERAL(INFO, "The bytes of V1 and V2 is different");
+  }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

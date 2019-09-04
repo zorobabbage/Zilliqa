@@ -106,6 +106,10 @@ class Messenger {
   static bool GetMbInfoHash(const std::vector<MicroBlockInfo>& mbInfos,
                             MBInfoHash& dst);
 
+  static bool SetDSBlockHeaderV1(bytes& dst, const unsigned int offset,
+                                 const DSBlockHeader& dsBlockHeader,
+                                 bool concreteVarsOnly = false);
+
   static bool SetDSBlockHeader(bytes& dst, const unsigned int offset,
                                const DSBlockHeader& dsBlockHeader,
                                bool concreteVarsOnly = false);

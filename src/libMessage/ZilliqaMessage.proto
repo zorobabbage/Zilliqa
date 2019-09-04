@@ -53,6 +53,41 @@ message ProtoBlockHeaderBase
 }
 
 // Used in database "dsBlocks"
+message ProtoDSBlockV1
+{
+    message DSBlockHashSet
+    {
+        bytes shardinghash     = 1;  // Added in: v1.0, Deprecated in: N/A
+        bytes reservedfield    = 2;  // Added in: v1.0, Deprecated in: N/A
+        // Add new members here
+    }
+    message DSBlockHeader
+    {
+        ProtoBlockHeaderBase blockheaderbase = 1;  // Added in: v1.0, Deprecated in: N/A
+        uint32 dsdifficulty                  = 2;  // Added in: v1.0, Deprecated in: N/A, Only LSB used
+        uint32 difficulty                    = 3;  // Added in: v1.0, Deprecated in: N/A, Only LSB used
+        bytes prevhash                       = 4;  // Added in: v1.0, Deprecated in: N/A, 32 bytes
+        ByteArray leaderpubkey               = 5;  // Added in: v1.0, Deprecated in: N/A
+        uint64 blocknum                      = 6;  // Added in: v1.0, Deprecated in: N/A
+        uint64 epochnum                      = 7;  // Added in: v1.0, Deprecated in: N/A
+        ByteArray gasprice                   = 8;  // Added in: v1.0, Deprecated in: N/A
+        ByteArray swinfo                     = 9;  // Added in: v1.0, Deprecated in: N/A
+        message PowDSWinners
+        {
+            ByteArray key      = 1;  // Added in: v1.0, Deprecated in: N/A
+            ByteArray val      = 2;  // Added in: v1.0, Deprecated in: N/A
+            // Add new members here
+        }
+        repeated PowDSWinners dswinners = 10; // Added in: v1.0, Deprecated in: N/A
+        DSBlockHashSet hash    = 11; // Added in: v1.0, Deprecated in: N/A
+        // Add new members here
+    }
+    DSBlockHeader header       = 1;  // Added in: v1.0, Deprecated in: N/A
+    ProtoBlockBase blockbase   = 2;  // Added in: v1.0, Deprecated in: N/A
+    // Add new members here
+}
+
+// Used in database "dsBlocks"
 message ProtoDSBlock
 {
     message DSBlockHashSet

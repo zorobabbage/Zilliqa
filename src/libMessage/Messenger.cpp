@@ -1334,6 +1334,47 @@ void ProtobufToPeer(const ProtoPeer& protoPeer, Peer& peer) {
   peer = Peer(ipAddress, protoPeer.listenporthost());
 }
 
+void DSBlockHeaderToProtobufV1(
+    const DSBlockHeader& dsBlockHeader,
+    ProtoDSBlockV1::DSBlockHeader& protoDSBlockHeader,
+    bool concreteVarsOnly = false) {
+  ZilliqaMessage::ProtoBlockHeaderBase* protoBlockHeaderBase =
+      protoDSBlockHeader.mutable_blockheaderbase();
+  BlockHeaderBaseToProtobuf(dsBlockHeader, *protoBlockHeaderBase);
+
+  if (!concreteVarsOnly) {
+    protoDSBlockHeader.set_dsdifficulty(dsBlockHeader.GetDSDifficulty());
+    protoDSBlockHeader.set_difficulty(dsBlockHeader.GetDifficulty());
+    NumberToProtobufByteArray<uint128_t, UINT128_SIZE>(
+        dsBlockHeader.GetGasPrice(), *protoDSBlockHeader.mutable_gasprice());
+    ZilliqaMessage::ProtoDSBlockV1::DSBlockHeader::PowDSWinners* powdswinner;
+
+    for (const auto& winner : dsBlockHeader.GetDSPoWWinners()) {
+      powdswinner = protoDSBlockHeader.add_dswinners();
+      SerializableToProtobufByteArray(winner.first,
+                                      *powdswinner->mutable_key());
+      SerializableToProtobufByteArray(winner.second,
+                                      *powdswinner->mutable_val());
+    }
+  }
+
+  SerializableToProtobufByteArray(dsBlockHeader.GetLeaderPubKey(),
+                                  *protoDSBlockHeader.mutable_leaderpubkey());
+
+  protoDSBlockHeader.set_blocknum(dsBlockHeader.GetBlockNum());
+  protoDSBlockHeader.set_epochnum(dsBlockHeader.GetEpochNum());
+  SerializableToProtobufByteArray(dsBlockHeader.GetSWInfo(),
+                                  *protoDSBlockHeader.mutable_swinfo());
+
+  ZilliqaMessage::ProtoDSBlockV1::DSBlockHashSet* protoHeaderHash =
+      protoDSBlockHeader.mutable_hash();
+  protoHeaderHash->set_shardinghash(dsBlockHeader.GetShardingHash().data(),
+                                    dsBlockHeader.GetShardingHash().size);
+  protoHeaderHash->set_reservedfield(
+      dsBlockHeader.GetHashSetReservedField().data(),
+      dsBlockHeader.GetHashSetReservedField().size());
+}
+
 void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
                              ProtoDSBlock::DSBlockHeader& protoDSBlockHeader,
                              bool concreteVarsOnly = false) {
@@ -2806,6 +2847,21 @@ bool Messenger::GetMbInfoHash(const std::vector<MicroBlockInfo>& mbInfos,
   copy(tmp.begin(), tmp.end(), dst.asArray().begin());
 
   return true;
+}
+
+bool Messenger::SetDSBlockHeaderV1(bytes& dst, const unsigned int offset,
+                                   const DSBlockHeader& dsBlockHeader,
+                                   bool concreteVarsOnly) {
+  ProtoDSBlockV1::DSBlockHeader result;
+
+  DSBlockHeaderToProtobufV1(dsBlockHeader, result, concreteVarsOnly);
+
+  if (!result.IsInitialized()) {
+    LOG_GENERAL(WARNING, "ProtoDSBlock::DSBlockHeader initialization failed");
+    return false;
+  }
+
+  return SerializeToArray(result, dst, offset);
 }
 
 bool Messenger::SetDSBlockHeader(bytes& dst, const unsigned int offset,
