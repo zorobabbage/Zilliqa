@@ -75,6 +75,8 @@ BOOST_AUTO_TEST_CASE(test_DSBlock_Header) {
   } else {
     LOG_GENERAL(INFO, "The bytes of V1 and V2 is different");
   }
+
+  BOOST_REQUIRE(bytesOfHeader == bytesOfHeaderV1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
