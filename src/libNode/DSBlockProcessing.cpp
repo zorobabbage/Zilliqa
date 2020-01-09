@@ -503,6 +503,11 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     return false;
   }
 
+  // For recovery entire network, the ipMapping.xml should be removed after
+  // first ds epoch generated. Because if RejoinAsNormal happened before first
+  // ds epoch, ipMapping.xml still needed to map the ds committee to correct ip.
+  RemoveIpMapping();
+
   LogReceivedDSBlockDetails(dsblock);
 
   // Add to block chain and Store the DS block to disk.

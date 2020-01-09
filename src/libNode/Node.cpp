@@ -743,8 +743,6 @@ bool Node::StartRetrieveHistory(const SyncType syncType,
         }
       }
     }
-
-    RemoveIpMapping();
   }
 
   bool bInShardStructure = false;
