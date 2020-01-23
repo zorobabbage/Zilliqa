@@ -249,6 +249,9 @@
         <INPUT_CODE>input.scilla</INPUT_CODE>
         <ENABLE_SCILLA_MULTI_VERSION>true</ENABLE_SCILLA_MULTI_VERSION>
         <FIELDS_MAP_DEPTH_INDICATOR>_fields_map_depth</FIELDS_MAP_DEPTH_INDICATOR>
+        <MAP_DEPTH_INDICATOR>_depth</MAP_DEPTH_INDICATOR>
+        <SCILLA_VERSION_INDICATOR>_version</SCILLA_VERSION_INDICATOR>
+        <TYPE_INDICATOR>_type</TYPE_INDICATOR>
         <LOG_SC>false</LOG_SC>
     </smart_contract>
     <tests>

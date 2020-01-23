@@ -220,6 +220,13 @@ class AccountStore
 
   /// clean the data for revert the AccountStore
   void InitRevertibles();
+
+  /// Used for exposing fetching other contract states for scilla IPC from
+  /// AccountStoreTemp
+  bool FetchExternalStateValueTemp(const Address& callerAddr,
+                                   const Address& externalAddr,
+                                   const bytes& query, bytes& value,
+                                   bool& found, bytes& type);
 };
 
 #endif  // ZILLIQA_SRC_LIBDATA_ACCOUNTDATA_ACCOUNTSTORE_H_

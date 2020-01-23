@@ -181,9 +181,11 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
 
   /// verify the return from scilla_checker for deployment is valid
   /// expose in protected for using by data migration
-  bool ParseContractCheckerOutput(const std::string& checkerPrint,
+  bool ParseContractCheckerOutput(const Address& addr,
+                                  const std::string& checkerPrint,
                                   TransactionReceipt& receipt,
-                                  bytes& map_depth_data, uint64_t& gasRemained);
+                                  std::map<std::string, bytes>& metadata,
+                                  uint64_t& gasRemained);
 
   /// external interface for processing txn
   bool UpdateAccounts(const uint64_t& blockNum, const unsigned int& numShards,
