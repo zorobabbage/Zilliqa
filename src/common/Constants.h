@@ -370,6 +370,9 @@ extern const std::string LIBRARY_CODE_EXTENSION;
 extern const std::string EXTLIB_FOLDER;
 extern const bool ENABLE_SCILLA_MULTI_VERSION;
 extern const std::string FIELDS_MAP_DEPTH_INDICATOR;
+extern const std::string MAP_DEPTH_INDICATOR;
+extern const std::string SCILLA_VERSION_INDICATOR;
+extern const std::string TYPE_INDICATOR;
 extern const bool LOG_SC;
 extern const bool DISABLE_SCILLA_LIB;
 

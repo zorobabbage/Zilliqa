@@ -158,9 +158,6 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
                        unsigned int s_offset, bytes& dst, unsigned int d_offset,
                        bool& foundVal);
 
-  bool FetchContractFieldsMapDepth(const dev::h160& address,
-                                   Json::Value& map_depth_json, bool temp);
-
   void InsertValueToStateJson(Json::Value& _json, std::string key,
                               std::string value, bool unquote = true,
                               bool nokey = false);

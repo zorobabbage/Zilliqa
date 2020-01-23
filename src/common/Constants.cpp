@@ -529,6 +529,12 @@ const bool ENABLE_SCILLA_MULTI_VERSION{
     "true"};
 const string FIELDS_MAP_DEPTH_INDICATOR{
     ReadConstantString("FIELDS_MAP_DEPTH_INDICATOR", "node.smart_contract.")};
+const string MAP_DEPTH_INDICATOR{
+    ReadConstantString("MAP_DEPTH_INDICATOR", "node.smart_contract.")};
+const string SCILLA_VERSION_INDICATOR{
+    ReadConstantString("SCILLA_VERSION_INDICATOR", "node.smart_contract.")};
+const string TYPE_INDICATOR{
+    ReadConstantString("TYPE_INDICATOR", "node.smart_contract.")};
 const bool LOG_SC{ReadConstantString("LOG_SC", "node.smart_contract.") ==
                   "true"};
 const bool DISABLE_SCILLA_LIB{
