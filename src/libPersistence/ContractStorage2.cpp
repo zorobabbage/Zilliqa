@@ -145,7 +145,8 @@ string ContractStorage2::RemoveAddrFromKey(const std::string& key) {
 
 bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
                                        unsigned int s_offset, bytes& dst,
-                                       unsigned int d_offset, bool& foundVal) {
+                                       unsigned int d_offset, bool& foundVal,
+                                       bool getType, string& type) {
   if (LOG_SC) {
     LOG_MARKER();
   }
@@ -180,6 +181,19 @@ bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
       query.name() == MAP_DEPTH_INDICATOR || query.name() == TYPE_INDICATOR) {
     LOG_GENERAL(WARNING, "invalid query: " << query.name());
     return false;
+  }
+
+  if (getType) {
+    std::map<std::string, bytes> t_type;
+    std::string type_key =
+        GenerateStorageKey(addr, TYPE_INDICATOR, {query.name()});
+    FetchStateDataForKey(t_type, type_key, true);
+    if (t_type.empty()) {
+      LOG_GENERAL(WARNING, "Failed to fetch type for addr: "
+                               << addr.hex() << " vname: " << query.name());
+      return false;
+    }
+    type = DataConversion::CharArrayToString(t_type[type_key]);
   }
 
   string key = addr.hex() + SCILLA_INDEX_SEPARATOR + query.name() +
@@ -379,14 +393,43 @@ bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
   return SerializeToArray(value, dst, 0);
 }
 
-// void ContractStorage2::FetchExternalStateValue(const dev::h160& caller, const
-// dev::h160& target, const bytes& src,
-//                                                unsigned int s_offset, bytes&
-//                                                dst, unsigned int d_offset,
-//                                                bool& foundVal, string& type)
-//                                                {
+bool ContractStorage2::FetchExternalStateValue(
+    const dev::h160& caller, const dev::h160& target, const bytes& src,
+    unsigned int s_offset, bytes& dst, unsigned int d_offset, bool& foundVal,
+    string& type, uint32_t caller_version) {
+  // get caller version if not available
+  if (caller_version == std::numeric_limits<uint32_t>::max()) {
+    std::map<std::string, bytes> t_caller_version;
+    string version_key =
+        GenerateStorageKey(caller, SCILLA_VERSION_INDICATOR, {});
+    FetchStateDataForKey(t_caller_version, version_key, true);
+    if (t_caller_version.empty()) {
+      return false;
+    }
+    caller_version = std::stoul(
+        DataConversion::CharArrayToString(t_caller_version[version_key]));
+  }
 
-// }
+  // get target version if not available
+  std::map<std::string, bytes> t_target_version;
+  string version_key = GenerateStorageKey(target, SCILLA_VERSION_INDICATOR, {});
+  FetchStateDataForKey(t_target_version, version_key, true);
+  if (t_target_version.empty()) {
+    return false;
+  }
+  uint32_t target_version = std::stoul(
+      DataConversion::CharArrayToString(t_target_version[version_key]));
+
+  if (target_version != caller_version) {
+    LOG_GENERAL(WARNING, "Caller(" << caller_version << ") target("
+                                   << target_version << ") version mismatch");
+    return false;
+  }
+
+  // get value
+  return FetchStateValue(target, src, s_offset, dst, d_offset, foundVal, true,
+                         type);
+}
 
 void ContractStorage2::DeleteByPrefix(const string& prefix) {
   auto p = t_stateDataMap.lower_bound(prefix);
@@ -557,10 +600,9 @@ bool ContractStorage2::FetchStateJsonForContract(Json::Value& _json,
     FetchStateDataForKey(map_depth, map_depth_key, temp);
 
     jsonMapWrapper(_json[vname], map_indices, state.second, 0,
-                   (map_depth.find(map_depth_key) != map_depth.end())
+                   !map_depth.empty()
                        ? std::stoi(DataConversion::CharArrayToString(
-                                       map_depth[map_depth_key]),
-                                   nullptr, 0)
+                             map_depth[map_depth_key]))
                        : -1);
   }
 
