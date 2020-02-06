@@ -229,7 +229,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       }
 
       // prepare IPC with current contract address
-      m_scillaIPCServer->setContractAddress(toAddr);
+      m_scillaIPCServer->setContractAddressVer(toAddr, scilla_version);
 
       // ************************************************************************
       // Undergo scilla checker
@@ -499,7 +499,12 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       }
 
       // prepare IPC with current contract address
-      m_scillaIPCServer->setContractAddress(toAddr);
+      uint32_t scilla_version;
+      if (!toAccount->GetScillaVersion(scilla_version)) {
+        LOG_GENERAL(WARNING, "Failed to get scilla_version");
+        return false;
+      }
+      m_scillaIPCServer->setContractAddressVer(toAddr, scilla_version);
 
       std::string runnerPrint;
       bool ret = true;
@@ -1183,7 +1188,6 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
     return false;
   }
 
-  std::vector<Contract::StateEntry> state_entries;
   try {
     for (const auto& e : _json["events"]) {
       LogEntry entry;
@@ -1221,6 +1225,10 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
     Address curContractAddr = m_curContractAddr;
     for (const auto& msg : _json["messages"]) {
       LOG_GENERAL(INFO, "Process new message");
+
+      // a buffer for `ret` flag to be reset per loop
+      bool t_ret = ret;
+
       // Non-null messages must have few mandatory fields.
       if (!msg.isMember("_tag") || !msg.isMember("_amount") ||
           !msg.isMember("params") || !msg.isMember("_recipient")) {
@@ -1260,7 +1268,7 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
           receipt.AddError(BALANCE_TRANSFER_FAILED);
           return false;
         } else {
-          ret = true;
+          t_ret = true;
         }
       }
 
@@ -1270,7 +1278,7 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
         LOG_GENERAL(INFO,
                     "_tag in the scilla output is empty when invoking a "
                     "contract, transaction finished");
-        ret = true;
+        t_ret = true;
       }
 
       m_storageRootUpdateBufferAtomic.emplace(curContractAddr);
@@ -1282,7 +1290,7 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
         LOG_GENERAL(DEBUG, "Gas used = " << (startGas - gasRemained));
       }
 
-      if (ret) {
+      if (t_ret) {
         // return true;
         continue;
       }
@@ -1335,7 +1343,13 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
       }
 
       // prepare IPC with the recipient contract address
-      m_scillaIPCServer->setContractAddress(recipient);
+      uint32_t scilla_version;
+      if (!account->GetScillaVersion(scilla_version)) {
+        LOG_GENERAL(WARNING, "Failed to get scilla_version");
+        return false;
+      }
+      m_scillaIPCServer->setContractAddressVer(recipient, scilla_version);
+
       std::string runnerPrint;
       bool result = true;
       int pid = -1;
