@@ -938,7 +938,7 @@ bool AccountStoreSC<MAP>::ParseContractCheckerOutput(
               Contract::ContractStorage2::GetContractStorage()
                   .GenerateStorageKey(addr, TYPE_INDICATOR,
                                       {field["vname"].asString()}),
-              DataConversion::StringToCharArray(field["depth"].asString()));
+              DataConversion::StringToCharArray(field["type"].asString()));
         } else {
           LOG_GENERAL(WARNING, "Unexpected field detected" << checkerPrint);
           return false;
