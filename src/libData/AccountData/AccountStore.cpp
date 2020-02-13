@@ -544,11 +544,11 @@ bool AccountStore::MigrateContractStates2(
     // invoke scilla checker
     std::string checkerPrint;
     bool ret_checker = true;
-    int pid = -1;
     TransactionReceipt receipt;
     uint64_t gasRem = UINT64_MAX;
-    InvokeScillaChecker(checkerPrint, ret_checker, pid, gasRem, receipt,
-                        is_library);
+    InvokeInterpreter(CHECKER, checkerPrint, scilla_version, is_library, gasRem,
+                      std::numeric_limits<uint128_t>::max(), ret_checker,
+                      receipt);
 
     if (!ret_checker) {
       LOG_GENERAL(WARNING, "InvokeScillaChecker failed");

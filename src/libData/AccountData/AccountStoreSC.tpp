@@ -569,14 +569,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       }
 
       // prepare IPC with current contract address
-      uint32_t scilla_version;
-      if (!toAccount->GetScillaVersion(scilla_version)) {
-        LOG_GENERAL(WARNING, "Failed to get scilla_version");
-        return false;
-      }
       m_scillaIPCServer->setContractAddressVer(toAddr, scilla_version);
-
-      Contract::ContractStorage2::GetContractStorage().BufferCurrentState();
       Contract::ContractStorage2::GetContractStorage()
           .ResetBufferedAtomicState();
 
@@ -1439,7 +1432,7 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
       }
 
       // prepare IPC with the recipient contract address
-      m_scillaIPCServer->setContractAddress(recipient);
+      m_scillaIPCServer->setContractAddressVer(recipient, scilla_version);
       std::string runnerPrint;
       bool result = true;
 

@@ -541,9 +541,8 @@ bool ContractStorage2::FetchStateJsonForContract(Json::Value& _json,
 
     string vname = fragments.at(1);
 
-    if (vname == CONTRACT_ADDR_INDICATOR ||
-        vname == SCILLA_VERSION_INDICATOR || vname == MAP_DEPTH_INDICATOR ||
-        vname == TYPE_INDICATOR) {
+    if (vname == CONTRACT_ADDR_INDICATOR || vname == SCILLA_VERSION_INDICATOR ||
+        vname == MAP_DEPTH_INDICATOR || vname == TYPE_INDICATOR) {
       continue;
     }
 
@@ -1146,7 +1145,8 @@ dev::h256 ContractStorage2::UpdateContractTrieCore(
     }
 
     for (const auto& index : toDeletedIndices) {
-      bytes b_index = DataConversion::StringToCharArray(RemoveAddrFromKey(index));
+      bytes b_index =
+          DataConversion::StringToCharArray(RemoveAddrFromKey(index));
       if (m_tempTrie.contains(b_index)) {
         m_tempTrie.remove(b_index);
       }
@@ -1171,7 +1171,8 @@ dev::h256 ContractStorage2::UpdateContractTrieCore(
     }
 
     for (const auto& index : toDeletedIndices) {
-      bytes b_index = DataConversion::StringToCharArray(RemoveAddrFromKey(index));
+      bytes b_index =
+          DataConversion::StringToCharArray(RemoveAddrFromKey(index));
       if (m_permTrie.contains(b_index)) {
         m_permTrie.remove(b_index);
       }
