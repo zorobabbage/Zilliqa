@@ -299,6 +299,7 @@ endif()
 # installation
 set_target_properties(zilliqa sendcmd genkeypair getpub getaddr gentxn signmultisig verifymultisig  gensigninitialds grepperf getnetworkhistory getrewardhistory validateDB restore zilliqad genTxnBodiesFromS3 isolatedServer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+
 set_target_properties(Common Trie ethash NAT
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
