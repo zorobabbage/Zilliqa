@@ -47,6 +47,7 @@
 #include "libPersistence/BlockStorage.h"
 #include "libServer/GetWorkServer.h"
 #include "libServer/LookupServer.h"
+#include "libServer/StakingServer.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/GetTxnFromFile.h"
@@ -56,6 +57,8 @@
 
 using namespace std;
 using namespace boost::multiprecision;
+
+const int32_t MAX_FETCH_BLOCK_RETRIES = 5;
 
 Lookup::Lookup(Mediator& mediator, SyncType syncType) : m_mediator(mediator) {
   m_syncType.store(SyncType::NO_SYNC);
@@ -73,6 +76,7 @@ Lookup::Lookup(Mediator& mediator, SyncType syncType) : m_mediator(mediator) {
   if (LOOKUP_NODE_MODE) {
     SetDSCommitteInfo();
   }
+  m_sendSCCallsToDS = false;
 }
 
 Lookup::~Lookup() {}
@@ -87,6 +91,7 @@ void Lookup::InitAsNewJoiner() {
     std::lock_guard<mutex> lock(m_mediator.m_mutexDSCommittee);
     m_mediator.m_DSCommittee->clear();
   }
+
   AccountStore::GetInstance().Init();
 
   Synchronizer tempSyncer;
@@ -121,7 +126,8 @@ void Lookup::InitSync() {
       LOG_GENERAL(INFO,
                   "TxBlockNum " << txBlockNum << " DSBlockNum: " << dsBlockNum);
       ComposeAndSendGetDirectoryBlocksFromSeed(
-          m_mediator.m_blocklinkchain.GetLatestIndex() + 1);
+          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, true,
+          LOOKUP_NODE_MODE);
       GetTxBlockFromSeedNodes(txBlockNum, 0);
 
       this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
@@ -130,8 +136,7 @@ void Lookup::InitSync() {
     ComposeAndSendGetShardingStructureFromSeed();
     std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
     if (cv_shardStruct.wait_for(
-            cv_lk,
-            std::chrono::seconds(NEW_LOOKUP_GETSHARD_TIMEOUT_IN_SECONDS)) ==
+            cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
         std::cv_status::timeout) {
       LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
     } else {
@@ -245,7 +250,7 @@ std::once_flag generateReceiverOnce;
 Address GenOneReceiver() {
   static Address receiverAddr;
   std::call_once(generateReceiverOnce, []() {
-    auto receiver = Schnorr::GetInstance().GenKeyPair();
+    auto receiver = Schnorr::GenKeyPair();
     receiverAddr = Account::GetAddressFromPublicKey(receiver.second);
     LOG_GENERAL(INFO, "Generate testing transaction receiver " << receiverAddr);
   });
@@ -270,7 +275,7 @@ Transaction CreateValidTestingTransaction(PrivKey& fromPrivKey,
   // txn.SerializeWithoutSignature(buf, 0);
 
   // Signature sig;
-  // Schnorr::GetInstance().Sign(buf, fromPrivKey, fromPubKey, sig);
+  // Schnorr::Sign(buf, fromPrivKey, fromPubKey, sig);
 
   // bytes sigBuf;
   // sig.Serialize(sigBuf, 0);
@@ -341,10 +346,6 @@ bool Lookup::GenTxnToSend(size_t num_txn,
   }
 
   unsigned int NUM_TXN_TO_DS = num_txn / GENESIS_WALLETS.size();
-
-  if (numShards == 0) {
-    return false;
-  }
 
   for (auto& addrStr : GENESIS_WALLETS) {
     bytes addrBytes;
@@ -437,7 +438,7 @@ void Lookup::SendMessageToLookupNodes(const bytes& message) const {
     for (const auto& node : m_lookupNodes) {
       auto resolved_ip = TryGettingResolvedIP(node.second);
 
-      Blacklist::GetInstance().Exclude(
+      Blacklist::GetInstance().Whitelist(
           resolved_ip);  // exclude this lookup ip from blacklisting
 
       Peer tmp(resolved_ip, node.second.GetListenPortHost());
@@ -467,7 +468,7 @@ void Lookup::SendMessageToLookupNodesSerial(const bytes& message) const {
 
       auto resolved_ip = TryGettingResolvedIP(node.second);
 
-      Blacklist::GetInstance().Exclude(
+      Blacklist::GetInstance().Whitelist(
           resolved_ip);  // exclude this lookup ip from blacklisting
 
       Peer tmp(resolved_ip, node.second.GetListenPortHost());
@@ -510,7 +511,7 @@ void Lookup::SendMessageToRandomLookupNode(const bytes& message) const {
   int index = RandomGenerator::GetRandomInt(tmp.size());
   auto resolved_ip = TryGettingResolvedIP(tmp[index].second);
 
-  Blacklist::GetInstance().Exclude(
+  Blacklist::GetInstance().Whitelist(
       resolved_ip);  // exclude this lookup ip from blacklisting
   Peer tmpPeer(resolved_ip, tmp[index].second.GetListenPortHost());
   LOG_GENERAL(INFO, "Sending to Random lookup: " << tmpPeer);
@@ -527,7 +528,7 @@ void Lookup::SendMessageToSeedNodes(const bytes& message) const {
     for (const auto& node : m_seedNodes) {
       auto resolved_ip = TryGettingResolvedIP(node.second);
 
-      Blacklist::GetInstance().Exclude(
+      Blacklist::GetInstance().Whitelist(
           resolved_ip);  // exclude this lookup ip from blacklisting
       Peer tmpPeer(resolved_ip, node.second.GetListenPortHost());
       LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
@@ -590,7 +591,8 @@ bool Lookup::GetStateFromSeedNodes() {
 }
 
 bytes Lookup::ComposeGetDSBlockMessage(uint64_t lowBlockNum,
-                                       uint64_t highBlockNum) {
+                                       uint64_t highBlockNum,
+                                       const bool includeMinerInfo) {
   LOG_MARKER();
 
   bytes getDSBlockMessage = {MessageType::LOOKUP,
@@ -598,7 +600,7 @@ bytes Lookup::ComposeGetDSBlockMessage(uint64_t lowBlockNum,
 
   if (!Messenger::SetLookupGetDSBlockFromSeed(
           getDSBlockMessage, MessageOffset::BODY, lowBlockNum, highBlockNum,
-          m_mediator.m_selfPeer.m_listenPortHost)) {
+          m_mediator.m_selfPeer.m_listenPortHost, includeMinerInfo)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetLookupGetDSBlockFromSeed failed.");
     return {};
@@ -612,21 +614,23 @@ bytes Lookup::ComposeGetDSBlockMessage(uint64_t lowBlockNum,
 // lowBlockNum = 0 => lowBlockNum set to 1
 // highBlockNum = 0 => Latest block number
 bool Lookup::GetDSBlockFromLookupNodes(uint64_t lowBlockNum,
-                                       uint64_t highBlockNum) {
+                                       uint64_t highBlockNum,
+                                       const bool includeMinerInfo) {
   LOG_MARKER();
   SendMessageToRandomLookupNode(
-      ComposeGetDSBlockMessage(lowBlockNum, highBlockNum));
+      ComposeGetDSBlockMessage(lowBlockNum, highBlockNum, includeMinerInfo));
   return true;
 }
 
 bool Lookup::GetDSBlockFromSeedNodes(uint64_t lowBlockNum,
-                                     uint64_t highBlockNum) {
+                                     uint64_t highBlockNum,
+                                     const bool includeMinerInfo) {
   LOG_MARKER();
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
             "ComposeGetDSBlockMessage for blocks " << lowBlockNum << " to "
                                                    << highBlockNum);
   SendMessageToRandomSeedNode(
-      ComposeGetDSBlockMessage(lowBlockNum, highBlockNum));
+      ComposeGetDSBlockMessage(lowBlockNum, highBlockNum, includeMinerInfo));
   return true;
 }
 
@@ -972,9 +976,11 @@ bool Lookup::ProcessGetDSBlockFromSeed(const bytes& message,
   uint64_t lowBlockNum = 0;
   uint64_t highBlockNum = 0;
   uint32_t portNo = 0;
+  bool includeMinerInfo = false;
 
   if (!Messenger::GetLookupGetDSBlockFromSeed(message, offset, lowBlockNum,
-                                              highBlockNum, portNo)) {
+                                              highBlockNum, portNo,
+                                              includeMinerInfo)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::GetLookupGetDSBlockFromSeed failed.");
     return false;
@@ -987,12 +993,12 @@ bool Lookup::ProcessGetDSBlockFromSeed(const bytes& message,
                                                       << lowBlockNum << " to "
                                                       << highBlockNum);
 
-  bytes dsBlockMessage = {MessageType::LOOKUP,
-                          LookupInstructionType::SETDSBLOCKFROMSEED};
+  bytes returnMsg = {MessageType::LOOKUP,
+                     LookupInstructionType::SETDSBLOCKFROMSEED};
 
-  if (!Messenger::SetLookupSetDSBlockFromSeed(
-          dsBlockMessage, MessageOffset::BODY, lowBlockNum, highBlockNum,
-          m_mediator.m_selfKey, dsBlocks)) {
+  if (!Messenger::SetLookupSetDSBlockFromSeed(returnMsg, MessageOffset::BODY,
+                                              lowBlockNum, highBlockNum,
+                                              m_mediator.m_selfKey, dsBlocks)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetLookupSetDSBlockFromSeed failed.");
     return false;
@@ -1000,7 +1006,51 @@ bool Lookup::ProcessGetDSBlockFromSeed(const bytes& message,
 
   Peer requestingNode(from.m_ipAddress, portNo);
   LOG_GENERAL(INFO, requestingNode);
-  P2PComm::GetInstance().SendMessage(requestingNode, dsBlockMessage);
+  P2PComm::GetInstance().SendMessage(requestingNode, returnMsg);
+
+  // Send minerInfo as a separate message since it is not critical information
+  if (includeMinerInfo) {
+    LOG_GENERAL(INFO, "Miner info requested");
+    map<uint64_t, pair<MinerInfoDSComm, MinerInfoShards>> minerInfoPerDS;
+    for (const auto& dsBlock : dsBlocks) {
+      const uint64_t dsBlockNum = dsBlock.GetHeader().GetBlockNum();
+      MinerInfoDSComm minerInfoDSComm;
+      MinerInfoShards minerInfoShards;
+      if (!BlockStorage::GetBlockStorage().GetMinerInfoDSComm(
+              dsBlockNum, minerInfoDSComm)) {
+        LOG_GENERAL(WARNING,
+                    "GetMinerInfoDSComm failed for block " << dsBlockNum);
+        continue;
+      }
+      if (!BlockStorage::GetBlockStorage().GetMinerInfoShards(
+              dsBlockNum, minerInfoShards)) {
+        LOG_GENERAL(WARNING,
+                    "GetMinerInfoShards failed for block " << dsBlockNum);
+        continue;
+      }
+      minerInfoPerDS.emplace(dsBlockNum,
+                             make_pair(minerInfoDSComm, minerInfoShards));
+      LOG_GENERAL(INFO, "Added info for " << dsBlockNum);
+    }
+
+    if (minerInfoPerDS.size() > 0) {
+      // Ok to reuse returnMsg at this point
+      returnMsg = {MessageType::LOOKUP,
+                   LookupInstructionType::SETMINERINFOFROMSEED};
+      if (!Messenger::SetLookupSetMinerInfoFromSeed(
+              returnMsg, MessageOffset::BODY, m_mediator.m_selfKey,
+              minerInfoPerDS)) {
+        LOG_GENERAL(WARNING,
+                    "Messenger::SetLookupSetMinerInfoFromSeed failed.");
+        return false;
+      }
+
+      P2PComm::GetInstance().SendMessage(requestingNode, returnMsg);
+      LOG_GENERAL(INFO, "Sent miner info. Count=" << minerInfoPerDS.size());
+    } else {
+      LOG_GENERAL(INFO, "No miner info sent");
+    }
+  }
 
   return true;
 }
@@ -1386,7 +1436,8 @@ bool Lookup::ProcessSetShardFromSeed([[gnu::unused]] const bytes& message,
     return false;
   }
 
-  if (!VerifySenderNode(GetLookupNodesStatic(), lookupPubKey)) {
+  if (!(VerifySenderNode(GetLookupNodesStatic(), lookupPubKey) ||
+        VerifySenderNode(GetSeedNodes(), lookupPubKey))) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "The message sender pubkey: "
                   << lookupPubKey << " is not in my lookup node list.");
@@ -1405,24 +1456,6 @@ bool Lookup::ProcessSetShardFromSeed([[gnu::unused]] const bytes& message,
   m_mediator.m_ds->m_shards = move(shards);
 
   cv_shardStruct.notify_all();
-
-  return true;
-}
-
-// UNUSED
-bool Lookup::GetShardFromLookup() {
-  LOG_MARKER();
-
-  bytes msg = {MessageType::LOOKUP, LookupInstructionType::GETSHARDSFROMSEED};
-
-  if (!Messenger::SetLookupGetShardsFromSeed(
-          msg, MessageOffset::BODY, m_mediator.m_selfPeer.m_listenPortHost)) {
-    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
-              "Messenger::SetLookupGetShardsFromSeed failed.");
-    return false;
-  }
-
-  SendMessageToRandomLookupNode(msg);
 
   return true;
 }
@@ -1516,7 +1549,7 @@ bool Lookup::ProcessGetMicroBlockFromLookup(
     LOG_GENERAL(INFO, "[SendMB]"
                           << "Request for microBlockHash " << mbhash);
     shared_ptr<MicroBlock> mbptr;
-    int retryCount = 5;
+    int retryCount = MAX_FETCH_BLOCK_RETRIES;
 
     while (retryCount-- > 0) {
       if (!BlockStorage::GetBlockStorage().GetMicroBlock(mbhash, mbptr)) {
@@ -1613,6 +1646,128 @@ void Lookup::SendGetMicroBlockFromLookup(const vector<BlockHash>& mbHashes) {
   SendMessageToRandomLookupNode(msg);
 }
 
+bool Lookup::ProcessGetCosigsRewardsFromSeed(
+    [[gnu::unused]] const bytes& message, [[gnu::unused]] unsigned int offset,
+    [[gnu::unused]] const Peer& from) {
+  LOG_MARKER();
+
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Function not expected to be called from non-lookup node");
+    return false;
+  }
+
+  // verify if sender is from know DS Committee
+  const uint128_t& ipSenderAddr = from.m_ipAddress;
+  {
+    lock_guard<mutex> g(m_mediator.m_mutexDSCommittee);
+    if (!VerifySenderNode(*m_mediator.m_DSCommittee, ipSenderAddr)) {
+      LOG_GENERAL(
+          WARNING,
+          "Requesting IP : "
+              << from.GetPrintableIPAddress()
+              << " is not in Present DS Committee list. Ignore the request");
+      return false;
+    }
+  }
+
+  uint64_t blockNum;
+  uint32_t portNo = 0;
+  PubKey dsPubKey;
+  if (!Messenger::GetLookupGetCosigsRewardsFromSeed(message, offset, dsPubKey,
+                                                    blockNum, portNo)) {
+    LOG_GENERAL(WARNING, "Failed to process");
+    return false;
+  }
+
+  const uint64_t& currDsEpoch =
+      m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetEpochNum();
+  if (blockNum < currDsEpoch) {
+    LOG_GENERAL(WARNING,
+                "Requested cosigs/rewards for txBlock that is beyond the "
+                "current DS epoch "
+                "(requested txblk  :"
+                    << blockNum << ", curr DS Epoch : " << currDsEpoch << ")");
+    return false;
+  }
+
+  {
+    lock_guard<mutex> g(m_mediator.m_mutexDSCommittee);
+    if (!VerifySenderNode(*m_mediator.m_DSCommittee, dsPubKey)) {
+      LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
+                "The message sender pubkey: "
+                    << dsPubKey << " is not in current ds committee list.");
+      return false;
+    }
+  }
+
+  LOG_GENERAL(INFO, "Request for cosig/rewards for blockNum " << blockNum);
+
+  Peer requestingNode(ipSenderAddr, portNo);
+  vector<MicroBlock> retMicroBlocks;
+
+  TxBlockSharedPtr txblkPtr;
+  int retryCount = MAX_FETCH_BLOCK_RETRIES;
+  while (retryCount > 0) {
+    if (!BlockStorage::GetBlockStorage().GetTxBlock(blockNum, txblkPtr)) {
+      LOG_GENERAL(WARNING,
+                  "Failed to fetch tx block " << blockNum << " , retry... ");
+      this_thread::sleep_for(chrono::seconds(1));
+    } else {
+      break;
+    }
+
+    --retryCount;
+  }
+
+  if (retryCount == 0) {
+    LOG_GENERAL(WARNING, "Failed to fetch tx block, giving up !");
+    return false;
+  }
+
+  const auto& microblockInfos = txblkPtr->GetMicroBlockInfos();
+  std::vector<MicroBlock> microblocks;
+  for (const auto& mbInfo : microblockInfos) {
+    if (mbInfo.m_shardId ==
+        m_mediator.m_ds->GetNumShards()) {  // ignore ds microblock
+      continue;
+    }
+    MicroBlockSharedPtr mbptr;
+    retryCount = MAX_FETCH_BLOCK_RETRIES;
+    while (retryCount > 0) {
+      if (!BlockStorage::GetBlockStorage().GetMicroBlock(
+              mbInfo.m_microBlockHash, mbptr)) {
+        LOG_GENERAL(WARNING, "Could not get MicroBlock "
+                                 << mbInfo.m_microBlockHash << ", retry..");
+        this_thread::sleep_for(chrono::seconds(1));
+      } else {
+        break;
+      }
+
+      --retryCount;
+    }
+    if (retryCount == 0) {
+      LOG_GENERAL(WARNING, "Failed to fetch MicroBlock "
+                               << mbInfo.m_microBlockHash << " , giving up !");
+      return false;
+    }
+    microblocks.emplace_back(*mbptr);
+  }
+
+  bytes retMsg = {MessageType::DIRECTORY,
+                  DSInstructionType::SETCOSIGSREWARDSFROMSEED};
+
+  if (!Messenger::SetLookupSetCosigsRewardsFromSeed(
+          retMsg, MessageOffset::BODY, m_mediator.m_selfKey, blockNum,
+          microblocks, *txblkPtr, m_mediator.m_ds->GetNumShards())) {
+    LOG_GENERAL(WARNING, "Failed to Process ");
+    return false;
+  }
+
+  P2PComm::GetInstance().SendMessage(requestingNode, retMsg);
+  return true;
+}
+
 bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
                                       const Peer& from) {
   LOG_MARKER();
@@ -1706,20 +1861,17 @@ bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
     return false;
   }
 
-  bool isVerif = true;
-
   for (i = 0; i < m_mediator.m_blocklinkchain.GetBuiltDSComm().size(); i++) {
     if (!(dsNodes.at(i).first ==
           m_mediator.m_blocklinkchain.GetBuiltDSComm().at(i).first)) {
       LOG_GENERAL(WARNING, "Mis-match of ds comm at index " << i);
-      isVerif = false;
-      break;
+      lock_guard<mutex> g(m_mediator.m_mutexDSCommittee);
+      m_mediator.m_DSCommittee->clear();
+      return false;
     }
   }
 
-  if (isVerif) {
-    LOG_GENERAL(INFO, "[DSINFOVERIF] Success");
-  }
+  LOG_GENERAL(INFO, "[DSINFOVERIF] Success");
 
   lock_guard<mutex> g(m_mediator.m_mutexDSCommittee);
   *m_mediator.m_DSCommittee = move(dsNodes);
@@ -1731,6 +1883,7 @@ bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
   //    Data::GetInstance().SetDSPeers(dsPeers);
   //#endif // IS_LOOKUP_NODE
 
+  /*
   if ((!LOOKUP_NODE_MODE && m_dsInfoWaitingNotifying &&
        (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0)) ||
       (LOOKUP_NODE_MODE &&
@@ -1742,6 +1895,15 @@ bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
     unique_lock<mutex> lock(m_mutexDSInfoUpdation);
     m_fetchedDSInfo = true;
   }
+  */
+
+  if (m_dsInfoWaitingNotifying &&
+      (m_syncType != NO_SYNC ||
+       m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0)) {
+    unique_lock<mutex> lock(m_mutexDSInfoUpdation);
+    m_fetchedDSInfo = true;
+  }
+
   cv_dsInfoUpdate.notify_all();
   return true;
 }
@@ -1765,7 +1927,7 @@ bool Lookup::ProcessSetDSBlockFromSeed(const bytes& message,
   if (!Messenger::GetLookupSetDSBlockFromSeed(
           message, offset, lowBlockNum, highBlockNum, lookupPubKey, dsBlocks)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
-              "Messenger::SetLookupGetDSBlockFromSeed failed.");
+              "Messenger::GetLookupSetDSBlockFromSeed failed.");
     return false;
   }
 
@@ -1836,6 +1998,49 @@ bool Lookup::ProcessSetDSBlockFromSeed(const bytes& message,
         }
         m_mediator.UpdateDSBlockRand();
       }
+    }
+  }
+
+  return true;
+}
+
+bool Lookup::ProcessSetMinerInfoFromSeed(const bytes& message,
+                                         unsigned int offset,
+                                         [[gnu::unused]] const Peer& from) {
+  LOG_MARKER();
+
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Function not expected to be called from non-lookup node");
+    return false;
+  }
+
+  map<uint64_t, pair<MinerInfoDSComm, MinerInfoShards>> minerInfoPerDS;
+  PubKey lookupPubKey;
+  if (!Messenger::GetLookupSetMinerInfoFromSeed(message, offset, lookupPubKey,
+                                                minerInfoPerDS)) {
+    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
+              "Messenger::GetLookupSetMinerInfoFromSeed failed.");
+    return false;
+  }
+
+  if (!VerifySenderNode(GetSeedNodes(), lookupPubKey)) {
+    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
+              "The message sender pubkey: "
+                  << lookupPubKey << " is not in my lookup node list.");
+    return false;
+  }
+
+  for (const auto& dsBlockAndMinerInfo : minerInfoPerDS) {
+    if (!BlockStorage::GetBlockStorage().PutMinerInfoDSComm(
+            dsBlockAndMinerInfo.first, dsBlockAndMinerInfo.second.first)) {
+      LOG_GENERAL(WARNING, "BlockStorage::PutMinerInfoDSComm failed");
+      continue;
+    }
+    if (!BlockStorage::GetBlockStorage().PutMinerInfoShards(
+            dsBlockAndMinerInfo.first, dsBlockAndMinerInfo.second.second)) {
+      LOG_GENERAL(WARNING, "BlockStorage::PutMinerInfoShards failed");
+      continue;
     }
   }
 
@@ -1921,7 +2126,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(const bytes& message,
         txBlocks, m_mediator.m_blocklinkchain.GetBuiltDSComm(),
         m_mediator.m_blocklinkchain.GetLatestBlockLink());
     switch (res) {
-      case ValidatorBase::TxBlockValidationMsg::VALID:
+      case Validator::TxBlockValidationMsg::VALID:
 #ifdef SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
         if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
           LOG_GENERAL(INFO,
@@ -1932,11 +2137,11 @@ bool Lookup::ProcessSetTxBlockFromSeed(const bytes& message,
 #endif  // SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
         CommitTxBlocks(txBlocks);
         break;
-      case ValidatorBase::TxBlockValidationMsg::INVALID:
+      case Validator::TxBlockValidationMsg::INVALID:
         LOG_GENERAL(INFO, "[TxBlockVerif]"
                               << "Invalid blocks");
         break;
-      case ValidatorBase::TxBlockValidationMsg::STALEDSINFO:
+      case Validator::TxBlockValidationMsg::STALEDSINFO:
         LOG_GENERAL(INFO, "[TxBlockVerif]"
                               << "Saved to buffer");
         m_txBlockBuffer.clear();
@@ -2053,6 +2258,9 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       return;
     }
   }
+  if (LOOKUP_NODE_MODE) {
+    m_mediator.m_node->ClearUnconfirmedTxn();
+  }
 
   for (const auto& txBlock : txBlocks) {
     LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, txBlock);
@@ -2061,18 +2269,42 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
     // Store Tx Block to disk
     bytes serializedTxBlock;
     txBlock.Serialize(serializedTxBlock, 0);
+    uint64_t blockNum = txBlock.GetHeader().GetBlockNum();
 
-    if (!BlockStorage::GetBlockStorage().PutTxBlock(
-            txBlock.GetHeader().GetBlockNum(), serializedTxBlock)) {
+    if (!BlockStorage::GetBlockStorage().PutTxBlock(blockNum,
+                                                    serializedTxBlock)) {
       LOG_GENERAL(WARNING, "BlockStorage::PutTxBlock failed " << txBlock);
       return;
     }
+
+    // If txblk not from vacaous epoch and is rejoining as ds node
+    if ((blockNum + 1) % NUM_FINAL_BLOCK_PER_POW != 0 &&
+        (m_syncType == SyncType::DS_SYNC ||
+         m_syncType == SyncType::GUARD_DS_SYNC)) {
+      // Coinbase
+      uint128_t rewards = txBlock.GetHeader().GetRewards();
+      LOG_GENERAL(INFO, "Update coin base for finalblock with blockNum: "
+                            << blockNum << ", reward: " << rewards);
+      m_mediator.m_ds->SaveCoinbase(txBlock.GetB1(), txBlock.GetB2(),
+                                    CoinbaseReward::FINALBLOCK_REWARD,
+                                    blockNum + 1);
+      // Need if it join immediately before vacaous. And will be used in
+      // InitCoinbase in final blk consensus in vacaous epoch.
+      m_mediator.m_ds->m_totalTxnFees += rewards;
+    }
+
     if ((LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP &&
          m_syncType == SyncType::NEW_LOOKUP_SYNC) ||
         (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP &&
          m_syncType == SyncType::LOOKUP_SYNC)) {
       m_mediator.m_node->LoadUnavailableMicroBlockHashes(
           txBlock, placeholder, true /*skip shardid check*/);
+    }
+
+    if (m_syncType == SyncType::DS_SYNC ||
+        m_syncType == SyncType::GUARD_DS_SYNC) {
+      // Compose And Send GetCosigRewards for this txBlk from seed
+      ComposeAndSendGetCosigsRewardsFromSeed(txBlock.GetHeader().GetBlockNum());
     }
   }
 
@@ -2086,6 +2318,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP &&
        m_syncType == SyncType::LOOKUP_SYNC)) {
     m_mediator.m_node->CommitMBnForwardedTransactionBuffer();
+    m_mediator.m_node->CommitPendingTxnBuffer();
     // Additional safe-guard mechanism, if have not received the MBNdFWDTXNS at
     // all for last few txBlks.
     FindMissingMBsForLastNTxBlks(LAST_N_TXBLKS_TOCHECK_FOR_MISSINGMBS);
@@ -2097,46 +2330,66 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
 
   m_mediator.UpdateTxBlockRand();
 
-  if ((m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0) &&
-      (m_syncType != SyncType::NEW_LOOKUP_SYNC)) {
-    if (m_syncType == SyncType::RECOVERY_ALL_SYNC) {
-      LOG_EPOCH(
-          INFO, m_mediator.m_currentEpochNum,
-          "New node - At new DS epoch now, try getting state from lookup");
-      GetStateFromSeedNodes();
-    } else if (m_syncType == SyncType::LOOKUP_SYNC) {
-      LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-                "Lookup node - Join back to network now.");
+  if (m_syncType == SyncType::NEW_SYNC || m_syncType == SyncType::NORMAL_SYNC) {
+    if (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0) {
+      SetSyncType(SyncType::NO_SYNC);
+      m_isFirstLoop = true;
+      m_currDSExpired = false;
+      m_mediator.m_node->m_confirmedNotInNetwork = false;
+      PrepareForStartPow();
+    } else {
+      // check if already identified as not being part of any shard.
+      // If yes, just keep sycing until vacaous epoch. Don't proceed further.
+      if (!m_mediator.m_node->m_confirmedNotInNetwork) {
+        // Ask for the sharding structure from lookup
+        ComposeAndSendGetShardingStructureFromSeed();
+        std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
+        if (cv_shardStruct.wait_for(
+                cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
+            std::cv_status::timeout) {
+          LOG_GENERAL(
+              WARNING,
+              "Didn't receive sharding structure! Try checking next epoch");
+        } else {
+          if (!m_mediator.m_node->RecalculateMyShardId()) {
+            LOG_GENERAL(
+                INFO, "I was not in any shard in current ds epoch previously");
+            m_mediator.m_node->m_confirmedNotInNetwork = true;
+          } else if (m_mediator.m_node->LoadShardingStructure()) {
+            if (!m_currDSExpired &&
+                m_mediator.m_dsBlockChain.GetLastBlock()
+                        .GetHeader()
+                        .GetEpochNum() < m_mediator.m_currentEpochNum) {
+              GetDSInfo();
+              m_isFirstLoop = true;
+              SetSyncType(SyncType::NO_SYNC);
+              // Send whitelist request to all peers.
+              m_mediator.m_node->ComposeAndSendRemoveNodeFromBlacklist(
+                  Node::PEER);
 
-      if (!m_currDSExpired) {
-        if (FinishRejoinAsLookup()) {
-          SetSyncType(SyncType::NO_SYNC);
-
-          if (m_lookupServer) {
-            if (m_lookupServer->StartListening()) {
-              LOG_GENERAL(INFO, "API Server started to listen again");
-            } else {
-              LOG_GENERAL(WARNING, "API Server couldn't start");
+              m_mediator.m_node->StartFirstTxEpoch();
             }
           }
+          m_currDSExpired = false;
         }
       }
-
-      m_currDSExpired = false;
-    } else if (m_syncType == SyncType::NEW_SYNC ||
-               m_syncType == SyncType::NORMAL_SYNC) {
-      PrepareForStartPow();
-    } else if (m_syncType == SyncType::DS_SYNC ||
-               m_syncType == SyncType::GUARD_DS_SYNC) {
-      if (!m_currDSExpired &&
-          m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetEpochNum() <
-              m_mediator.m_currentEpochNum) {
-        m_isFirstLoop = true;
-        SetSyncType(SyncType::NO_SYNC);
-        m_mediator.m_ds->FinishRejoinAsDS();
-      }
-      m_currDSExpired = false;
     }
+  } else if ((m_syncType == SyncType::DS_SYNC ||
+              m_syncType == SyncType::GUARD_DS_SYNC) &&
+             (!m_mediator.m_ds->m_dsguardPodDelete ||
+              /* Re-assigned DSGUARD-POD allowed to rejoin only in vacaous epoch
+                 for now */
+              m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0)) {
+    if (!m_currDSExpired &&
+        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetEpochNum() <
+            m_mediator.m_currentEpochNum) {
+      m_isFirstLoop = true;
+      SetSyncType(SyncType::NO_SYNC);
+
+      m_mediator.m_ds->FinishRejoinAsDS(lowBlockNum % NUM_FINAL_BLOCK_PER_POW ==
+                                        0);
+    }
+    m_currDSExpired = false;
   } else if (m_syncType == SyncType::LOOKUP_SYNC ||
              m_syncType == SyncType::NEW_LOOKUP_SYNC) {
     LOG_EPOCH(
@@ -2155,6 +2408,14 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
             }
           }
           m_isFirstLoop = true;
+
+          if (m_stakingServer) {
+            if (m_stakingServer->StartListening()) {
+              LOG_GENERAL(INFO, "Staking Server started to listen again");
+            } else {
+              LOG_GENERAL(WARNING, "Staking Server couldn't start");
+            }
+          }
         }
         m_currDSExpired = false;
       }
@@ -2444,6 +2705,14 @@ bool Lookup::ProcessSetStateFromSeed(const bytes& message, unsigned int offset,
             LOG_GENERAL(WARNING, "API Server couldn't start");
           }
         }
+
+        if (m_stakingServer) {
+          if (m_stakingServer->StartListening()) {
+            LOG_GENERAL(INFO, "Staking Server started to listen again");
+          } else {
+            LOG_GENERAL(WARNING, "Staking Server couldn't start");
+          }
+        }
       }
     }
     m_currDSExpired = false;
@@ -2482,6 +2751,14 @@ bool Lookup::ProcessSetStateFromSeed(const bytes& message, unsigned int offset,
           LOG_GENERAL(INFO, "API Server started to listen again");
         } else {
           LOG_GENERAL(WARNING, "API Server couldn't start");
+        }
+      }
+
+      if (m_stakingServer) {
+        if (m_stakingServer->StartListening()) {
+          LOG_GENERAL(INFO, "Staking Server started to listen again");
+        } else {
+          LOG_GENERAL(WARNING, "Staking Server couldn't start");
         }
       }
     }
@@ -2527,11 +2804,12 @@ bool Lookup::ProcessGetTxnsFromLookup([[gnu::unused]] const bytes& message,
     return true;
   }
 
-  if (requestedNum > MICROBLOCK_GAS_LIMIT) {
-    LOG_GENERAL(WARNING, "No microblock can have more than "
-                             << MICROBLOCK_GAS_LIMIT
-                             << " missing txns. Looks suspicious so will "
-                                "ignore the message and blacklist sender");
+  if (requestedNum > max(DS_MICROBLOCK_GAS_LIMIT, SHARD_MICROBLOCK_GAS_LIMIT)) {
+    LOG_GENERAL(WARNING,
+                "No microblock can have more than "
+                    << max(DS_MICROBLOCK_GAS_LIMIT, SHARD_MICROBLOCK_GAS_LIMIT)
+                    << " missing txns. Looks suspicious so will "
+                       "ignore the message and blacklist sender");
     Blacklist::GetInstance().Add(from.GetIpAddress());
     return false;
   }
@@ -3185,7 +3463,8 @@ void Lookup::StartSynchronization() {
     auto func = [this]() -> void {
       GetDSInfoFromSeedNodes();
       while (GetSyncType() != SyncType::NO_SYNC) {
-        GetDSBlockFromSeedNodes(m_mediator.m_dsBlockChain.GetBlockCount(), 0);
+        GetDSBlockFromSeedNodes(m_mediator.m_dsBlockChain.GetBlockCount(), 0,
+                                true);
         GetTxBlockFromSeedNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
         this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
       }
@@ -3196,7 +3475,8 @@ void Lookup::StartSynchronization() {
       GetMyLookupOffline();
       GetDSInfoFromLookupNodes();
       while (GetSyncType() != SyncType::NO_SYNC) {
-        GetDSBlockFromLookupNodes(m_mediator.m_dsBlockChain.GetBlockCount(), 0);
+        GetDSBlockFromLookupNodes(m_mediator.m_dsBlockChain.GetBlockCount(), 0,
+                                  true);
         GetTxBlockFromLookupNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
         this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
       }
@@ -3207,14 +3487,18 @@ void Lookup::StartSynchronization() {
 
 bool Lookup::GetDSInfoLoop() {
   unsigned int counter = 0;
-  {
+  // Allow over-writing ds committee because of corner case where node rejoined
+  // in first tx epoch of ds epoch. Node can get started rejoining from incr db
+  // which holds older ds comm at this point. So time to try fetching and
+  // over-wriiting ds comm from lookup up in this case.
+  /*{
     lock_guard<mutex> g(m_mediator.m_mutexDSCommittee);
     if (m_mediator.m_DSCommittee->size() > 0) {
       LOG_GENERAL(WARNING,
                   "DS comm already set, make sure you cleaned variables");
       return false;
     }
-  }
+  }*/
 
   while (counter <= FETCH_LOOKUP_MSG_MAX_RETRY) {
     GetDSInfoFromSeedNodes();
@@ -3386,6 +3670,10 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
         m_lookupServer->StopListening();
         LOG_GENERAL(INFO, "API Server stopped listen for syncing");
       }
+      if (m_stakingServer) {
+        m_stakingServer->StopListening();
+        LOG_GENERAL(INFO, "Staking Server stopped listen for syncing");
+      }
     };
     DetachedFunction(1, func1);
 
@@ -3442,6 +3730,10 @@ void Lookup::RejoinAsLookup() {
         m_lookupServer->StopListening();
         LOG_GENERAL(INFO, "API Server stopped listen for syncing");
       }
+      if (m_stakingServer) {
+        m_stakingServer->StopListening();
+        LOG_GENERAL(INFO, "Staking Server stopped listen for syncing");
+      }
     };
 
     DetachedFunction(1, func1);
@@ -3484,6 +3776,7 @@ bool Lookup::CleanVariables() {
     m_nodesInNetwork.clear();
     l_nodesInNetwork.clear();
   }
+  m_mediator.m_node->CleanWhitelistReqs();
 
   return true;
 }
@@ -3507,7 +3800,8 @@ bool Lookup::ToBlockMessage(unsigned char ins_byte) {
           ins_byte != LookupInstructionType::SETTXNFROMLOOKUP &&
           ins_byte != LookupInstructionType::SETSTATEDELTAFROMSEED &&
           ins_byte != LookupInstructionType::SETSTATEDELTASFROMSEED &&
-          ins_byte != LookupInstructionType::SETDIRBLOCKSFROMSEED);
+          ins_byte != LookupInstructionType::SETDIRBLOCKSFROMSEED &&
+          ins_byte != LookupInstructionType::SETMINERINFOFROMSEED);
 }
 
 bytes Lookup::ComposeGetOfflineLookupNodes() {
@@ -3569,8 +3863,9 @@ bool Lookup::ProcessGetDirectoryBlocksFromSeed(const bytes& message,
 
   uint64_t index_num;
   uint32_t portNo;
-  if (!Messenger::GetLookupGetDirectoryBlocksFromSeed(message, offset, portNo,
-                                                      index_num)) {
+  bool includeMinerInfo;
+  if (!Messenger::GetLookupGetDirectoryBlocksFromSeed(
+          message, offset, portNo, index_num, includeMinerInfo)) {
     LOG_GENERAL(WARNING,
                 "Messenger::GetLookupGetDirectoryBlocksFromSeed failed");
     return false;
@@ -3622,6 +3917,55 @@ bool Lookup::ProcessGetDirectoryBlocksFromSeed(const bytes& message,
   }
 
   P2PComm::GetInstance().SendMessage(peer, msg);
+
+  // Send minerInfo as a separate message since it is not critical information
+  if (includeMinerInfo) {
+    LOG_GENERAL(INFO, "Miner info requested");
+    map<uint64_t, pair<MinerInfoDSComm, MinerInfoShards>> minerInfoPerDS;
+    for (uint64_t i = index_num;
+         i <= m_mediator.m_blocklinkchain.GetLatestIndex(); i++) {
+      BlockLink b = m_mediator.m_blocklinkchain.GetBlockLink(i);
+      if (get<BlockLinkIndex::BLOCKTYPE>(b) == BlockType::DS) {
+        MinerInfoDSComm minerInfoDSComm;
+        MinerInfoShards minerInfoShards;
+        uint64_t dsBlockNum =
+            m_mediator.m_dsBlockChain.GetBlock(get<BlockLinkIndex::DSINDEX>(b))
+                .GetHeader()
+                .GetBlockNum();
+        if (!BlockStorage::GetBlockStorage().GetMinerInfoDSComm(
+                dsBlockNum, minerInfoDSComm)) {
+          LOG_GENERAL(WARNING,
+                      "GetMinerInfoDSComm failed for block " << dsBlockNum);
+          continue;
+        }
+        if (!BlockStorage::GetBlockStorage().GetMinerInfoShards(
+                dsBlockNum, minerInfoShards)) {
+          LOG_GENERAL(WARNING,
+                      "GetMinerInfoShards failed for block " << dsBlockNum);
+          continue;
+        }
+        minerInfoPerDS.emplace(dsBlockNum,
+                               make_pair(minerInfoDSComm, minerInfoShards));
+        LOG_GENERAL(INFO, "Added info for " << dsBlockNum);
+      }
+    }
+
+    if (minerInfoPerDS.size() > 0) {
+      // Ok to reuse msg at this point
+      msg = {MessageType::LOOKUP, LookupInstructionType::SETMINERINFOFROMSEED};
+      if (!Messenger::SetLookupSetMinerInfoFromSeed(
+              msg, MessageOffset::BODY, m_mediator.m_selfKey, minerInfoPerDS)) {
+        LOG_GENERAL(WARNING,
+                    "Messenger::SetLookupSetMinerInfoFromSeed failed.");
+        return false;
+      }
+
+      P2PComm::GetInstance().SendMessage(peer, msg);
+      LOG_GENERAL(INFO, "Sent miner info. Count=" << minerInfoPerDS.size());
+    } else {
+      LOG_GENERAL(INFO, "No miner info sent");
+    }
+  }
 
   return true;
 }
@@ -3732,42 +4076,41 @@ bool Lookup::ProcessSetDirectoryBlocksFromSeed(
 
 void Lookup::CheckBufferTxBlocks() {
   if (!m_txBlockBuffer.empty()) {
-    ValidatorBase::TxBlockValidationMsg res =
-        m_mediator.m_validator->CheckTxBlocks(
-            m_txBlockBuffer, m_mediator.m_blocklinkchain.GetBuiltDSComm(),
-            m_mediator.m_blocklinkchain.GetLatestBlockLink());
+    Validator::TxBlockValidationMsg res = m_mediator.m_validator->CheckTxBlocks(
+        m_txBlockBuffer, m_mediator.m_blocklinkchain.GetBuiltDSComm(),
+        m_mediator.m_blocklinkchain.GetLatestBlockLink());
 
     switch (res) {
-      case ValidatorBase::TxBlockValidationMsg::VALID:
+      case Validator::TxBlockValidationMsg::VALID:
         CommitTxBlocks(m_txBlockBuffer);
         m_txBlockBuffer.clear();
         break;
-      case ValidatorBase::TxBlockValidationMsg::STALEDSINFO:
+      case Validator::TxBlockValidationMsg::STALEDSINFO:
         LOG_GENERAL(WARNING,
                     "Even after the recving latest ds info, the information "
                     "is stale ");
         break;
-      case ValidatorBase::TxBlockValidationMsg::INVALID:
+      case Validator::TxBlockValidationMsg::INVALID:
         LOG_GENERAL(WARNING, "The blocks in buffer are invalid ");
         m_txBlockBuffer.clear();
         break;
       default:
         LOG_GENERAL(WARNING,
-                    "The return value of ValidatorBase::CheckTxBlocks does not "
+                    "The return value of Validator::CheckTxBlocks does not "
                     "match any type");
     }
   }
 }
 
-void Lookup::ComposeAndSendGetDirectoryBlocksFromSeed(const uint64_t& index_num,
-                                                      bool toSendSeed) {
+void Lookup::ComposeAndSendGetDirectoryBlocksFromSeed(
+    const uint64_t& index_num, bool toSendSeed, const bool includeMinerInfo) {
   LOG_MARKER();
   bytes message = {MessageType::LOOKUP,
                    LookupInstructionType::GETDIRBLOCKSFROMSEED};
 
   if (!Messenger::SetLookupGetDirectoryBlocksFromSeed(
           message, MessageOffset::BODY, m_mediator.m_selfPeer.m_listenPortHost,
-          index_num)) {
+          index_num, includeMinerInfo)) {
     LOG_GENERAL(WARNING, "Messenger::SetLookupGetDirectoryBlocksFromSeed");
     return;
   }
@@ -3791,6 +4134,22 @@ void Lookup::ComposeAndSendGetShardingStructureFromSeed() {
     return;
   }
 
+  SendMessageToRandomSeedNode(message);
+}
+
+void Lookup::ComposeAndSendGetCosigsRewardsFromSeed(const uint64_t& block_num) {
+  LOG_MARKER();
+  bytes message = {MessageType::LOOKUP,
+                   LookupInstructionType::GETCOSIGSREWARDSFROMSEED};
+
+  if (!Messenger::SetLookupGetCosigsRewardsFromSeed(
+          message, MessageOffset::BODY, block_num,
+          m_mediator.m_selfPeer.m_listenPortHost, m_mediator.m_selfKey)) {
+    LOG_GENERAL(WARNING, "Messenger::SetLookupGetCosigsRewardsFromSeed");
+    return;
+  }
+  LOG_GENERAL(INFO,
+              "Sending req for cosigs/rewards of block num = " << block_num);
   SendMessageToRandomSeedNode(message);
 }
 
@@ -3834,7 +4193,9 @@ bool Lookup::Execute(const bytes& message, unsigned int offset,
       &Lookup::ProcessVCGetLatestDSTxBlockFromSeed,
       &Lookup::ProcessForwardTxn,
       &Lookup::ProcessGetDSGuardNetworkInfo,
-      &Lookup::ProcessSetHistoricalDB};
+      &Lookup::ProcessSetHistoricalDB,
+      &Lookup::ProcessGetCosigsRewardsFromSeed,
+      &Lookup::ProcessSetMinerInfoFromSeed};
 
   const unsigned char ins_byte = message.at(offset);
   const unsigned int ins_handlers_count =
@@ -3875,19 +4236,14 @@ void Lookup::RemoveSeedNodesFromBlackList() {
   }
 }
 
-bool Lookup::AddToTxnShardMap(const Transaction& tx, uint32_t shardId) {
-  if (!LOOKUP_NODE_MODE) {
-    LOG_GENERAL(WARNING,
-                "Lookup::AddToTxnShardMap not expected to be called from "
-                "other than the LookUp node.");
-    return true;
-  }
-
-  lock_guard<mutex> g(m_txnShardMapMutex);
+bool Lookup::AddToTxnShardMap(const Transaction& tx, uint32_t shardId,
+                              TxnShardMap& txnShardMap,
+                              mutex& txnShardMapMutex) {
+  lock_guard<mutex> g(txnShardMapMutex);
 
   uint32_t size = 0;
 
-  for (const auto& x : m_txnShardMap) {
+  for (const auto& x : txnShardMap) {
     size += x.second.size();
   }
 
@@ -3897,19 +4253,30 @@ bool Lookup::AddToTxnShardMap(const Transaction& tx, uint32_t shardId) {
   }
 
   // case where txn already exist
-  if (find_if(m_txnShardMap[shardId].begin(), m_txnShardMap[shardId].end(),
+  if (find_if(txnShardMap[shardId].begin(), txnShardMap[shardId].end(),
               [tx](const Transaction& txn) {
                 return tx.GetTranID() == txn.GetTranID();
-              }) != m_txnShardMap[shardId].end()) {
+              }) != txnShardMap[shardId].end()) {
     LOG_GENERAL(WARNING, "Same hash present " << tx.GetTranID());
     return false;
   }
 
-  m_txnShardMap[shardId].push_back(tx);
+  txnShardMap[shardId].push_back(tx);
   LOG_GENERAL(INFO,
               "Added Txn " << tx.GetTranID().hex() << " to shard " << shardId);
 
   return true;
+}
+
+bool Lookup::AddToTxnShardMap(const Transaction& tx, uint32_t shardId) {
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Lookup::AddToTxnShardMap not expected to be called from "
+                "other than the LookUp node.");
+    return true;
+  }
+
+  return AddToTxnShardMap(tx, shardId, m_txnShardMap, m_txnShardMapMutex);
 }
 
 bool Lookup::DeleteTxnShardMap(uint32_t shardId) {
@@ -3948,10 +4315,6 @@ void Lookup::SenderTxnBatchThread(const uint32_t oldNumShards) {
     while (true) {
       if (!m_mediator.GetIsVacuousEpoch()) {
         numShards = m_mediator.m_ds->GetNumShards();
-        if (numShards == 0) {
-          this_thread::sleep_for(chrono::milliseconds(1000));
-          continue;
-        }
         SendTxnPacketToNodes(oldNumShards, numShards);
       }
       break;
@@ -4162,13 +4525,50 @@ bool Lookup::GetIsServer() {
   return m_isServer;
 }
 
-bool Lookup::VerifySenderNode(const VectorOfNode& vecLookupNodes,
+bool Lookup::VerifySenderNode(const VectorOfNode& vecNodes,
                               const PubKey& pubKeyToVerify) {
-  auto iter = std::find_if(vecLookupNodes.cbegin(), vecLookupNodes.cend(),
+  auto iter = std::find_if(vecNodes.cbegin(), vecNodes.cend(),
                            [&pubKeyToVerify](const PairOfNode& node) {
                              return node.first == pubKeyToVerify;
                            });
-  return vecLookupNodes.cend() != iter;
+  return vecNodes.cend() != iter;
+}
+
+bool Lookup::VerifySenderNode(const VectorOfNode& vecNodes,
+                              const uint128_t& ipToVerify) {
+  auto iter = std::find_if(vecNodes.cbegin(), vecNodes.cend(),
+                           [&ipToVerify](const PairOfNode& node) {
+                             return node.second.m_ipAddress == ipToVerify;
+                           });
+  return vecNodes.cend() != iter;
+}
+
+bool Lookup::VerifySenderNode(const DequeOfNode& deqNodes,
+                              const PubKey& pubKeyToVerify) {
+  auto iter = std::find_if(deqNodes.cbegin(), deqNodes.cend(),
+                           [&pubKeyToVerify](const PairOfNode& node) {
+                             return node.first == pubKeyToVerify;
+                           });
+  return deqNodes.cend() != iter;
+}
+
+bool Lookup::VerifySenderNode(const DequeOfNode& deqNodes,
+                              const uint128_t& ipToVerify) {
+  auto iter = std::find_if(deqNodes.cbegin(), deqNodes.cend(),
+                           [&ipToVerify](const PairOfNode& node) {
+                             return node.second.m_ipAddress == ipToVerify;
+                           });
+  return deqNodes.cend() != iter;
+}
+
+bool Lookup::VerifySenderNode(const Shard& shard,
+                              const PubKey& pubKeyToVerify) {
+  auto iter = std::find_if(
+      shard.cbegin(), shard.cend(),
+      [&pubKeyToVerify](const tuple<PubKey, Peer, uint16_t>& node) {
+        return get<SHARD_NODE_PUBKEY>(node) == pubKeyToVerify;
+      });
+  return shard.cend() != iter;
 }
 
 bool Lookup::ProcessForwardTxn(const bytes& message, unsigned int offset,
@@ -4198,10 +4598,25 @@ bool Lookup::ProcessForwardTxn(const bytes& message, unsigned int offset,
       return false;
     }
 
-    for (const auto& txn : txnsShard) {
-      unsigned int shard = txn.GetShardIndex(shard_size);
-      AddToTxnShardMap(txn, shard);
+    if (!m_sendSCCallsToDS) {
+      for (const auto& txn : txnsShard) {
+        unsigned int shard = txn.GetShardIndex(shard_size);
+        AddToTxnShardMap(txn, shard);
+      }
+    } else {
+      LOG_GENERAL(INFO, "Sending all contract calls to DS committee");
+      for (const auto& txn : txnsShard) {
+        const Transaction::ContractType txnType =
+            Transaction::GetTransactionType(txn);
+        if (txnType == Transaction::ContractType::CONTRACT_CALL) {
+          AddToTxnShardMap(txn, shard_size);
+        } else {
+          unsigned int shard = txn.GetShardIndex(shard_size);
+          AddToTxnShardMap(txn, shard);
+        }
+      }
     }
+
     for (const auto& txn : txnsDS) {
       AddToTxnShardMap(txn, shard_size);
     }
@@ -4421,8 +4836,7 @@ void Lookup::CheckAndFetchUnavailableMBs(bool skipLatestTxBlk) {
       // Delete missing mbs from unavailable list which has no txns
       auto& mbs = m.second;
       mbs.erase(std::remove_if(mbs.begin(), mbs.end(),
-                               [](const std::pair<BlockHash, TxnHash> e) {
-                                 MicroBlockSharedPtr mbptr;
+                               [](const std::pair<BlockHash, TxnHash>& e) {
                                  return e.second == TxnHash();
                                }),
                 mbs.end());

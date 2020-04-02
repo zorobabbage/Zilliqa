@@ -28,8 +28,8 @@
 #include <utility>
 #include <vector>
 
+#include <Schnorr.h>
 #include "common/Executable.h"
-#include "libCrypto/Schnorr.h"
 #include "libData/AccountData/Transaction.h"
 #include "libData/BlockData/Block/DSBlock.h"
 #include "libData/BlockData/Block/MicroBlock.h"
@@ -48,6 +48,7 @@
 class Mediator;
 class Synchronizer;
 class LookupServer;
+class StakingServer;
 
 // The "first" element in the pair is a map of shard to its transactions
 // The "second" element in the pair counts the total number of transactions in
@@ -122,9 +123,6 @@ class Lookup : public Executable {
   std::mutex m_mutexCheckDirBlocks;
   std::mutex m_mutexMicroBlocksBuffer;
 
-  std::mutex m_mutexShardStruct;
-  std::condition_variable cv_shardStruct;
-
   TxnShardMap m_txnShardMap;
 
   // Get StateDeltas from seed
@@ -135,11 +133,13 @@ class Lookup : public Executable {
   std::vector<TxBlock> m_txBlockBuffer;
 
   std::shared_ptr<LookupServer> m_lookupServer;
+  std::shared_ptr<StakingServer> m_stakingServer;
 
   bytes ComposeGetDSInfoMessage(bool initialDS = false);
   bytes ComposeGetStateMessage();
 
-  bytes ComposeGetDSBlockMessage(uint64_t lowBlockNum, uint64_t highBlockNum);
+  bytes ComposeGetDSBlockMessage(uint64_t lowBlockNum, uint64_t highBlockNum,
+                                 const bool includeMinerInfo = false);
   bytes ComposeGetTxBlockMessage(uint64_t lowBlockNum, uint64_t highBlockNum);
   bytes ComposeGetStateDeltaMessage(uint64_t blockNum);
   bytes ComposeGetStateDeltasMessage(uint64_t lowBlockNum,
@@ -149,8 +149,6 @@ class Lookup : public Executable {
   bytes ComposeGetLookupOnlineMessage();
 
   bytes ComposeGetOfflineLookupNodes();
-
-  void ComposeAndSendGetShardingStructureFromSeed();
 
   void RetrieveDSBlocks(std::vector<DSBlock>& dsBlocks, uint64_t& lowBlockNum,
                         uint64_t& highBlockNum, bool partialRetrieve = false);
@@ -189,6 +187,11 @@ class Lookup : public Executable {
   const std::vector<Transaction>& GetTxnFromShardMap(
       uint32_t index);  // Use m_txnShardMapMutex with this function
 
+  std::mutex m_mutexShardStruct;
+  std::condition_variable cv_shardStruct;
+
+  void ComposeAndSendGetShardingStructureFromSeed();
+
   bool IsLookupNode(const PubKey& pubKey) const;
 
   bool IsLookupNode(const Peer& peerInfo) const;
@@ -222,7 +225,8 @@ class Lookup : public Executable {
   bool GetDSInfoFromSeedNodes();
   bool GetDSInfoLoop();
   bool GetDSInfoFromLookupNodes(bool initialDS = false);
-  bool GetDSBlockFromLookupNodes(uint64_t lowBlockNum, uint64_t highBlockNum);
+  bool GetDSBlockFromLookupNodes(uint64_t lowBlockNum, uint64_t highBlockNum,
+                                 const bool includeMinerInfo = false);
   bool GetTxBlockFromLookupNodes(uint64_t lowBlockNum, uint64_t highBlockNum);
   bool GetTxBlockFromSeedNodes(uint64_t lowBlockNum, uint64_t highBlockNum);
   bool GetStateDeltaFromSeedNodes(const uint64_t& blockNum);
@@ -237,9 +241,9 @@ class Lookup : public Executable {
   bool ProcessSetShardFromSeed([[gnu::unused]] const bytes& message,
                                [[gnu::unused]] unsigned int offset,
                                [[gnu::unused]] const Peer& from);
-  bool GetDSBlockFromSeedNodes(uint64_t lowBlockNum, uint64_t highblocknum);
-  // UNUSED
-  bool GetShardFromLookup();
+  bool GetDSBlockFromSeedNodes(uint64_t lowBlockNum, uint64_t highblocknum,
+                               const bool includeMinerInfo = false);
+
   // Get the offline lookup nodes from lookup nodes
   bool GetOfflineLookupNodes();
 
@@ -265,6 +269,9 @@ class Lookup : public Executable {
   void RejoinAsNewLookup(bool fromLookup = true);
 
   bool AddToTxnShardMap(const Transaction& tx, uint32_t shardId);
+  static bool AddToTxnShardMap(const Transaction& tx, uint32_t shardId,
+                               TxnShardMap& txnShardMap,
+                               std::mutex& txnShardMapMutex);
 
   void CheckBufferTxBlocks();
 
@@ -321,6 +328,8 @@ class Lookup : public Executable {
                                 const Peer& from);
   bool ProcessSetDSBlockFromSeed(const bytes& message, unsigned int offset,
                                  const Peer& from);
+  bool ProcessSetMinerInfoFromSeed(const bytes& message, unsigned int offset,
+                                   const Peer& from);
   bool ProcessSetTxBlockFromSeed(const bytes& message, unsigned int offset,
                                  const Peer& from);
   void CommitTxBlocks(const std::vector<TxBlock>& txBlocks);
@@ -365,10 +374,29 @@ class Lookup : public Executable {
 
   bool ProcessSetHistoricalDB(const bytes& message, unsigned int offset,
                               const Peer& from);
-  void ComposeAndSendGetDirectoryBlocksFromSeed(const uint64_t& index_num,
-                                                bool toSendSeed = true);
 
-  static bool VerifySenderNode(const VectorOfNode& vecLookupNodes,
+  bool ProcessGetCosigsRewardsFromSeed(const bytes& message,
+                                       unsigned int offset, const Peer& from);
+
+  void ComposeAndSendGetDirectoryBlocksFromSeed(
+      const uint64_t& index_num, bool toSendSeed = true,
+      const bool includeMinerInfo = false);
+
+  void ComposeAndSendGetCosigsRewardsFromSeed(const uint64_t& block_num);
+
+  static bool VerifySenderNode(const VectorOfNode& vecNodes,
+                               const PubKey& pubKeyToVerify);
+
+  static bool VerifySenderNode(const VectorOfNode& vecNodes,
+                               const uint128_t& ipToVerify);
+
+  static bool VerifySenderNode(const DequeOfNode& deqNodes,
+                               const PubKey& pubKeyToVerify);
+
+  static bool VerifySenderNode(const DequeOfNode& deqNodes,
+                               const uint128_t& ipToVerify);
+
+  static bool VerifySenderNode(const Shard& shard,
                                const PubKey& pubKeyToVerify);
 
   /// Check and fetch unavailable microblocks
@@ -388,6 +416,10 @@ class Lookup : public Executable {
 
   void SetLookupServer(std::shared_ptr<LookupServer> lookupServer) {
     m_lookupServer = std::move(lookupServer);
+  }
+
+  void SetStakingServer(std::shared_ptr<StakingServer> stakingServer) {
+    m_stakingServer = std::move(stakingServer);
   }
 
   bool m_fetchedOfflineLookups = false;
@@ -424,6 +456,9 @@ class Lookup : public Executable {
   // Start PoW variables
   std::set<Peer> m_getStartPoWPeerSet;
   std::mutex m_mutexGetStartPoWPeerSet;
+
+  // For use by lookup for dispatching transactions
+  std::atomic<bool> m_sendSCCallsToDS{};
 };
 
 #endif  // ZILLIQA_SRC_LIBLOOKUP_LOOKUP_H_

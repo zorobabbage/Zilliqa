@@ -103,8 +103,19 @@ void Node::UpdateDSCommitteeComposition(DequeOfNode& dsComm,
   // Update the DS committee composition.
   LOG_MARKER();
 
-  UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm,
-                                   dsblock);
+  MinerInfoDSComm dummy;
+  UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm, dsblock,
+                                   dummy);
+}
+
+void Node::UpdateDSCommitteeComposition(DequeOfNode& dsComm,
+                                        const DSBlock& dsblock,
+                                        MinerInfoDSComm& minerInfo) {
+  // Update the DS committee composition.
+  LOG_MARKER();
+
+  UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm, dsblock,
+                                   minerInfo);
 }
 
 bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
@@ -148,8 +159,8 @@ bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
   }
   dsblock.GetCS1().Serialize(message, message.size());
   BitVector::SetBitVector(message, message.size(), dsblock.GetB1());
-  if (!MultiSig::GetInstance().MultiSigVerify(
-          message, 0, message.size(), dsblock.GetCS2(), *aggregatedKey)) {
+  if (!MultiSig::MultiSigVerify(message, 0, message.size(), dsblock.GetCS2(),
+                                *aggregatedKey)) {
     LOG_GENERAL(WARNING, "Cosig verification failed");
     for (auto& kv : keys) {
       LOG_GENERAL(WARNING, kv);
@@ -208,7 +219,7 @@ bool Node::LoadShardingStructure(bool callByRetrieve) {
                                      std::get<SHARD_NODE_PEER>(shardNode));
 
       // Zero out my IP to avoid sending to myself
-      if (m_mediator.m_selfPeer == m_myShardMembers->back().second) {
+      if (m_mediator.m_selfKey.second == m_myShardMembers->back().first) {
         m_consensusMyID = index;  // Set my ID
         m_myShardMembers->back().second = Peer();
         foundMe = true;
@@ -224,7 +235,7 @@ bool Node::LoadShardingStructure(bool callByRetrieve) {
 
   if (!foundMe && !callByRetrieve) {
     LOG_GENERAL(WARNING, "I'm not in the sharding structure, why?");
-    RejoinAsNormal();
+    this->StartSynchronization();
     return false;
   }
 
@@ -252,6 +263,8 @@ void Node::StartFirstTxEpoch() {
   Blacklist::GetInstance().Pop(BLACKLIST_NUM_TO_POP);
   P2PComm::ClearPeerConnectionCount();
 
+  CleanWhitelistReqs();
+
   uint16_t lastBlockHash = 0;
   if (m_mediator.m_currentEpochNum > 1) {
     lastBlockHash = DataConversion::charArrTo16Bits(
@@ -267,6 +280,10 @@ void Node::StartFirstTxEpoch() {
     m_consensusLeaderID = CalculateShardLeaderFromDequeOfNode(
         lastBlockHash, m_myShardMembers->size(), *m_myShardMembers);
   }
+
+  // If node was restarted consensusID needs to be calculated ( will not be 1)
+  m_mediator.m_consensusID =
+      (m_mediator.m_txBlockChain.GetBlockCount()) % NUM_FINAL_BLOCK_PER_POW;
 
   // Check if I am the leader or backup of the shard
   if (m_mediator.m_selfKey.second ==
@@ -490,12 +507,33 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
 
   m_mediator.m_ds->m_shards = move(t_shards);
 
+  MinerInfoDSComm minerInfoDSComm;
+  MinerInfoShards minerInfoShards;
+  if (LOOKUP_NODE_MODE) {
+    for (const auto& shard : m_mediator.m_ds->m_shards) {
+      minerInfoShards.m_shards.push_back(MinerInfoShards::MinerInfoShard());
+      minerInfoShards.m_shards.back().m_shardSize = shard.size();
+      for (const auto& node : shard) {
+        const PubKey& pubKey = std::get<SHARD_NODE_PUBKEY>(node);
+        if (!Guard::GetInstance().IsNodeInShardGuardList(pubKey)) {
+          minerInfoShards.m_shards.back().m_shardNodes.emplace_back(pubKey);
+        }
+      }
+    }
+  }
+
   m_myshardId = shardId;
   if (!BlockStorage::GetBlockStorage().PutShardStructure(
           m_mediator.m_ds->m_shards, m_myshardId)) {
     LOG_GENERAL(WARNING, "BlockStorage::PutShardStructure failed");
     return false;
   }
+
+  // During RECOVERY_ALL_SYNC, the ipMapping.xml should be removed only after
+  // first DS epoch has passed, because if RejoinAsNormal is triggered during
+  // the first DS epoch, the ipMapping.xml will be needed again to map the DS
+  // committee to the correct IP addresses.
+  RemoveIpMapping();
 
   LogReceivedDSBlockDetails(dsblock);
 
@@ -530,7 +568,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
   {
     std::lock_guard<mutex> g(m_mediator.m_mutexDSCommittee);
     UpdateDSCommitteeComposition(*m_mediator.m_DSCommittee,
-                                 m_mediator.m_dsBlockChain.GetLastBlock());
+                                 m_mediator.m_dsBlockChain.GetLastBlock(),
+                                 minerInfoDSComm);
   }
 
   uint16_t lastBlockHash = 0;
@@ -652,6 +691,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     Blacklist::GetInstance().Clear();
     P2PComm::GetInstance().ClearPeerConnectionCount();
 
+    m_mediator.m_node->CleanWhitelistReqs();
+
     // Clear GetStartPow requesting peer list
     {
       lock_guard<mutex> g(m_mediator.m_lookup->m_mutexGetStartPoWPeerSet);
@@ -673,6 +714,19 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
   }
 
   m_mediator.m_blocklinkchain.SetBuiltDSComm(*m_mediator.m_DSCommittee);
+
+  if (LOOKUP_NODE_MODE) {
+    if (!BlockStorage::GetBlockStorage().PutMinerInfoDSComm(
+            dsblock.GetHeader().GetBlockNum(), minerInfoDSComm)) {
+      LOG_GENERAL(WARNING, "BlockStorage::PutMinerInfoDSComm failed");
+      return false;
+    }
+    if (!BlockStorage::GetBlockStorage().PutMinerInfoShards(
+            dsblock.GetHeader().GetBlockNum(), minerInfoShards)) {
+      LOG_GENERAL(WARNING, "BlockStorage::PutMinerInfoShards failed");
+      return false;
+    }
+  }
 
   if (LOOKUP_NODE_MODE) {
     bool canPutNewEntry = true;

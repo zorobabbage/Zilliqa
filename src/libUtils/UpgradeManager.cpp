@@ -16,12 +16,12 @@
  */
 
 #include "UpgradeManager.h"
+#include <MultiSig.h>
 #include <sys/wait.h>
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/tokenizer.hpp>
-#include "libCrypto/MultiSig.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/Logger.h"
 
@@ -73,8 +73,6 @@ UpgradeManager::UpgradeManager() {
     LOG_GENERAL(WARNING, "curl initialization fail!");
     curl_global_cleanup();
   }
-
-  boost::filesystem::create_directories(DOWNLOAD_FOLDER);
 }
 
 UpgradeManager::~UpgradeManager() {
@@ -197,6 +195,7 @@ string UpgradeManager::DownloadFile(const char* fileTail,
   curl_easy_setopt(m_curl, CURLOPT_URL, downloadFilePath.data());
   curl_easy_setopt(m_curl, CURLOPT_VERBOSE, 1L);
   curl_easy_setopt(m_curl, CURLOPT_NOPROGRESS, 1L);
+  boost::filesystem::create_directories(DOWNLOAD_FOLDER);
   unique_ptr<FILE, decltype(&fclose)> fp(fopen(fileName.data(), "wb"), &fclose);
 
   if (!fp) {
@@ -262,7 +261,7 @@ bool UpgradeManager::LoadInitialDS(vector<PubKey>& initialDSCommittee) {
       }
       Signature sig(sigBytes, 0);
 
-      if (!Schnorr::GetInstance().Verify(message, sig, pubKey)) {
+      if (!Schnorr::Verify(message, sig, pubKey)) {
         LOG_GENERAL(WARNING, "Unable to verify file");
         return false;
       }
@@ -285,4 +284,8 @@ bool UpgradeManager::LoadInitialDS(vector<PubKey>& initialDSCommittee) {
     LOG_GENERAL(WARNING, e.what());
     return false;
   }
+}
+
+void UpgradeManager::CleanInitialDS() {
+  boost::filesystem::remove(DOWNLOAD_FOLDER);
 }
