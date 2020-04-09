@@ -223,6 +223,10 @@ LookupServer::LookupServer(Mediator& mediator,
                          NULL),
       &LookupServer::GetPendingTxnI);
   this->bindAndAddMethod(
+      jsonrpc::Procedure("GetPendingTxns", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, NULL),
+      &LookupServer::GetPendingTxnsI);
+  this->bindAndAddMethod(
       jsonrpc::Procedure("GetMinerInfo", jsonrpc::PARAMS_BY_POSITION,
                          jsonrpc::JSON_OBJECT, "param01", jsonrpc::JSON_STRING,
                          NULL),
@@ -1659,6 +1663,31 @@ Json::Value LookupServer::GetPendingTxn(const string& tranID) {
     throw je;
   } catch (exception& e) {
     LOG_GENERAL(WARNING, "[Error]" << e.what() << " Input " << tranID);
+    throw JsonRpcException(RPC_MISC_ERROR,
+                           string("Unable To Process: ") + e.what());
+  }
+}
+
+Json::Value LookupServer::GetPendingTxns() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  try {
+    Json::Value _json;
+    _json["TxnHashes"] = Json::Value(Json::arrayValue);
+    for (const auto& txhash_and_status :
+         m_mediator.m_node->GetUnconfirmedTxns()) {
+      Json::Value tmpJson;
+      tmpJson["Txn"] = txhash_and_status.first.hex();
+      tmpJson["Status"] = uint(txhash_and_status.second);
+      _json["TxnHashes"].append(tmpJson);
+    }
+    return _json;
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (exception& e) {
+    LOG_GENERAL(WARNING, "[Error]" << e.what());
     throw JsonRpcException(RPC_MISC_ERROR,
                            string("Unable To Process: ") + e.what());
   }
