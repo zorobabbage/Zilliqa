@@ -404,6 +404,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
           // llvm_ir to machine code and puts it in the cache. Later on, the
           // call to scilla-runner above can be removed.
           try {
+            ScillaJIT::init();
             auto SP = buildScillaParams(toAddr);
             auto sJIT =
                 ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(), &SCM);
@@ -607,6 +608,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       bool ret = true;
 
       try {
+        ScillaJIT::init();
         auto SP = buildScillaParams(toAddr);
         auto llvm_ir = "";  // Assuming that the machine code is already cached.
         auto sJIT =
