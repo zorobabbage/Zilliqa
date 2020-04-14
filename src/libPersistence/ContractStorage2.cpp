@@ -156,6 +156,7 @@ bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
     if (boost::has_type<ScillaVM::ScillaParams::MapValueT>(aval)) {
       auto& mval =
           boost::any_cast<const ScillaVM::ScillaParams::MapValueT&>(aval);
+      pval->mutable_mval()->mutable_m();
       for (auto iter : mval) {
         auto& pmval = pval->mutable_mval()->mutable_m()->operator[](iter.first);
         anyToPB(iter.second, &pmval);
@@ -165,8 +166,7 @@ bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
       pval->set_bval(bval);
     }
   };
-  if (!dstany.empty()) {
-    // If there's a value fetched, encode it as protobuf.
+  if (!q.IgnoreVal && foundVal) {
     anyToPB(dstany, &v);
   }
   return SerializeToArray(v, dst, 0);
