@@ -1319,7 +1319,7 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
 
   bool ret = false;
 
-  if (_json["messages"].type() != Json::arrayValue) {
+  if (_json["messages"].type() != Json::arrayValue && _json["messages"].type() != Json::nullValue) {
     LOG_GENERAL(INFO, "messages is not in array value");
     return false;
   }
