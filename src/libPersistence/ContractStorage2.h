@@ -21,10 +21,12 @@
 #include <json/json.h>
 #include <leveldb/db.h>
 #include <shared_mutex>
+#include <type_traits>
 
 #include "common/Constants.h"
 #include "common/Singleton.h"
 #include "depends/libDatabase/LevelDB.h"
+#include "libUtils/DataConversion.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -41,16 +43,182 @@ enum TERM { TEMPORARY, SHORTTERM, LONGTERM };
 
 Index GetIndex(const dev::h160& address, const std::string& key);
 
+//-----------------------------------------------------------------------//
+
+// template<size_t idx, typename T>
+// struct GetHelper;
+
+struct MapBase {
+  virtual bool exists(dev::h256 const& _h) const = 0;
+  virtual std::string lookup(dev::h256 const& _h) const = 0;
+  virtual void insert(dev::h256 const& _h, dev::bytesConstRef _v) = 0;
+  virtual bool kill(dev::h256 const& _h) = 0;
+};
+
+template <typename ADDS, typename DELETES>
+struct AddDeleteMap : private MapBase {
+  AddDeleteMap(std::shared_ptr<ADDS> adds, std::shared_ptr<DELETES> deletes)
+      : m_adds(adds), m_deletes(deletes) {}
+  bool exists(dev::h256 const& _h) const {
+    if (m_deletes->find(_h.hex()) != m_deletes->end()) {
+      return false;
+    }
+    return m_adds->find(_h.hex()) != m_adds->end();
+  }
+  std::string lookup(dev::h256 const& _h) const {
+    if (m_deletes->find(_h.hex()) != m_deletes->end()) {
+      return "";
+    }
+    auto find = m_adds->find(_h.hex());
+    if (find != m_adds->end()) {
+      return DataConversion::CharArrayToString(find->second);
+    }
+    return "";
+  }
+  void insert(dev::h256 const& _h, dev::bytesConstRef _v) {
+    auto find = m_deletes->find(_h.hex());
+    if (find != m_deletes->end()) {
+      m_deletes->erase(find);
+    }
+    (*m_adds)[_h.hex()] = DataConversion::StringToCharArray(_v.toString());
+  }
+  bool kill(dev::h256 const& _h) {
+    m_deletes->emplace(_h.hex());
+    return true;
+  }
+
+ private:
+  std::shared_ptr<ADDS> m_adds;
+  std::shared_ptr<DELETES> m_deletes;
+};
+
+struct LevelDBMap : private MapBase {
+  LevelDBMap(std::shared_ptr<LevelDB> db) : m_db(db) {}
+  bool exists(dev::h256 const& _h) const { return m_db->Exists(_h); }
+  std::string lookup(dev::h256 const& _h) const { return m_db->Lookup(_h); }
+  void insert([[gnu::unused]] dev::h256 const& _h,
+              [[gnu::unused]] dev::bytesConstRef _v) {
+    // do nothing
+  }
+  bool kill([[gnu::unused]] dev::h256 const& _h) {
+    // do nothing
+    return true;
+  }
+
+ private:
+  std::shared_ptr<LevelDB> m_db;
+};
+
+template <class... T>
+struct OverlayMap {};
+
+// template<class T>
+// struct MapUnion{
+//   MapUnion(T t) : t(t) {}
+//   bool exists(dev::h256 const& _h) const {
+//     return t.exists(_h);
+//   }
+
+//   std::string lookup(dev::h256 const& _h) const {
+//     return t.lookup(_h);
+//   }
+
+//   void insert(dev::h256 const& _h, dev::bytesConstRef _v) {
+//     t.insert(_h, _v);
+//   }
+
+//   bool kill(dev::h256 const& _h) {
+//     t.kill(_h);
+
+//     return true;
+//   }
+// private:
+//   T t;
+// };
+
+template <class Head, class... Tail>
+struct OverlayMap<Head, Tail...> {
+  OverlayMap(Head head, Tail... tail) : head(head), tail(tail...) {}
+
+  bool exists(dev::h256 const& _h) const {
+    if (head.exists(_h)) {
+      return true;
+    } else if (!sizeof...(Tail)) {
+      return false;
+    }
+
+    return tail.exists(_h);
+  }
+
+  std::string lookup(dev::h256 const& _h) const {
+    std::string ret = head.lookup(_h);
+    if (!ret.empty()) {
+      return ret;
+    } else if (!sizeof...(Tail)) {
+      return "";
+    }
+
+    return tail.lookup(_h);
+  }
+
+  void insert(dev::h256 const& _h, dev::bytesConstRef _v) {
+    head.insert(_h, _v);
+  }
+
+  bool kill(dev::h256 const& _h) {
+    head.kill(_h);
+
+    return true;
+  }
+
+ private:
+  Head head;
+  OverlayMap<Tail...> tail;
+};
+
+template <>
+struct OverlayMap<> {
+  bool exists([[gnu::unused]] dev::h256 const& _h) const { return false; }
+
+  std::string lookup([[gnu::unused]] dev::h256 const& _h) const { return ""; }
+
+  void insert([[gnu::unused]] dev::h256 const& _h,
+              [[gnu::unused]] dev::bytesConstRef _v) {}
+
+  bool kill([[gnu::unused]] dev::h256 const& _h) { return false; }
+};
+
+using DefaultAddDeleteMap =
+    AddDeleteMap<std::map<std::string, bytes>, std::set<std::string>>;
+
+using PermOverlayMap = OverlayMap<DefaultAddDeleteMap, LevelDBMap>;
+using TempOverlayMap =
+    OverlayMap<DefaultAddDeleteMap, DefaultAddDeleteMap, LevelDBMap>;
+
 class ContractStorage2 : public Singleton<ContractStorage2> {
   LevelDB m_codeDB;
   LevelDB m_initDataDB;
+
   LevelDB m_stateDataDB;
+  //*
+  std::shared_ptr<LevelDB> mp_stateDataDB;
+  //*
 
   // Used by AccountStore
   std::map<std::string, bytes> m_stateDataMap;
+  std::set<std::string> m_indexToBeDeleted;
+  //*
+  std::shared_ptr<std::map<std::string, bytes>> mp_stateDataMap;
+  std::shared_ptr<std::set<std::string>> mp_indexToBeDeleted;
+  //*
 
   // Used by AccountStoreTemp for StateDelta
   std::map<std::string, bytes> t_stateDataMap;
+  std::set<std::string> t_indexToBeDeleted;
+  //*
+  std::shared_ptr<std::map<std::string, bytes>> tp_stateDataMap;
+  std::shared_ptr<std::set<std::string>> tp_indexToBeDeleted;
+  //*
 
   // Used for revert state due to failure in chain call
   std::map<std::string, bytes> p_stateDataMap;
@@ -61,9 +229,13 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   // value being true for newly added, false for newly deleted
   std::unordered_map<std::string, bool> r_indexToBeDeleted;
 
-  // Used for delete map index
-  std::set<std::string> m_indexToBeDeleted;
-  std::set<std::string> t_indexToBeDeleted;
+  // Permanent State
+  //*
+  PermOverlayMap m_permOM;
+  TempOverlayMap m_tempOM;
+  dev::GenericTrieDB<PermOverlayMap> m_permTrie;
+  dev::GenericTrieDB<TempOverlayMap> m_tempTrie;
+  //*
 
   mutable std::mutex m_codeMutex;
   mutable std::mutex m_initDataMutex;
@@ -82,10 +254,7 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
 
   void InitTempStateCore();
 
-  ContractStorage2()
-      : m_codeDB("contractCode"),
-        m_initDataDB("contractInitState2"),
-        m_stateDataDB("contractStateData2"){};
+  ContractStorage2();
 
   ~ContractStorage2() = default;
 
@@ -120,9 +289,9 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   bool DeleteInitData(const dev::h160& address);
 
   /////////////////////////////////////////////////////////////////////////////
-  std::string GenerateStorageKey(const dev::h160& addr,
-                                 const std::string& vname,
-                                 const std::vector<std::string>& indices);
+  static std::string GenerateStorageKey(
+      const dev::h160& addr, const std::string& vname,
+      const std::vector<std::string>& indices);
 
   bool FetchStateValue(const dev::h160& addr, const bytes& src,
                        unsigned int s_offset, bytes& dst, unsigned int d_offset,

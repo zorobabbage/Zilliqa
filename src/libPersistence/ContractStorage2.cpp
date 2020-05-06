@@ -34,6 +34,28 @@ using namespace std;
 using namespace ZilliqaMessage;
 
 namespace Contract {
+
+ContractStorage2::ContractStorage2()
+    : m_codeDB("contractCode"),
+      m_initDataDB("contractInitState2"),
+      m_stateDataDB("contractStateData2"),
+      mp_stateDataDB(make_shared<LevelDB>("contractStateData2")),
+      mp_stateDataMap(make_shared<std::map<string, bytes>>()),
+      mp_indexToBeDeleted(make_shared<std::set<string>>()),
+      tp_stateDataMap(make_shared<std::map<string, bytes>>()),
+      tp_indexToBeDeleted(make_shared<std::set<string>>()),
+      m_permOM({mp_stateDataMap, mp_indexToBeDeleted}, {mp_stateDataDB}),
+      m_tempOM({tp_stateDataMap, tp_indexToBeDeleted},
+               {mp_stateDataMap, mp_indexToBeDeleted}, {mp_stateDataDB}) {
+  // m_permOM = PermOverlayMap({mp_stateDataMap, mp_indexToBeDeleted},
+  //                           {mp_stateDataDB});
+  // m_tempOM = TempOverlayMap({tp_stateDataMap, tp_indexToBeDeleted},
+  //                           {mp_stateDataMap, mp_indexToBeDeleted},
+  //                           {mp_stateDataDB});
+  m_permTrie = dev::GenericTrieDB<PermOverlayMap>(&m_permOM);
+  m_tempTrie = dev::GenericTrieDB<TempOverlayMap>(&m_tempOM);
+}
+
 // Code
 // ======================================
 
