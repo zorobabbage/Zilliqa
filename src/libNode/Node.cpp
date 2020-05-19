@@ -1760,6 +1760,8 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
   }
 #endif  // DM_TEST_DM_MORETXN_HALF
 
+
+  m_txnPacketsInQueue.fetch_add(1, std::memory_order_seq_cst);
   // Process the txns
   unsigned int processed_count = 0;
 
@@ -1785,7 +1787,6 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
   }
 
   {
-    m_txnPacketsInQueue.fetch_add(1, std::memory_order_seq_cst);
     lock_guard<mutex> g(m_mutexCreatedTransactions);
 
     LOG_GENERAL(INFO,
@@ -1798,12 +1799,12 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
       m_createdTxns.insert(txn);
     }
 
-    m_txnPacketsInQueue.fetch_sub(1, std::memory_order_seq_cst);
-
     LOG_GENERAL(INFO, "[TxPool] Txn processed: " << processed_count
                                         << " TxnPool size after processing: "
                                         << m_createdTxns.size());
   }
+
+  m_txnPacketsInQueue.fetch_sub(1, std::memory_order_seq_cst);
 
   LOG_STATE("[TXNPKTPROC][" << std::setw(15) << std::left
                             << m_mediator.m_selfPeer.GetPrintableIPAddress()
