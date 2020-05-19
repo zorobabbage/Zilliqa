@@ -1785,7 +1785,9 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
   }
 
   {
+    m_txnPacketsInQueue.fetch_add(1, std::memory_order_seq_cst);
     lock_guard<mutex> g(m_mutexCreatedTransactions);
+
     LOG_GENERAL(INFO,
                 "[TxPool] TxnPool size before processing: " << m_createdTxns.size());
 
@@ -1795,6 +1797,8 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
                   << ") added to pool");
       m_createdTxns.insert(txn);
     }
+
+    m_txnPacketsInQueue.fetch_sub(1, std::memory_order_seq_cst);
 
     LOG_GENERAL(INFO, "[TxPool] Txn processed: " << processed_count
                                         << " TxnPool size after processing: "

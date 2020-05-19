@@ -274,6 +274,8 @@ void Node::ProcessTransactionWhenShardLeader(
   }
   TxnPool t_createdTxns;
   {
+    LOG_GENERAL(INFO, "Waiting on" << m_txnPacketsInQueue.load() << " txnPackets to finish processing");
+    while (m_txnPacketsInQueue.load() != 0) {this_thread::sleep_for(chrono::milliseconds(100));}
     lock_guard<mutex> g(m_mutexCreatedTransactions);
     t_createdTxns = m_createdTxns;
   }
@@ -536,6 +538,8 @@ void Node::ProcessTransactionWhenShardBackup(
 
   TxnPool t_createdTxns;
   {
+    LOG_GENERAL(INFO, "Waiting on" << m_txnPacketsInQueue.load() << " txnPackets to finish processing");
+    while (m_txnPacketsInQueue.load() != 0) {this_thread::sleep_for(chrono::milliseconds(100));}
     lock_guard<mutex> g(m_mutexCreatedTransactions);
     t_createdTxns = m_createdTxns;
   }

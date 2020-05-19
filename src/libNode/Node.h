@@ -126,6 +126,8 @@ class Node : public Executable {
   std::mutex m_mutexCreatedTransactions;
   TxnPool m_createdTxns, t_createdTxns;
 
+  std::atomic<uint32_t> m_txnPacketsInQueue{0};
+
   std::vector<TxnHash> m_expectedTranOrdering;
   std::mutex m_mutexProcessedTransactions;
   std::unordered_map<uint64_t,
