@@ -1602,10 +1602,10 @@ bool Node::ProcessTxnPacketFromLookup([[gnu::unused]] const bytes& message,
         m_state == MICROBLOCK_CONSENSUS));
 
   if (fromLookup || !properState) {
-    if ((epochNumber + (fromLookup ? 0 : 1)) < m_mediator.m_currentEpochNum) {
-      LOG_GENERAL(WARNING, "Txn packet from older epoch, discard");
-      return false;
-    }
+    // if ((epochNumber + (fromLookup ? 0 : 1)) < m_mediator.m_currentEpochNum) {
+    //   LOG_GENERAL(WARNING, "Txn packet from older epoch, discard");
+    //   return false;
+    // }
     lock_guard<mutex> g(m_mutexTxnPacketBuffer);
     LOG_GENERAL(INFO, string(fromLookup ? "Received txn packet from lookup"
                                         : "Received not in the proper state") +
@@ -1652,9 +1652,8 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
 
   if (epochNum + PACKET_EPOCH_LATE_ALLOW < m_mediator.m_currentEpochNum) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
-              "The epoch when the packet from is too late (" << epochNum
-                                                             << "), reject");
-    return false;
+              "The epoch when the packet from is from an earlier epoch:" << epochNum );
+    // return false;
   }
 
   if (dsBlockNum !=
