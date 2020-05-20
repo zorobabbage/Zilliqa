@@ -37,9 +37,9 @@ struct TxnPool {
   };
 
   std::unordered_map<TxnHash, Transaction> HashIndex;
-  std::map<uint128_t, std::map<TxnHash, Transaction>, std::greater<uint128_t>>
+  std::map<uint128_t, std::set<TxnHash>, std::greater<uint128_t>>
       GasIndex;
-  std::unordered_map<std::pair<PubKey, uint64_t>, Transaction, PubKeyNonceHash>
+  std::unordered_map<std::pair<PubKey, uint64_t>, TxnHash, PubKeyNonceHash>
       NonceIndex;
 
   void clear() {
@@ -70,31 +70,32 @@ struct TxnPool {
 
     auto searchNonce = NonceIndex.find({t.GetSenderPubKey(), t.GetNonce()});
     if (searchNonce != NonceIndex.end()) {
-      if ((t.GetGasPrice() > searchNonce->second.GetGasPrice()) ||
-          (t.GetGasPrice() == searchNonce->second.GetGasPrice() &&
-           t.GetTranID() < searchNonce->second.GetTranID())) {
+      auto tx = HashIndex.at(searchNonce->second);
+
+      if ((t.GetGasPrice() > tx.GetGasPrice()) ||
+          (t.GetGasPrice() == tx.GetGasPrice() &&
+           t.GetTranID() < tx.GetTranID())) {
         // erase from HashIdxTxns
-        auto searchHash = HashIndex.find(searchNonce->second.GetTranID());
+        auto searchHash = HashIndex.find(tx.GetTranID());
         if (searchHash != HashIndex.end()) {
           HashIndex.erase(searchHash);
         }
         // erase from GasIdxTxns
-        auto searchGas = GasIndex.find(searchNonce->second.GetGasPrice());
+        auto searchGas = GasIndex.find(tx.GetGasPrice());
         if (searchGas != GasIndex.end()) {
-          auto searchGasHash =
-              searchGas->second.find(searchNonce->second.GetTranID());
+          auto searchGasHash = searchGas->second.find(tx.GetTranID());
           if (searchGasHash != searchGas->second.end()) {
             searchGas->second.erase(searchGasHash);
           }
         }
         HashIndex[t.GetTranID()] = t;
-        GasIndex[t.GetGasPrice()][t.GetTranID()] = t;
-        searchNonce->second = t;
+        GasIndex[t.GetGasPrice()].insert(t.GetTranID());
+        searchNonce->second = t.GetTranID();
       }
     } else {
       HashIndex[t.GetTranID()] = t;
-      GasIndex[t.GetGasPrice()][t.GetTranID()] = t;
-      NonceIndex[{t.GetSenderPubKey(), t.GetNonce()}] = t;
+      GasIndex[t.GetGasPrice()].insert(t.GetTranID());
+      NonceIndex[{t.GetSenderPubKey(), t.GetNonce()}] = t.GetTranID();
     }
     return true;
   }
@@ -102,8 +103,10 @@ struct TxnPool {
   void findSameNonceButHigherGas(Transaction& t) {
     auto searchNonce = NonceIndex.find({t.GetSenderPubKey(), t.GetNonce()});
     if (searchNonce != NonceIndex.end()) {
-      if (searchNonce->second.GetGasPrice() > t.GetGasPrice()) {
-        t = std::move(searchNonce->second);
+      auto tx = HashIndex.at(searchNonce->second);
+
+      if (tx.GetGasPrice() > t.GetGasPrice()) {
+        t = tx;
 
         // erase tx nonce map
         NonceIndex.erase(searchNonce);
@@ -127,7 +130,7 @@ struct TxnPool {
     auto firstHash = firstGas->second.begin();
 
     if (firstHash != firstGas->second.end()) {
-      t = std::move(firstHash->second);
+      t = HashIndex.at(*firstHash);
 
       // erase tx gas map
       firstGas->second.erase(firstHash);
@@ -136,7 +139,7 @@ struct TxnPool {
       }
       // erase tx nonce map
       NonceIndex.erase({t.GetSenderPubKey(), t.GetNonce()});
-      // erase tx hash m ap
+      // erase tx hash map
       HashIndex.erase(t.GetTranID());
       return true;
     }
