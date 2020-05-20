@@ -503,18 +503,23 @@ void Node::UpdateProcessedTransactions() {
 
   {
     lock_guard<mutex> g(m_mutexCreatedTransactions);
+    lock_guard<mutex> q(m_mutexMicroBlock);
 
-    t_createdTxns = m_createdTxns;
-    m_createdTxns.clear();
-    // m_createdTxns = move(t_createdTxns);
-    // TODO GEORGE: make this more efficient
-    for (const auto& kv : t_createdTxns.HashIndex) {
-      if (t_processedTransactions.find(kv.first) == t_processedTransactions.end()) {
-            m_createdTxns.insert(kv.second);
-      }
+    // Mempool changes only if we had consensus
+    if (m_mediator.m_node->m_microblock != nullptr) {
+      t_createdTxns = m_createdTxns;
+      m_createdTxns.clear();
+        dev::h256s mbTxHashes = m_mediator.m_node->m_microblock->GetTranHashes();
+        for (const auto& kv : t_createdTxns.HashIndex) {
+          if (std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) == mbTxHashes.end()) {
+                m_createdTxns.insert(kv.second);
+          }
+        }
     }
+
     t_createdTxns.clear();
   }
+
   if (m_mediator.m_currentEpochNum % NUM_STORE_TX_BODIES_INTERVAL == 0) {
     BlockStorage::GetBlockStorage().ResetDB(
         BlockStorage::DBTYPE::PROCESSED_TEMP);
