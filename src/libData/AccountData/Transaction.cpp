@@ -169,104 +169,123 @@ void Transaction::SetSignature(const Signature& signature) {
 }
 
 unsigned int Transaction::GetShardIndex(unsigned int numShards) const {
-  const auto& fromAddr = GetSenderAddr();
-  const auto ds_shard = numShards;
-
-  const auto tt = GetTransactionType(*this);
-
-  if (tt == CONTRACT_CALL) {
-    std::chrono::system_clock::time_point tpStart;
-      if (ENABLE_CHECK_PERFORMANCE_LOG) {
-            tpStart = r_timer_start();
-      }
-
-      const auto& toAddr = GetToAddr();
-      Account* toAccount =
-        AccountStore::GetInstance().GetAccount(toAddr);
-      Json::Value sh_info;
-      auto& cs = Contract::ContractStorage2::GetContractStorage();
-
-      std::vector<Address> extlibs;
-      bool is_library = false;
-      uint32_t scilla_version = 0;
-
-      if (toAccount != nullptr && toAccount->isContract()
-          && cs.FetchContractShardingInfo(toAddr, sh_info)
-          && toAccount->GetContractAuxiliaries(is_library, scilla_version, extlibs)
-          && !is_library) {
-
-        // Prepare request to the sharding decider
-        auto td = GetData();
-        std::string dataStr(td.begin(), td.end());
-        // SECURITY TODO: do we need to sanity check tx_data? should be handled above us
-        Json::Value tx_data;
-        if (!JSONUtils::GetInstance().convertStrtoJson(dataStr, tx_data)) {
-          return ds_shard;
-        }
-        std::string prepend = "0x";
-        tx_data["_sender"] =
-            prepend + fromAddr.hex();
-        tx_data["_amount"] = GetAmount().convert_to<std::string>();
-
-        Json::Value req_t = Json::objectValue;
-        req_t["req_type"] = "get_shard";
-        req_t["sender_shard"] = AddressShardIndex(fromAddr, numShards);
-        req_t["contract_shard"] = AddressShardIndex(toAddr, numShards);
-        req_t["ds_shard"] = ds_shard;
-        req_t["num_shards"] = numShards;
-        req_t["sharding_info"] = sh_info;
-        req_t["param_contracts"] = Json::arrayValue;
-        req_t["tx_data"] = tx_data;
-
-        // Provide info about which addresses in tx_data are contracts
-        // _sender is never a contract
-        for (const auto& param: tx_data["params"]) {
-          if (param.isMember("type") && param.isMember("value")
-              && param.isMember("vname")
-              && param["type"].asString() == "ByStr20" ) {
-            string addr_str = param["value"].asString().erase(0, prepend.length());
-            Address paddr (addr_str);
-            Account* pacc = AccountStore::GetInstance().GetAccount(paddr);
-            if (pacc != nullptr && pacc->isContract()) {
-              req_t["param_contracts"].append(param["vname"].asString());
-            }
-          }
-        }
-        // We can't send the JSON dictionary directly; serialize it
-        string req_str = JSONUtils::GetInstance().convertJsontoStr(req_t);
-        Json::Value req = Json::objectValue;
-        req["req"] = req_str;
-
-        string result = "";
-        bool call_succeeded =
-          ScillaClient::GetInstance().CallSharding(scilla_version, req, result);
-        Json::Value resp;
-        auto shard = ds_shard;
-        if (call_succeeded
-            && JSONUtils::GetInstance().convertStrtoJson(result, resp)
-            && resp.isMember("shard") && resp["shard"].isIntegral()) {
-
-          if (LOG_SC) {
-            LOG_GENERAL(INFO, "GetShardIndex\nRequest: " << req_str
-                        << "\nResponse: " << result);
-          }
-          shard = resp["shard"].asUInt();
-        }
-
-        if (ENABLE_CHECK_PERFORMANCE_LOG) {
-          LOG_GENERAL(INFO, "Routed CONTRACT_CALL with nonce " << GetNonce()
-                              << " to shard " << shard << " in "
-                              << r_timer_end(tpStart) << " microseconds");
-        }
-        return shard;
-      // The transaction is junk
-      } else {
-        LOG_GENERAL(INFO, "GetShardIndex saw JUNK transaction!");
-        return ds_shard;
-      }
+  std::chrono::system_clock::time_point tpStart;
+  if (ENABLE_CHECK_PERFORMANCE_LOG) {
+        tpStart = r_timer_start();
   }
 
-  return AddressShardIndex(fromAddr, numShards);
+  const auto& fromAddr = GetSenderAddr();
+  const auto& toAddr = GetToAddr();
+  const auto ds_shard = numShards;
+  const auto tt = GetTransactionType(*this);
+  auto ret_shard = ds_shard;
+
+  if (SEMANTIC_SHARDING) {
+    if (tt != CONTRACT_CALL) {
+      ret_shard = AddressShardIndex(fromAddr, numShards);
+    } else {
+        Account* toAccount =
+          AccountStore::GetInstance().GetAccount(toAddr);
+        Json::Value sh_info;
+        auto& cs = Contract::ContractStorage2::GetContractStorage();
+
+        std::vector<Address> extlibs;
+        bool is_library = false;
+        uint32_t scilla_version = 0;
+
+        if (toAccount != nullptr && toAccount->isContract()
+            && cs.FetchContractShardingInfo(toAddr, sh_info)
+            && toAccount->GetContractAuxiliaries(is_library, scilla_version, extlibs)
+            && !is_library) {
+
+          // Prepare request to the sharding decider
+          auto td = GetData();
+          std::string dataStr(td.begin(), td.end());
+          // SECURITY TODO: do we need to sanity check tx_data? should be handled above us
+          Json::Value tx_data;
+          if (!JSONUtils::GetInstance().convertStrtoJson(dataStr, tx_data)) {
+            return ds_shard;
+          }
+          std::string prepend = "0x";
+          tx_data["_sender"] =
+              prepend + fromAddr.hex();
+          tx_data["_amount"] = GetAmount().convert_to<std::string>();
+
+          Json::Value req_t = Json::objectValue;
+          req_t["req_type"] = "get_shard";
+          req_t["sender_shard"] = AddressShardIndex(fromAddr, numShards);
+          req_t["contract_shard"] = AddressShardIndex(toAddr, numShards);
+          req_t["ds_shard"] = ds_shard;
+          req_t["num_shards"] = numShards;
+          req_t["sharding_info"] = sh_info;
+          req_t["param_contracts"] = Json::arrayValue;
+          req_t["tx_data"] = tx_data;
+
+          // Provide info about which addresses in tx_data are contracts
+          // _sender is never a contract
+          for (const auto& param: tx_data["params"]) {
+            if (param.isMember("type") && param.isMember("value")
+                && param.isMember("vname")
+                && param["type"].asString() == "ByStr20" ) {
+              string addr_str = param["value"].asString().erase(0, prepend.length());
+              Address paddr (addr_str);
+              Account* pacc = AccountStore::GetInstance().GetAccount(paddr);
+              if (pacc != nullptr && pacc->isContract()) {
+                req_t["param_contracts"].append(param["vname"].asString());
+              }
+            }
+          }
+          // We can't send the JSON dictionary directly; serialize it
+          string req_str = JSONUtils::GetInstance().convertJsontoStr(req_t);
+          Json::Value req = Json::objectValue;
+          req["req"] = req_str;
+
+          string result = "";
+          bool call_succeeded =
+            ScillaClient::GetInstance().CallSharding(scilla_version, req, result);
+          Json::Value resp;
+          auto shard = ds_shard;
+          if (call_succeeded
+              && JSONUtils::GetInstance().convertStrtoJson(result, resp)
+              && resp.isMember("shard") && resp["shard"].isIntegral()) {
+
+            if (LOG_SC) {
+              LOG_GENERAL(INFO, "GetShardIndex\nRequest: " << req_str
+                          << "\nResponse: " << result);
+            }
+            shard = resp["shard"].asUInt();
+          }
+          ret_shard = shard;
+        // The transaction is junk
+        } else {
+          LOG_GENERAL(WARNING, "GetShardIndex saw JUNK transaction!");
+          ret_shard = ds_shard;
+        }
+    }
+  }
+  // Non-semantic sharding
+  else {
+    auto from_shard = AddressShardIndex(fromAddr, numShards);
+    if (tt != CONTRACT_CALL) {
+      ret_shard = from_shard;
+    } else {
+      auto to_shard = AddressShardIndex(toAddr, numShards);
+      if (from_shard == to_shard) {
+        ret_shard = from_shard;
+      } else {
+        ret_shard = ds_shard;
+      }
+    }
+  }
+
+  if (ENABLE_CHECK_PERFORMANCE_LOG) {
+    LOG_GENERAL(INFO, "Routed " << ContractTypeToString(tt)
+                        << " transaction with nonce " << GetNonce()
+                        << " to shard " << ret_shard << " in "
+                        << r_timer_end(tpStart) << " microseconds");
+  }
+
+  return ret_shard;
 }
 
 bool Transaction::operator==(const Transaction& tran) const {

@@ -921,12 +921,16 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
   if (temp) {
     Json::Value sh_info;
     auto& cs = Contract::ContractStorage2::GetContractStorage();
+    std::chrono::system_clock::time_point tpStart;
+
+    if (ENABLE_CHECK_PERFORMANCE_LOG) {
+        tpStart = r_timer_start();
+    }
 
     // Case (1) -- three-way merge for a contract with sharding info
-    if (t_states.size() > 0 && shardId != UNKNOWN_SHARD_ID
+    if (SEMANTIC_SHARDING && t_states.size() > 0 && shardId != UNKNOWN_SHARD_ID
         && numShards != UNKNOWN_SHARD_ID
         && cs.FetchContractShardingInfo(addr, sh_info)) {
-      std::chrono::system_clock::time_point tpStart;
       std::chrono::system_clock::time_point genStart;
       std::chrono::system_clock::time_point callStart;
       std::chrono::system_clock::time_point writeStart;
@@ -934,7 +938,6 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
       double genTime, callTime;
 
       if (ENABLE_CHECK_PERFORMANCE_LOG) {
-        tpStart = r_timer_start();
         genStart = r_timer_start();
       }
 
@@ -1016,11 +1019,16 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
     // Case (2) -- overwrite
     } else {
       for (const auto& state : t_states) {
-          t_stateDataMap[state.first] = state.second;
+        t_stateDataMap[state.first] = state.second;
         auto pos = t_indexToBeDeleted.find(state.first);
         if (pos != t_indexToBeDeleted.end()) {
           t_indexToBeDeleted.erase(pos);
         }
+      }
+
+      if (ENABLE_CHECK_PERFORMANCE_LOG) {
+        LOG_GENERAL(INFO, "Merged " << t_states.size() << " account deltas in "
+                          << r_timer_end(tpStart) << " microseconds");
       }
     }
 

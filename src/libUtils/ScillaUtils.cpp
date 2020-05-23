@@ -70,19 +70,22 @@ Json::Value ScillaUtils::GetContractCheckerJson(const string& root_w_version,
   ret["argv"].append("-gaslimit");
   ret["argv"].append(to_string(available_gas));
   ret["argv"].append("-contractinfo");
-  ret["argv"].append("-sa");
   ret["argv"].append("-jsonerrors");
 
-  if (sharding_input.isMember("transitions")) {
-    for (const auto& tr : sharding_input["transitions"]) {
-      ret["argv"].append("-sa-tr");
-      ret["argv"].append(tr.asString());
+  if (SEMANTIC_SHARDING) {
+    ret["argv"].append("-sa");
+
+    if (sharding_input.isMember("transitions")) {
+      for (const auto& tr : sharding_input["transitions"]) {
+        ret["argv"].append("-sa-tr");
+        ret["argv"].append(tr.asString());
+      }
     }
-  }
-  if (sharding_input.isMember("weak_reads")) {
-    for (const auto& wr : sharding_input["weak_reads"]) {
-      ret["argv"].append("-sa-wr");
-      ret["argv"].append(wr.asString());
+    if (sharding_input.isMember("weak_reads")) {
+      for (const auto& wr : sharding_input["weak_reads"]) {
+        ret["argv"].append("-sa-wr");
+        ret["argv"].append(wr.asString());
+      }
     }
   }
 

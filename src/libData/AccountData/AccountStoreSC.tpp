@@ -232,30 +232,34 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
 
       Json::Value sharding_input = Json::objectValue;
       try {
-        // Handle optional sharding parameters in transaction init data
-        Json::Value init_data = Json::arrayValue;
-        // Filter out sharding parameters if they exist
-        Json::Value filtered_init_data = Json::arrayValue;
         bytes initData = transaction.GetData();
-        if (!initData.empty() && JSONUtils::GetInstance().convertStrtoJson(
-              DataConversion::CharArrayToString(initData), init_data)) {
+        bytes filteredData = initData;
 
-          for(const auto& entry : init_data) {
-            if (entry.isMember("vname") && entry.isMember("type")
-                && entry.isMember("value")
-                && entry["vname"].asString() == "_sharding_input"
-                && entry["value"].isString()) {
+        if (SEMANTIC_SHARDING) {
+          // Handle optional sharding parameters in transaction init data
+          Json::Value init_data = Json::arrayValue;
+          // Filter out sharding parameters if they exist
+          Json::Value filtered_init_data = Json::arrayValue;
+          if (!initData.empty() && JSONUtils::GetInstance().convertStrtoJson(
+                DataConversion::CharArrayToString(initData), init_data)) {
 
-              std::string si = entry["value"].asString();
-              JSONUtils::GetInstance().convertStrtoJson(si, sharding_input);
-            } else {
-              filtered_init_data.append(entry);
+            for(const auto& entry : init_data) {
+              if (entry.isMember("vname") && entry.isMember("type")
+                  && entry.isMember("value")
+                  && entry["vname"].asString() == "_sharding_input"
+                  && entry["value"].isString()) {
+
+                std::string si = entry["value"].asString();
+                JSONUtils::GetInstance().convertStrtoJson(si, sharding_input);
+              } else {
+                filtered_init_data.append(entry);
+              }
             }
           }
-        }
 
-        bytes filteredData = DataConversion::StringToCharArray(
+          filteredData = DataConversion::StringToCharArray(
             JSONUtils::GetInstance().convertJsontoStr(filtered_init_data));
+        }
 
         // Initiate the contract account, including setting the contract code
         // store the immutable states
@@ -330,11 +334,12 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
             Contract::ContractStorage2::GetContractStorage().GenerateStorageKey(
                 toAddr, FIELDS_MAP_DEPTH_INDICATOR, {}),
             map_depth_data);
-        sharding_info = sharding_info;
-        t_metadata.emplace(
-            Contract::ContractStorage2::GetContractStorage().GenerateStorageKey(
-                toAddr, SHARDING_INFO_INDICATOR, {}),
-            sharding_info);
+        if (SEMANTIC_SHARDING) {
+          t_metadata.emplace(
+              Contract::ContractStorage2::GetContractStorage().GenerateStorageKey(
+                  toAddr, SHARDING_INFO_INDICATOR, {}),
+              sharding_info);
+        }
         toAccount->UpdateStates(toAddr, t_metadata, {}, true);
       }
 
@@ -969,17 +974,19 @@ bool AccountStoreSC<MAP>::ParseContractCheckerOutput(
       map_depth_data = DataConversion::StringToCharArray(
           JSONUtils::GetInstance().convertJsontoStr(map_depth_json));
 
-      if (!root.isMember("sharding_info")
-          || !root["sharding_info"].isMember("field_pcms")
-          || !root["sharding_info"].isMember("transition_constraints")) {
-        receipt.AddError(CHECKER_FAILED);
-        return false;
+      if (SEMANTIC_SHARDING) {
+        if (!root.isMember("sharding_info")
+            || !root["sharding_info"].isMember("field_pcms")
+            || !root["sharding_info"].isMember("transition_constraints")) {
+          receipt.AddError(CHECKER_FAILED);
+          return false;
+        }
+
+        Json::Value sharding_info_json = root["sharding_info"];
+
+        sharding_info = DataConversion::StringToCharArray(
+            JSONUtils::GetInstance().convertJsontoStr(sharding_info_json));
       }
-
-      Json::Value sharding_info_json = root["sharding_info"];
-
-      sharding_info = DataConversion::StringToCharArray(
-          JSONUtils::GetInstance().convertJsontoStr(sharding_info_json));
     }
   } catch (const std::exception& e) {
     LOG_GENERAL(WARNING, "Exception caught: " << e.what() << " checkerPrint: "

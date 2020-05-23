@@ -257,8 +257,9 @@
         <EXTLIB_FOLDER>scilla_libs</EXTLIB_FOLDER>
         <ENABLE_SCILLA_MULTI_VERSION>true</ENABLE_SCILLA_MULTI_VERSION>
         <FIELDS_MAP_DEPTH_INDICATOR>_fields_map_depth</FIELDS_MAP_DEPTH_INDICATOR>
+        <SEMANTIC_SHARDING>false</SEMANTIC_SHARDING>
         <SHARDING_INFO_INDICATOR>_sharding_info</SHARDING_INFO_INDICATOR>
-        <LOG_SC>false</LOG_SC>
+        <LOG_SC>true</LOG_SC>
     </smart_contract>
     <tests>
         <ENABLE_CHECK_PERFORMANCE_LOG>true</ENABLE_CHECK_PERFORMANCE_LOG>
@@ -309,6 +310,7 @@
     <!-- These are the genesis accounts -->
     <accounts>
         <account>
+            <private_key>6409DF90B2377C0103F1BD8CA7AB6BA4CB5FD07B937C10C27B9A1E4BBAE21897</private_key>
             <wallet_address>1c2c7516dac2140c47cbae264e8349bb7c07a534</wallet_address>
         </account>
     </accounts>

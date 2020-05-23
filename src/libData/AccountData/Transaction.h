@@ -173,6 +173,15 @@ class Transaction : public SerializableDataBlock {
     return ERROR;
   }
 
+  static std::string ContractTypeToString(ContractType ct) {
+    switch (ct) {
+      case NON_CONTRACT: return "NON_CONTRACT";
+      case CONTRACT_CREATION: return "CONTRACT_CREATION";
+      case CONTRACT_CALL: return "CONTRACT_CALL";
+      default: return "ERROR";
+    }
+  }
+
   /// Equality comparison operator.
   bool operator==(const Transaction& tran) const;
 
