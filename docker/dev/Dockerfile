@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-ARG BASE=zilliqa/scilla:sharding_test
+ARG BASE=zilliqa/scilla:sharding_testv1
 FROM ${BASE}
 
 # Format guideline: one package per line and keep them alphabetically sorted
