@@ -483,13 +483,15 @@ void Node::UpdateProcessedTransactions() {
       m_createdTxns.clear();
         dev::h256s mbTxHashes = m_mediator.m_node->m_microblock->GetTranHashes();
         for (const auto& kv : t_createdTxns.HashIndex) {
-          // Put back transactions that haven't been committed, but discard
-          // those with nonces that are too low
           auto tx = kv.second;
           Address senderAddr = tx.GetSenderAddr();
           auto senderNonce = AccountStore::GetInstance().GetNonce(senderAddr);
-          if (std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) == mbTxHashes.end()
-            && tx.GetNonce() < senderNonce) {
+
+          bool transactionNotCommitted =
+            std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) == mbTxHashes.end();
+          bool hasHigherNonce = tx.GetNonce() >= senderNonce;
+
+          if (transactionNotCommitted && hasHigherNonce) {
                 m_createdTxns.insert(kv.second);
           }
         }
