@@ -631,12 +631,13 @@ void AccountDeltaToProtobuf(const Account* oldAccount,
   protoAccount.set_numbersign(balanceDelta > 0);
   accbase.SetBalance(uint128_t(abs(balanceDelta)));
 
-  uint64_t nonceDelta = 0;
-  if (!SafeMath<uint64_t>::sub(newAccount.GetNonce(), oldAccount->GetNonce(),
-                               nonceDelta)) {
-    return;
-  }
-  accbase.SetNonce(nonceDelta);
+  // uint64_t nonceDelta = 0;
+  // if (!SafeMath<uint64_t>::sub(newAccount.GetNonce(), oldAccount->GetNonce(),
+  //                              nonceDelta)) {
+  //   return;
+  // }
+  // accbase.SetNonce(nonceDelta);
+  accbase.SetNonce(newAccount.GetNonce());
 
   if (newAccount.isContract()) {
     if (fullCopy) {
@@ -709,10 +710,11 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
                               : 0 - accbase.GetBalance().convert_to<int256_t>();
   account.ChangeBalance(balanceDelta);
 
-  if (!account.IncreaseNonceBy(accbase.GetNonce())) {
-    LOG_GENERAL(WARNING, "IncreaseNonceBy failed");
-    return false;
-  }
+  // if (!account.IncreaseNonceBy(accbase.GetNonce())) {
+  //   LOG_GENERAL(WARNING, "IncreaseNonceBy failed");
+  //   return false;
+  // }
+  account.SetNonce(max(account.GetNonce(), accbase.GetNonce()));
 
   if ((protoAccount.code().size() > 0) || account.isContract()) {
     if (fullCopy) {

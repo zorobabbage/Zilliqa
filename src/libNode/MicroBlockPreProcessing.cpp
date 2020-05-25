@@ -299,7 +299,7 @@ void Node::ProcessTransactionWhenShardLeader(
          map<Address, map<uint64_t, Transaction>>& t_addrNonceTxnMap) -> bool {
     for (auto it = t_addrNonceTxnMap.begin(); it != t_addrNonceTxnMap.end();
          it++) {
-      if (it->second.begin()->first ==
+      if (it->second.begin()->first >=
           AccountStore::GetInstance().GetNonceTemp(it->first) + 1) {
         t = move(it->second.begin()->second);
         it->second.erase(it->second.begin());
@@ -334,9 +334,45 @@ void Node::ProcessTransactionWhenShardLeader(
     Transaction t;
     TransactionReceipt tr;
 
-    // check m_addrNonceTxnMap contains any txn meets right nonce,
-    // if contains, process it
-    if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+    if (t_createdTxns.findOne(t)) {
+      // LOG_GENERAL(INFO, "findOneFromCreated");
+
+      Address senderAddr = t.GetSenderAddr();
+      uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+
+      if (t.GetNonce() >= expectedNonce) {
+        // LOG_GENERAL(INFO, "High nonce: "
+        //                     << t.GetNonce() << " cur sender " <<
+        //                     senderAddr.hex()
+        //                     << " nonce: "
+        //                     <<
+        //                     AccountStore::GetInstance().GetNonceTemp(senderAddr));
+        auto it1 = t_addrNonceTxnMap.find(senderAddr);
+        if (it1 != t_addrNonceTxnMap.end()) {
+          auto it2 = it1->second.find(t.GetNonce());
+          if (it2 != it1->second.end()) {
+            // found the txn with same addr and same nonce
+            // then compare the gasprice and remains the higher one
+            if (t.GetGasPrice() > it2->second.GetGasPrice()) {
+              it2->second = t;
+            }
+            continue;
+          }
+        }
+        t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+      }
+      // if nonce too small, ignore it
+      // TODO: what if microblock gets lost!
+      else if (t.GetNonce() < expectedNonce) {
+        LOG_GENERAL(INFO,
+                    "Nonce too small"
+                        << " Expected "
+                        <<
+                        AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                        << " Found " << t.GetNonce());
+      }
+    }
+    else if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
       // (*optional step)
@@ -363,77 +399,13 @@ void Node::ProcessTransactionWhenShardLeader(
           LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
           break;
         }
-        appendOne(t, tr);
 
+        appendOne(t, tr);
+        LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
         continue;
       }
     }
-    // if no txn in u_map meet right nonce process new come-in transactions
-    else if (t_createdTxns.findOne(t)) {
-      // LOG_GENERAL(INFO, "findOneFromCreated");
-
-      Address senderAddr = t.GetSenderAddr();
-      uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
-
-      // check nonce, if nonce larger than expected, put it into
-      // m_addrNonceTxnMap
-      if (t.GetNonce() > expectedNonce) {
-        LOG_GENERAL(INFO, "High nonce: "
-                            << t.GetNonce() << " cur sender " <<
-                            senderAddr.hex()
-                            << " nonce: "
-                            <<
-                            AccountStore::GetInstance().GetNonceTemp(senderAddr));
-        auto it1 = t_addrNonceTxnMap.find(senderAddr);
-        if (it1 != t_addrNonceTxnMap.end()) {
-          auto it2 = it1->second.find(t.GetNonce());
-          if (it2 != it1->second.end()) {
-            // found the txn with same addr and same nonce
-            // then compare the gasprice and remains the higher one
-            if (t.GetGasPrice() > it2->second.GetGasPrice()) {
-              it2->second = t;
-            }
-            continue;
-          }
-        }
-        t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
-      }
-      // if nonce too small, ignore it
-      else if (t.GetNonce() < expectedNonce) {
-        LOG_GENERAL(INFO,
-                    "Nonce too small"
-                        << " Expected "
-                        <<
-                        AccountStore::GetInstance().GetNonceTemp(senderAddr)
-                        << " Found " << t.GetNonce());
-      }
-      // if nonce correct, process it
-      else {
-        LOG_GENERAL(INFO, "Found transaction with correct nonce " << t.GetNonce());
-        if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
-          gasLimitExceededTxnBuffer.emplace_back(t);
-          continue;
-        }
-        if (m_mediator.m_validator->CheckCreatedTransaction(t, tr)) {
-          if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                       m_gasUsedTotal)) {
-            LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
-            break;
-          }
-          uint128_t txnFee;
-          if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
-                                        txnFee)) {
-            LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
-            continue;
-          }
-          if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
-            LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
-            break;
-          }
-          appendOne(t, tr);
-        }
-      }
-    } else {
+    else {
       break;
     }
   }
@@ -511,7 +483,13 @@ void Node::UpdateProcessedTransactions() {
       m_createdTxns.clear();
         dev::h256s mbTxHashes = m_mediator.m_node->m_microblock->GetTranHashes();
         for (const auto& kv : t_createdTxns.HashIndex) {
-          if (std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) == mbTxHashes.end()) {
+          // Put back transactions that haven't been committed, but discard
+          // those with nonces that are too low
+          auto tx = kv.second;
+          Address senderAddr = tx.GetSenderAddr();
+          auto senderNonce = AccountStore::GetInstance().GetNonce(senderAddr);
+          if (std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) == mbTxHashes.end()
+            && tx.GetNonce() < senderNonce) {
                 m_createdTxns.insert(kv.second);
           }
         }
@@ -569,7 +547,7 @@ void Node::ProcessTransactionWhenShardBackup(
       -> bool {
     for (auto it = t_addrNonceTxnMap.begin(); it != t_addrNonceTxnMap.end();
          it++) {
-      if (it->second.begin()->first ==
+      if (it->second.begin()->first >=
           AccountStore::GetInstance().GetNonceTemp(it->first) + 1) {
         t = move(it->second.begin()->second);
         it->second.erase(it->second.begin());
@@ -604,9 +582,41 @@ void Node::ProcessTransactionWhenShardBackup(
     Transaction t;
     TransactionReceipt tr;
 
+    // first add transactions into t_addrNonceTxnMap
+    if (t_createdTxns.findOne(t)) {
+      Address senderAddr = t.GetSenderAddr();
+      uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+
+      if (t.GetNonce() >= expectedNonce) {
+        auto it1 = t_addrNonceTxnMap.find(senderAddr);
+        if (it1 != t_addrNonceTxnMap.end()) {
+          auto it2 = it1->second.find(t.GetNonce());
+          if (it2 != it1->second.end()) {
+            // found the txn with same addr and same nonce
+            // then compare the gasprice and remains the higher one
+            if (t.GetGasPrice() > it2->second.GetGasPrice()) {
+              it2->second = t;
+            }
+            continue;
+          }
+        }
+        // LOG_GENERAL(INFO, "Expected nonce " << expectedNonce << " got " << t.GetNonce());
+        t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+      }
+      // if nonce too small, ignore it
+      // TODO: what if microblock gets lost!
+      else if (t.GetNonce() < expectedNonce) {
+        LOG_GENERAL(INFO,
+                    "Nonce too small"
+                        << " Expected "
+                        <<
+                        AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                        << " Found " << t.GetNonce());
+      }
+    }
     // check t_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
-    if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+    else if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
       // (*optional step)
@@ -634,62 +644,11 @@ void Node::ProcessTransactionWhenShardBackup(
           break;
         }
         appendOne(t, tr);
+        LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
         continue;
       }
     }
-    // if no txn in u_map meet right nonce process new come-in transactions
-    else if (t_createdTxns.findOne(t)) {
-      Address senderAddr = t.GetSenderAddr();
-      uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
-      // check nonce, if nonce larger than expected, put it into
-      // t_addrNonceTxnMap
-      if (t.GetNonce() > expectedNonce) {
-        auto it1 = t_addrNonceTxnMap.find(senderAddr);
-        if (it1 != t_addrNonceTxnMap.end()) {
-          auto it2 = it1->second.find(t.GetNonce());
-          if (it2 != it1->second.end()) {
-            // found the txn with same addr and same nonce
-            // then compare the gasprice and remains the higher one
-            if (t.GetGasPrice() > it2->second.GetGasPrice()) {
-              it2->second = t;
-            }
-            continue;
-          }
-        }
-        // LOG_GENERAL(INFO, "Expected nonce " << expectedNonce << " got " << t.GetNonce());
-        t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
-      }
-      // if nonce too small, ignore it
-      else if (t.GetNonce() < expectedNonce) {
-      }
-      // if nonce correct, process it
-      else {
-        LOG_GENERAL(INFO, "Found transaction with correct nonce " << t.GetNonce());
-        if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
-          gasLimitExceededTxnBuffer.emplace_back(t);
-          continue;
-        }
-
-        if (m_mediator.m_validator->CheckCreatedTransaction(t, tr)) {
-          if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                       m_gasUsedTotal)) {
-            LOG_GENERAL(WARNING, "m_gasUsedTotal addition overflow!");
-            break;
-          }
-          uint128_t txnFee;
-          if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
-                                        txnFee)) {
-            LOG_GENERAL(WARNING, "txnFee multiplication overflow!");
-            continue;
-          }
-          if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
-            LOG_GENERAL(WARNING, "m_txnFees addition overflow!");
-            break;
-          }
-          appendOne(t, tr);
-        }
-      }
-    } else {
+    else {
       break;
     }
   }
