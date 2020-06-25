@@ -54,9 +54,8 @@ RUN apt-get update \
     python3-setuptools \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install 'setuptools<45' \
-    && pip install request requests clint futures \
-    && pip3 install requests clint future
+    && pip install -r requirements2.txt \
+    && pip3 install -r requirements3.txt
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v6.3.0-alpha.0
