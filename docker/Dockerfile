@@ -57,6 +57,7 @@ RUN apt-get update \
     python3-setuptools \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
+    && pip install -r requirements2.preq.txt \
     && pip install -r requirements2.txt \
     && pip3 install -r requirements3.txt
 
