@@ -24,6 +24,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     trickle \
     vim \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install 'setuptools<45' \
-    && pip install urllib3 kubernetes netaddr==0.7.19 boto3 awscli clint request
+    && pip install urllib3 kubernetes netaddr==0.7.19 boto3 awscli
 
