@@ -17,6 +17,9 @@
 ARG BASE=zilliqa/scilla:v0.7.0
 FROM ${BASE}
 
+COPY requirements2.txt ./
+COPY requirements3.txt ./
+
 # Format guideline: one package per line and keep them alphabetically sorted
 RUN apt-get update \
     && apt-get install -y software-properties-common \
