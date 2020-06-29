@@ -19,7 +19,8 @@ ARG BASE_IMAGE=ubuntu:20.04
 FROM ${BASE_IMAGE} as builder
 
 ARG MAJOR_VERSION=0
-
+ARG SCILLA_REPO=https://github.com/Zilliqa/scilla.git
+RUN git clone ${SCILLA_REPO}
 COPY scilla/ /scilla/${MAJOR_VERSION}
 
 WORKDIR /scilla/${MAJOR_VERSION}
