@@ -14,17 +14,45 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-ARG BASE=zilliqa/scilla:v0.7.0
-FROM ${BASE}
+# Manually input tag or commit, can be overwritten by docker build-args
+ARG BASE_IMAGE=ubuntu:20.04
+FROM ${BASE_IMAGE} as builder
 
-COPY requirements2.txt ./
-COPY requirements2.preq.txt ./
-COPY requirements3.txt ./
+ARG MAJOR_VERSION=0
 
-# Format guideline: one package per line and keep them alphabetically sorted
+COPY scilla/ /scilla/${MAJOR_VERSION}
+
+WORKDIR /scilla/${MAJOR_VERSION}
 RUN apt-get update \
     && apt-get install -y software-properties-common \
-    && add-apt-repository ppa:tah83/secp256k1 -y \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    cmake \
+    build-essential \
+    m4 \
+    ocaml \
+    opam \
+    pkg-config \
+    zlib1g-dev \
+    libgmp-dev \
+    libffi-dev \
+    libssl-dev \
+    libsecp256k1-dev \
+    libboost-system-dev \
+    libpcre3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV OCAML_VERSION 4.07.1
+
+ RUN make opamdep-ci \
+     && echo '. ~/.opam/opam-init/init.sh > /dev/null 2> /dev/null || true ' >> ~/.bashrc \
+     && eval $(opam env) && \
+     make
+
+FROM builder as build1
+RUN apt-get update \
+    && apt-get install -y software-properties-common \
     && apt-get update && apt-get install -y --no-install-recommends \
     autoconf \
     build-essential \
@@ -51,18 +79,14 @@ RUN apt-get update \
     libtool \
     ocl-icd-opencl-dev \
     pkg-config \
-    python \
-    python-pip \
-    python3-dev \
+    python-is-python3 \
     python3-pip \
     python3-setuptools \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install -r requirements2.preq.txt \
-    && pip install -r requirements2.txt \
-    && pip3 install -r requirements3.txt
+    && pip3 install request requests clint futures
 
-# Manually input tag or commit, can be overwritten by docker build-args
+# Manually input tag or commit, can be overwritten by docker build-arg
 ARG COMMIT_OR_TAG=v6.3.0-alpha.0
 ARG REPO=https://github.com/Zilliqa/Zilliqa.git
 ARG SOURCE_DIR=/zilliqa
