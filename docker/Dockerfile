@@ -18,12 +18,6 @@
 ARG BASE_IMAGE=ubuntu:20.04
 FROM ${BASE_IMAGE} as builder
 
-ARG MAJOR_VERSION=0
-ARG SCILLA_REPO=https://github.com/Zilliqa/scilla.git
-RUN git clone ${SCILLA_REPO}
-COPY scilla/ /scilla/${MAJOR_VERSION}
-
-WORKDIR /scilla/${MAJOR_VERSION}
 RUN apt-get update \
     && apt-get install -y software-properties-common \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -43,6 +37,12 @@ RUN apt-get update \
     libboost-system-dev \
     libpcre3-dev \
     && rm -rf /var/lib/apt/lists/*
+
+ARG MAJOR_VERSION=0
+ARG SCILLA_REPO=https://github.com/Zilliqa/scilla.git
+RUN git clone ${SCILLA_REPO}
+COPY scilla/ /scilla/${MAJOR_VERSION}
+WORKDIR /scilla/${MAJOR_VERSION}
 
 ENV OCAML_VERSION 4.07.1
 
