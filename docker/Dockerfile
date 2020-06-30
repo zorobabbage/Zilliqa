@@ -40,8 +40,7 @@ RUN apt-get update \
 
 ARG MAJOR_VERSION=0
 ARG SCILLA_REPO=https://github.com/Zilliqa/scilla.git
-RUN git clone ${SCILLA_REPO} /scilla/${MAJOR_VERSION}
-
+RUN git clone --jobs 4 --recurse-submodules ${SCILLA_REPO} /scilla/${MAJOR_VERSION}
 WORKDIR /scilla/${MAJOR_VERSION}
 
 ENV OCAML_VERSION 4.07.1
