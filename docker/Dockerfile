@@ -54,6 +54,7 @@ FROM builder as build1
 RUN apt-get update \
     && apt-get install -y software-properties-common \
     && apt-get update && apt-get install -y --no-install-recommends \
+    cron \
     autoconf \
     build-essential \
     ca-certificates \
