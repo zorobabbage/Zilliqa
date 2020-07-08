@@ -34,7 +34,7 @@ Compilation database setup:
 http://clang.llvm.org/docs/HowToSetupToolingForLLVM.html
 """
 
-from __future__ import print_function
+
 
 import argparse
 import glob
