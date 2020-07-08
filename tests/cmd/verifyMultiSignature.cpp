@@ -305,11 +305,6 @@ bool verifySig(const bytes& message, const SignatureL& toverify,
       throw "Challenge bin2bn conversion failed";
     }
 
-    std::unique_ptr<BN_CTX, void (*)(BN_CTX*)> ctx(BN_CTX_new(), BN_CTX_free);
-    if (!ctx) {
-      return false;
-    }
-
     err2 = (BN_nnmod(challenge_built.get(), challenge_built.get(),
                      curve.m_order.get(), ctx.get()) == 0);
     err = err || err2;
