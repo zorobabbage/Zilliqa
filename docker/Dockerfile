@@ -85,7 +85,7 @@ RUN apt-get update \
     python3-setuptools \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && pip3 install request requests clint futures
+    && pip3 install requests clint futures
 
 # Manually input tag or commit, can be overwritten by docker build-arg
 ARG COMMIT_OR_TAG=v6.3.0-alpha.0
