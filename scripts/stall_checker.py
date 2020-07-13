@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (C) 2019 Zilliqa
 #
 # This program is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ def getPods(fileName):
 	return result
 
 def getLookupData(lookup):
-	RESULT_LOOKUP[lookup] = subprocess.check_output(['kubectl','exec',lookup,'--','bash','-c','tac state-00001-log.txt | grep -m1 "RECVD FLBLK"']).strip()
+	RESULT_LOOKUP[lookup] = subprocess.check_output(['kubectl','exec',lookup,'--','bash','-c','tac state-00001-log.txt | grep -m1 "RECVD FLBLK"']).decode().strip()
 
 def generateReport(reportname, lookups, webhookURL, stalInMins):
 
@@ -104,7 +104,7 @@ def generateReport(reportname, lookups, webhookURL, stalInMins):
 
 	report_string += "```"
 
-	subprocess.check_output(['curl','-X','POST','-H','Content-type: application/json','--data','{"text":"' + report_string + '"}',webhookURL])
+	subprocess.check_output(['curl','-X','POST','-H','Content-type: application/json','--data','{"text":"' + report_string + '"}',webhookURL]).decode()
 
 	return
 
