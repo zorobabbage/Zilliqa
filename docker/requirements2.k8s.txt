@@ -1,5 +1,0 @@
-urllib3
-kubernetes
-netaddr
-boto3
-awscli

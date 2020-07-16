@@ -23,7 +23,6 @@ RUN apt-get update \
     && apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
-    rsync \
     cmake \
     build-essential \
     m4 \
@@ -63,6 +62,7 @@ RUN apt-get update \
     # curl is not a build dependency
     curl \
     git \
+    rsync \
     golang \
     libboost-filesystem-dev \
     libboost-program-options-dev \
@@ -86,7 +86,7 @@ RUN apt-get update \
     python3-setuptools \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && pip3 install requests clint futures
+    && pip3 install requests clint
 
 # Manually input tag or commit, can be overwritten by docker build-arg
 ARG COMMIT_OR_TAG=v6.3.0-alpha.0
