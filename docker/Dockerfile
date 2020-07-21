@@ -14,15 +14,48 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-ARG BASE=zilliqa/scilla:v0.7.0
-FROM ${BASE}
+#FROM zilliqa/scilla:v0.7.0
+ARG BASE_IMAGE=ubuntu:18.04
+FROM ${BASE_IMAGE} as builder
+
+RUN apt-get update \
+    && apt-get install -y software-properties-common \
+    && add-apt-repository ppa:avsm/ppa -y \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    cmake \
+    build-essential \
+    m4 \
+    ocaml \
+    opam \
+    pkg-config \
+    zlib1g-dev \
+    libgmp-dev \
+    libffi-dev \
+    libssl-dev \
+    libsecp256k1-dev \
+    libboost-system-dev \
+    libpcre3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG MAJOR_VERSION=0
+ARG SCILLA_REPO=https://github.com/Zilliqa/scilla.git
+RUN git clone --jobs 4 --recurse-submodules ${SCILLA_REPO} /scilla/${MAJOR_VERSION}
+WORKDIR /scilla/${MAJOR_VERSION}
+
+ENV OCAML_VERSION 4.07.1
+
+ RUN make opamdep-ci \
+     && echo '. ~/.opam/opam-init/init.sh > /dev/null 2> /dev/null || true ' >> ~/.bashrc \
+     && eval $(opam env) && \
+     make
+
+FROM builder as build1
 
 COPY requirements3.txt ./
 
-# Format guideline: one package per line and keep them alphabetically sorted
 RUN apt-get update \
     && apt-get install -y software-properties-common \
-    && add-apt-repository ppa:tah83/secp256k1 -y \
     && apt-get update && apt-get install -y --no-install-recommends \
     autoconf \
     build-essential \
