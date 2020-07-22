@@ -14,3 +14,4 @@
 [submodule "src/depends/Schnorr"]
 	path = src/depends/Schnorr
 	url = https://github.com/Zilliqa/schnorr.git
+	branch = fix/openssl-compatibility-ubuntu-20
