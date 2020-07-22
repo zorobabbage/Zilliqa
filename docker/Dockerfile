@@ -67,7 +67,7 @@ RUN apt-get update \
     golang \
     # rysnc bydefault gets installed with opam package of scilla.Better to explicitly
     # mention again as installation candidate
-    rysnc \
+    rsync \
     libboost-filesystem-dev \
     libboost-program-options-dev \
     libboost-system-dev \
