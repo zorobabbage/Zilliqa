@@ -580,6 +580,21 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
         return false;
       }
 
+      std::map<Address, std::pair<std::string, std::string>> extlibs_exports;
+      if (!PopulateExtlibsExports(scilla_version, extlibs, extlibs_exports)) {
+        LOG_GENERAL(WARNING, "PopulateExtLibsExports failed");
+        error_code = ErrTxnStatus::FAIL_SCILLA_LIB;
+        return false;
+      }
+
+      m_curBlockNum = blockNum;
+      if (!ExportCallContractFiles(*toAccount, transaction, scilla_version,
+                                   extlibs_exports)) {
+        LOG_GENERAL(WARNING, "ExportCallContractFiles failed");
+        error_code = ErrTxnStatus::FAIL_SCILLA_LIB;
+        return false;
+      }
+
       DiscardTransferAtomic();
 
       if (!this->DecreaseBalance(fromAddr, gasDeposit)) {
@@ -1319,7 +1334,8 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
 
   bool ret = false;
 
-  if (_json["messages"].type() != Json::arrayValue && _json["messages"].type() != Json::nullValue) {
+  if (_json["messages"].type() != Json::arrayValue &&
+      _json["messages"].type() != Json::nullValue) {
     LOG_GENERAL(INFO, "messages is not in array value");
     return false;
   }
