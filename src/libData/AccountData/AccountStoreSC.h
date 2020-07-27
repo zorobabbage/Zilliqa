@@ -125,7 +125,8 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
   /// verify the return from scilla_runner for calling is valid
   bool ParseCallContract(uint64_t& gasRemained, const std::string& runnerPrint,
                          TransactionReceipt& receipt, uint32_t tree_depth,
-                         uint32_t scilla_version);
+                         uint32_t scilla_version, uint64_t& callGasPenalty,
+                         ErrTxnStatus& error_code);
   /// convert the interpreter output into parsable json object for calling
   bool ParseCallContractOutput(Json::Value& jsonOutput,
                                const std::string& runnerPrint,
@@ -135,7 +136,9 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
                                    uint64_t& gasRemained,
                                    TransactionReceipt& receipt,
                                    uint32_t tree_depth,
-                                   uint32_t pre_scilla_version);
+                                   uint32_t pre_scilla_version,
+                                   uint64_t& callGasPenalty,
+                                   ErrTxnStatus& error_code);
 
   /// export files that ExportCreateContractFiles and ExportContractFiles
   /// both needs

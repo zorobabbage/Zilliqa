@@ -570,6 +570,8 @@ const unsigned int SCILLA_CHECKER_INVOKE_GAS{
     ReadConstantNumeric("SCILLA_CHECKER_INVOKE_GAS", "node.transactions.")};
 const unsigned int SCILLA_RUNNER_INVOKE_GAS{
     ReadConstantNumeric("SCILLA_RUNNER_INVOKE_GAS", "node.transactions.")};
+const double SCILLA_GAS_FACTOR{
+    ReadConstantDouble("SCILLA_GAS_FACTOR", "node.transactions.")};
 const unsigned int SYS_TIMESTAMP_VARIANCE_IN_SECONDS{ReadConstantNumeric(
     "SYS_TIMESTAMP_VARIANCE_IN_SECONDS", "node.transactions.")};
 const unsigned int TXN_MISORDER_TOLERANCE_IN_PERCENT{ReadConstantNumeric(

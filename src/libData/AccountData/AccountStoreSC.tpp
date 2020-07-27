@@ -65,24 +65,27 @@ void AccountStoreSC<MAP>::InvokeInterpreter(
       case CHECKER:
         if (!ScillaClient::GetInstance().CallChecker(
                 version,
-                ScillaUtils::GetContractCheckerJson(m_root_w_version,
-                                                    is_library, available_gas),
+                ScillaUtils::GetContractCheckerJson(
+                    m_root_w_version, is_library,
+                    available_gas * SCILLA_GAS_FACTOR),
                 interprinterPrint)) {
         }
         break;
       case RUNNER_CREATE:
         if (!ScillaClient::GetInstance().CallRunner(
                 version,
-                ScillaUtils::GetCreateContractJson(m_root_w_version, is_library,
-                                                   available_gas, balance),
+                ScillaUtils::GetCreateContractJson(
+                    m_root_w_version, is_library,
+                    available_gas * SCILLA_GAS_FACTOR, balance),
                 interprinterPrint)) {
         }
         break;
       case RUNNER_CALL:
         if (!ScillaClient::GetInstance().CallRunner(
                 version,
-                ScillaUtils::GetCallContractJson(m_root_w_version,
-                                                 available_gas, balance),
+                ScillaUtils::GetCallContractJson(
+                    m_root_w_version, available_gas * SCILLA_GAS_FACTOR,
+                    balance),
                 interprinterPrint)) {
         }
         break;
@@ -205,14 +208,14 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
         validToTransferBalance = false;
       }
 
-      // deduct scilla checker invoke gas
-      if (gasRemained < SCILLA_CHECKER_INVOKE_GAS) {
-        LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla checker");
-        error_code = ErrTxnStatus::INSUFFICIENT_GAS;
-        return false;
-      } else {
-        gasRemained -= SCILLA_CHECKER_INVOKE_GAS;
-      }
+      // // deduct scilla checker invoke gas
+      // if (gasRemained < SCILLA_CHECKER_INVOKE_GAS) {
+      //   LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla checker");
+      //   error_code = ErrTxnStatus::INSUFFICIENT_GAS;
+      //   return false;
+      // } else {
+      //   gasRemained -= SCILLA_CHECKER_INVOKE_GAS;
+      // }
 
       // generate address for new contract account
       toAddr =
@@ -327,14 +330,14 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       bool ret = true;
 
       if (ret_checker) {
-        // deduct scilla runner invoke gas
-        if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
-          LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
-          receipt.AddError(GAS_NOT_SUFFICIENT);
-          ret = false;
-        } else {
-          gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
-        }
+        // // deduct scilla runner invoke gas
+        // if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
+        //   LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
+        //   receipt.AddError(GAS_NOT_SUFFICIENT);
+        //   ret = false;
+        // } else {
+        //   gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
+        // }
 
         if (ret) {
           std::string runnerPrint;
@@ -483,14 +486,14 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
         return false;
       }
 
-      // deduct scilla checker invoke gas
-      if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
-        LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
-        error_code = ErrTxnStatus::INSUFFICIENT_GAS;
-        return false;
-      } else {
-        gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
-      }
+      // // deduct scilla checker invoke gas
+      // if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
+      //   LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
+      //   error_code = ErrTxnStatus::INSUFFICIENT_GAS;
+      //   return false;
+      // } else {
+      //   gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
+      // }
 
       m_curSenderAddr = fromAddr;
       m_curEdges = 0;
@@ -576,8 +579,9 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
 
       uint32_t tree_depth = 0;
 
-      if (ret && !ParseCallContract(gasRemained, runnerPrint, receipt,
-                                    tree_depth, scilla_version)) {
+      if (ret &&
+          !ParseCallContract(gasRemained, runnerPrint, receipt, tree_depth,
+                             scilla_version, callGasPenalty, error_code)) {
         Contract::ContractStorage2::GetContractStorage().RevertPrevState();
         receipt.RemoveAllTransitions();
         ret = false;
@@ -948,12 +952,14 @@ bool AccountStoreSC<MAP>::ParseContractCheckerOutput(
       return false;
     }
     try {
-      gasRemained = std::min(
-          gasRemained,
-          boost::lexical_cast<uint64_t>(root["gas_remaining"].asString()));
+      gasRemained = std::min(gasRemained,
+                             (uint64_t)(boost::lexical_cast<double>(
+                                            root["gas_remaining"].asString()) /
+                                        SCILLA_GAS_FACTOR));
     } catch (...) {
-      LOG_GENERAL(WARNING, "_amount " << root["gas_remaining"].asString()
-                                      << " is not numeric");
+      LOG_GENERAL(WARNING, "_amount(before factoring) "
+                               << root["gas_remaining"].asString()
+                               << " is not numeric");
       return false;
     }
     LOG_GENERAL(INFO, "gasRemained: " << gasRemained);
@@ -1051,11 +1057,14 @@ bool AccountStoreSC<MAP>::ParseCreateContractJsonOutput(
     return false;
   }
   try {
-    gasRemained = std::min(gasRemained, boost::lexical_cast<uint64_t>(
-                                            _json["gas_remaining"].asString()));
+    gasRemained = std::min(gasRemained,
+                           (uint64_t)(boost::lexical_cast<double>(
+                                          _json["gas_remaining"].asString()) /
+                                      SCILLA_GAS_FACTOR));
   } catch (...) {
-    LOG_GENERAL(WARNING, "_amount " << _json["gas_remaining"].asString()
-                                    << " is not numeric");
+    LOG_GENERAL(WARNING, "_amount(before factoring) "
+                             << _json["gas_remaining"].asString()
+                             << " is not numeric");
     return false;
   }
   LOG_GENERAL(INFO, "gasRemained: " << gasRemained);
@@ -1090,17 +1099,17 @@ bool AccountStoreSC<MAP>::ParseCreateContractJsonOutput(
 }
 
 template <class MAP>
-bool AccountStoreSC<MAP>::ParseCallContract(uint64_t& gasRemained,
-                                            const std::string& runnerPrint,
-                                            TransactionReceipt& receipt,
-                                            uint32_t tree_depth,
-                                            uint32_t scilla_version) {
+bool AccountStoreSC<MAP>::ParseCallContract(
+    uint64_t& gasRemained, const std::string& runnerPrint,
+    TransactionReceipt& receipt, uint32_t tree_depth, uint32_t scilla_version,
+    uint64_t& callGasPenalty, ErrTxnStatus& error_code) {
   Json::Value jsonOutput;
   if (!ParseCallContractOutput(jsonOutput, runnerPrint, receipt)) {
     return false;
   }
   return ParseCallContractJsonOutput(jsonOutput, gasRemained, receipt,
-                                     tree_depth, scilla_version);
+                                     tree_depth, scilla_version, callGasPenalty,
+                                     error_code);
 }
 
 template <class MAP>
@@ -1139,7 +1148,8 @@ template <class MAP>
 bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
     const Json::Value& _json, uint64_t& gasRemained,
     TransactionReceipt& receipt, uint32_t tree_depth,
-    uint32_t pre_scilla_version) {
+    uint32_t pre_scilla_version, uint64_t& callGasPenalty,
+    ErrTxnStatus& error_code) {
   std::chrono::system_clock::time_point tpStart;
   if (ENABLE_CHECK_PERFORMANCE_LOG) {
     tpStart = r_timer_start();
@@ -1159,11 +1169,14 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
   }
   uint64_t startGas = gasRemained;
   try {
-    gasRemained = std::min(gasRemained, boost::lexical_cast<uint64_t>(
-                                            _json["gas_remaining"].asString()));
+    gasRemained = std::min(gasRemained,
+                           (uint64_t)(boost::lexical_cast<double>(
+                                          _json["gas_remaining"].asString()) /
+                                      SCILLA_GAS_FACTOR));
   } catch (...) {
-    LOG_GENERAL(WARNING, "_amount " << _json["gas_remaining"].asString()
-                                    << " is not numeric");
+    LOG_GENERAL(WARNING, "_amount(before factoring) "
+                             << _json["gas_remaining"].asString()
+                             << " is not numeric");
     return false;
   }
   LOG_GENERAL(INFO, "gasRemained: " << gasRemained);
@@ -1330,14 +1343,23 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
       receipt.AddEdge();
       ++m_curEdges;
 
-      // deduct scilla runner invoke gas
-      if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
-        LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
-        receipt.AddError(GAS_NOT_SUFFICIENT);
+      callGasPenalty = std::max(CONTRACT_INVOKE_GAS, _json["messages"].size());
+
+      if (gasRemained < callGasPenalty) {
+        LOG_GENERAL(WARNING, "Gas remained " << gasRemained << " less than "
+                                             << callGasPenalty);
+        error_code = ErrTxnStatus::INSUFFICIENT_GAS_LIMIT;
         return false;
-      } else {
-        gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
       }
+
+      // // deduct scilla runner invoke gas
+      // if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
+      //   LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
+      //   receipt.AddError(GAS_NOT_SUFFICIENT);
+      //   return false;
+      // } else {
+      //   gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
+      // }
 
       // check whether the recipient contract is in the same shard with the
       // current contract
@@ -1435,7 +1457,7 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
       m_curSenderAddr = curContractAddr;
       m_curContractAddr = recipient;
       if (!ParseCallContract(gasRemained, runnerPrint, receipt, tree_depth + 1,
-                             scilla_version)) {
+                             scilla_version, callGasPenalty, error_code)) {
         LOG_GENERAL(WARNING, "ParseCallContract failed of calling contract: "
                                  << recipient);
         return false;
