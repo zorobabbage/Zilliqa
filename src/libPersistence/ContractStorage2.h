@@ -22,6 +22,7 @@
 #include <leveldb/db.h>
 #include <shared_mutex>
 
+#include <ScillaVM/Utils.h>
 #include "common/Constants.h"
 #include "common/Singleton.h"
 #include "depends/libDatabase/LevelDB.h"
@@ -128,6 +129,10 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
                        unsigned int s_offset, bytes& dst, unsigned int d_offset,
                        bool& foundVal);
 
+  bool FetchStateValue(const dev::h160& addr,
+                       const ScillaVM::ScillaParams::StateQuery& query,
+                       boost::any& dst, bool& foundVal);
+
   bool FetchContractFieldsMapDepth(const dev::h160& address,
                                    Json::Value& map_depth_json, bool temp);
 
@@ -156,6 +161,10 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   bool UpdateStateValue(const dev::h160& addr, const bytes& q,
                         unsigned int q_offset, const bytes& v,
                         unsigned int v_offset);
+
+  bool UpdateStateValue(const dev::h160& addr,
+                        const ScillaVM::ScillaParams::StateQuery& query,
+                        const boost::any& value);
 
   void UpdateStateDatasAndToDeletes(
       const dev::h160& addr, const std::map<std::string, bytes>& t_states,

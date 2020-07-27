@@ -253,7 +253,7 @@
     <smart_contract>
         <ENABLE_SC>false</ENABLE_SC>
         <SCILLA_ROOT/>
-        <SCILLA_CHECKER>bin/scilla-checker</SCILLA_CHECKER>
+        <SCILLA_CHECKER>bin/scilla-compiler</SCILLA_CHECKER>
         <SCILLA_BINARY>bin/scilla-runner</SCILLA_BINARY>
         <SCILLA_FILES>scilla_files</SCILLA_FILES>
         <SCILLA_LOG>_build</SCILLA_LOG>
