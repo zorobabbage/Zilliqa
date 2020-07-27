@@ -142,7 +142,7 @@ void ConsensusLeader::GenerateConsensusSubsets() {
     subset.commitMap.at(m_myID) = true;
 
     // If DS consensus, then first subset should be of dsguard commits only.
-    // Fill in from rest if commits from dsguards < m_numForConsensus
+    // Fill in from rest if commits from dsguards < m_commitCounter
     if (m_DS && GUARD_MODE && (i == 0)) {
       unsigned int subsetPeers = 1;  // myself
       vector<unsigned int> nondsguardIndexes;
@@ -152,10 +152,9 @@ void ConsensusLeader::GenerateConsensusSubsets() {
           subset.commitPoints.emplace_back(m_commitPointMap.at(index));
           subset.commitMap.at(index) = true;
           subsetPeers++;
-          if (subsetPeers == m_numForConsensus) {
+          if (subsetPeers == m_commitCounter) {
             // got all dsguards commit
-            LOG_GENERAL(INFO, "[SubsetID: " << i << "] Got all "
-                                            << m_numForConsensus
+            LOG_GENERAL(INFO, "[SubsetID: " << i << "] Got " << m_commitCounter
                                             << " commits from ds-guards");
             break;
           }
@@ -165,17 +164,17 @@ void ConsensusLeader::GenerateConsensusSubsets() {
       }
 
       // check if we fall short of commits from dsguards
-      if (subsetPeers < m_numForConsensus) {
+      if (subsetPeers < m_commitCounter) {
         // Add from rest of nondsguards commits
         LOG_GENERAL(WARNING, "[SubsetID: " << i << "] Guards = " << subsetPeers
                                            << ", Non-guards = "
-                                           << m_numForConsensus - subsetPeers);
+                                           << m_commitCounter - subsetPeers);
 
         for (auto index : nondsguardIndexes) {
           subset.commitPointMap.at(index) = m_commitPointMap.at(index);
           subset.commitPoints.emplace_back(m_commitPointMap.at(index));
           subset.commitMap.at(index) = true;
-          if (++subsetPeers >= m_numForConsensus) {
+          if (++subsetPeers >= m_commitCounter) {
             break;
           }
         }
@@ -183,7 +182,7 @@ void ConsensusLeader::GenerateConsensusSubsets() {
     }
     // For other subsets, its commit from every one together.
     else {
-      for (unsigned int j = 0; j < m_numForConsensus - 1; j++) {
+      for (unsigned int j = 0; j < m_commitCounter - 1; j++) {
         unsigned int index = peersWhoCommitted.at(j);
         subset.commitPointMap.at(index) = m_commitPointMap.at(index);
         subset.commitPoints.emplace_back(m_commitPointMap.at(index));
@@ -640,22 +639,23 @@ bool ConsensusLeader::ProcessMessageResponseCore(
       return false;
     }
 
-    // 32-byte response
-    subset.responseData.emplace_back(subsetInfo.at(subsetID).response);
-    subset.responseDataMap.at(backupID) = subsetInfo.at(subsetID).response;
-    subset.responseMap.at(backupID) = true;
-    subset.responseCounter++;
+    if (subset.responseCounter < m_numForConsensus) {
+      // 32-byte response
+      subset.responseData.emplace_back(subsetInfo.at(subsetID).response);
+      subset.responseDataMap.at(backupID) = subsetInfo.at(subsetID).response;
+      subset.responseMap.at(backupID) = true;
+      subset.responseCounter++;
 
-    if (subset.responseCounter % 10 == 0) {
-      LOG_GENERAL(INFO, "[Subset " << subsetID << "] Received responses = "
-                                   << subset.responseCounter << " / "
-                                   << m_numForConsensus);
+      if (subset.responseCounter % 10 == 0) {
+        LOG_GENERAL(INFO, "[Subset " << subsetID << "] Received responses = "
+                                     << subset.responseCounter << " / "
+                                     << m_numForConsensus);
+      }
     }
 
-    // Generate collective sig if sufficient responses have been obtained
-    // ==================================================================
-
     if (subset.responseCounter == m_numForConsensus) {
+      // Generate collective sig if sufficient responses have been obtained
+      // ==================================================================
       LOG_GENERAL(INFO, "[Subset " << subsetID << "] Sufficient responses");
 
       bytes collectivesig = {m_classByte, m_insByte,
