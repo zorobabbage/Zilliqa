@@ -486,6 +486,24 @@ bool Account::RetrieveContractAuxiliaries() {
                        m_extlibs);
 }
 
+Json::Value Account::GetInitJson() {
+  if (!isContract()) {
+    LOG_GENERAL(WARNING, "Not a contract");
+    return false;
+  }
+
+  bytes initData = GetInitData();
+  if (!JSONUtils::GetInstance().convertStrtoJson(
+          DataConversion::CharArrayToString(initData), m_initDataJson)) {
+    LOG_GENERAL(WARNING, "Convert InitData to Json failed"
+                             << endl
+                             << DataConversion::CharArrayToString(initData));
+    return false;
+  }
+
+  return m_initDataJson;
+}
+
 bool Account::SetInitData(const bytes& initData) {
   // LOG_MARKER();
 

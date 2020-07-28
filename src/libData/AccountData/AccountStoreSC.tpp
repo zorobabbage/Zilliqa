@@ -406,8 +406,8 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
           try {
             ScillaJIT::init();
             auto SP = buildScillaParams(toAddr);
-            auto sJIT =
-                ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(), &SCM);
+            auto sJIT = ScillaVM::ScillaJIT::create(
+                SP, llvm_ir, toAddr.hex(), toAccount->GetInitJson(), &SCM);
             // TODO: Use this JIT object to deploy.
           } catch (const ScillaVM::ScillaError& se) {
             LOG_GENERAL(WARNING,
@@ -626,8 +626,8 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
         ScillaJIT::init();
         auto SP = buildScillaParams(toAddr);
         auto llvm_ir = "";  // Assuming that the machine code is already cached.
-        auto sJIT =
-            ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(), &SCM);
+        auto sJIT = ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(),
+                                                toAccount->GetInitJson(), &SCM);
         Json::Value msgObj;
         try {
           // Message Json
@@ -646,14 +646,9 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
           receipt.AddError(JSON_OUTPUT_CORRUPTED);
           ret = false;
         }
-        sJIT->execMsg(msgObj);
-        // Let's just print a return JSON. TODO: VM should return these values.
-        Json::Value vmout;
-        vmout["scilla_major_version"] = "0";
-        vmout["gas_remaining"] = std::to_string(gasRemained);
-        vmout["_accepted"] = "false";
-        vmout["messages"] = Json::arrayValue;
-        vmout["events"] = Json::arrayValue;
+        Json::Value vmout =
+            sJIT->execMsg(toAccount->GetBalance().convert_to<std::string>(),
+                          gasRemained, msgObj);
         runnerPrint = vmout.toStyledString();
       } catch (const ScillaVM::ScillaError& se) {
         LOG_GENERAL(WARNING,

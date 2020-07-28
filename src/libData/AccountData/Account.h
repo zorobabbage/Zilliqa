@@ -178,6 +178,9 @@ class Account : public AccountBase {
   // includes scilla_version, is_library, and extlibs
   bool RetrieveContractAuxiliaries();
 
+  // Get the init JSON for this contract account.
+  Json::Value GetInitJson();
+
   /// !temp represents getting whole states
   void GetUpdatedStates(std::map<std::string, bytes>& t_states,
                         std::vector<std::string>& toDeleteIndices,
