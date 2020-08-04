@@ -1269,8 +1269,17 @@ bool Node::ProcessMBnForwardTransaction(const bytes& message,
     return false;
   }
 
-  // Verify the co-signature
-  if (!m_mediator.m_ds->VerifyMicroBlockCoSignature(
+  bool isDSMB;
+
+  {
+    std::lock_guard<mutex> g(m_mediator.m_ds->m_mutexShards);
+    isDSMB = entry.m_microBlock.GetHeader().GetShardId() !=
+          m_mediator.m_ds->m_shards.size();
+  }
+
+  // Verify the co-signature if not DS MB
+  if (!isDSMB &&
+      !m_mediator.m_ds->VerifyMicroBlockCoSignature(
           entry.m_microBlock, entry.m_microBlock.GetHeader().GetShardId())) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Microblock co-sig verification failed");
@@ -1343,15 +1352,10 @@ bool Node::ProcessMBnForwardTransaction(const bytes& message,
                           << " shard "
                           << entry.m_microBlock.GetHeader().GetShardId());
 
-    {
-      // skip for DS microblock submission
-      std::lock_guard<mutex> g(m_mediator.m_ds->m_mutexShards);
-      if (entry.m_microBlock.GetHeader().GetShardId() ==
-          m_mediator.m_ds->m_shards.size()) {
-        return true;
-      }
+    if (isDSMB) {
+      return true;
     }
-
+    
     // shard microblock only:
     // pre-process of early MBnForwardTxn submission
     // soft confirmation
