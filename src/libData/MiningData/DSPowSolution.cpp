@@ -34,6 +34,7 @@ DSPowSolution::DSPowSolution(const DSPowSolution& src)
       m_mixHash(src.m_mixHash),
       m_lookupId(src.m_lookupId),
       m_gasPrice(src.m_gasPrice),
+      m_govProposal(src.m_govProposal),
       m_signature(src.m_signature) {}
 
 DSPowSolution::DSPowSolution(
@@ -41,7 +42,9 @@ DSPowSolution::DSPowSolution(
     const Peer& submitterPeerInput, const PubKey& submitterKeyInput,
     const uint64_t& nonceInput, const std::string& resultingHashInput,
     const std::string& mixHashInput, const uint32_t& lookupIdInput,
-    const uint128_t& gasPriceInput, const Signature& signatureInput)
+    const uint128_t& gasPriceInput,
+    const std::pair<uint32_t, uint32_t>& govProposalInput,
+    const Signature& signatureInput)
     : m_blockNumber(blockNumberInput),
       m_difficultyLevel(difficultyLevelInput),
       m_submitterPeer(submitterPeerInput),
@@ -51,6 +54,7 @@ DSPowSolution::DSPowSolution(
       m_mixHash(mixHashInput),
       m_lookupId(lookupIdInput),
       m_gasPrice(gasPriceInput),
+      m_govProposal(govProposalInput),
       m_signature(signatureInput) {}
 
 /// Returns the current block number.
@@ -81,6 +85,16 @@ const std::string& DSPowSolution::GetMixHash() const { return m_mixHash; }
 /// Returns lookupid
 const uint32_t& DSPowSolution::GetLookupId() const { return m_lookupId; }
 
+/// Returns governance proposal id
+const uint32_t& DSPowSolution::GetGovProposalId() const {
+  return m_govProposal.first;
+}
+
+/// Returns governance vote value
+const uint32_t& DSPowSolution::GetGovVoteValue() const {
+  return m_govProposal.second;
+}
+
 /// Returns gas price
 const uint128_t& DSPowSolution::GetGasPrice() const { return m_gasPrice; }
 
@@ -99,7 +113,10 @@ bool DSPowSolution::operator==(const DSPowSolution& sol) const {
           (m_submitterKey == sol.m_submitterKey) && (m_nonce == sol.m_nonce) &&
           (m_resultingHash == sol.m_resultingHash) &&
           (m_mixHash == sol.m_mixHash) && (m_lookupId == sol.m_lookupId) &&
-          (m_gasPrice == sol.m_gasPrice) && (m_signature == sol.m_signature));
+          (m_gasPrice == sol.m_gasPrice) &&
+          (m_govProposal.first == sol.m_govProposal.first) &&
+          (m_govProposal.second == sol.m_govProposal.second) &&
+          (m_signature == sol.m_signature));
 }
 
 DSPowSolution& DSPowSolution::operator=(const DSPowSolution& src) {
@@ -112,7 +129,7 @@ DSPowSolution& DSPowSolution::operator=(const DSPowSolution& src) {
   m_mixHash = src.m_mixHash;
   m_lookupId = src.m_lookupId;
   m_gasPrice = src.m_gasPrice;
+  m_govProposal = src.m_govProposal;
   m_signature = src.m_signature;
-
   return *this;
 }

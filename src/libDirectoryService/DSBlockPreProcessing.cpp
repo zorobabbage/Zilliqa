@@ -974,6 +974,40 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
 
+  // TODO : typedef the long data type
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      govProposalMap;
+
+  // TODO: check ?  I suppose winner should be take from powDSWinners instead of
+  // sortedDSPoWSolns. powDSWinners will hold the latest node which is in DS
+  // committee.
+  for (const auto& dsnode : powDSWinners) {
+    const auto& powSolIter = allDSPoWs.find(dsnode.first);
+    if (powSolIter != allDSPoWs.end()) {
+      uint32_t proposalId = powSolIter->second.m_govProposal.first;
+      uint32_t voteValue = powSolIter->second.m_govProposal.second;
+      LOG_GENERAL(INFO, "Governance: DS votes count : proposalId: "
+                            << proposalId << " VoteValue: " << voteValue);
+      if (proposalId > 0 && voteValue > 0) {
+        govProposalMap[proposalId].first[voteValue]++;
+      }
+    }
+  }
+
+  for (const auto& miner : sortedPoWSolns) {
+    const auto& powSolIter = allPoWs.find(miner.second);
+    if (powSolIter != allPoWs.end()) {
+      uint32_t proposalId = powSolIter->second.m_govProposal.first;
+      uint32_t voteValue = powSolIter->second.m_govProposal.second;
+      LOG_GENERAL(INFO, "Governance: Miner votes count : proposalId: "
+                            << proposalId << " VoteValue: " << voteValue);
+      if (proposalId > 0 && voteValue > 0) {
+        govProposalMap[proposalId].second[voteValue]++;
+      }
+    }
+  }
+
   vector<Peer> proposedDSMembersInfo;
   proposedDSMembersInfo.reserve(sortedDSPoWSolns.size());
   for (const auto& proposedMember : sortedDSPoWSolns) {
@@ -1013,7 +1047,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         DSBlockHeader(dsDifficulty, difficulty, m_mediator.m_selfKey.second,
                       blockNum, m_mediator.m_currentEpochNum, GetNewGasPrice(),
                       m_mediator.m_curSWInfo, powDSWinners, removeDSNodePubkeys,
-                      dsBlockHashSet, version, committeeHash, prevHash),
+                      dsBlockHashSet, govProposalMap, version, committeeHash,
+                      prevHash),
         CoSignatures(m_mediator.m_DSCommittee->size())));
   }
 
