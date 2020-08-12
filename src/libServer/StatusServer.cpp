@@ -130,6 +130,10 @@ StatusServer::StatusServer(Mediator& mediator,
       jsonrpc::Procedure("GetValidateDB", jsonrpc::PARAMS_BY_POSITION,
                          jsonrpc::JSON_STRING, NULL),
       &StatusServer::GetValidateDBI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("SetVoteInPow", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, NULL),
+      &StatusServer::SetVoteInPowI);
 }
 
 string StatusServer::GetLatestEpochStatesUpdated() {
@@ -481,4 +485,14 @@ string StatusServer::GetValidateDB() {
   }
 
   return result;
+}
+
+bool StatusServer::SetVoteInPow(const string& proposalId, const string& vote) {
+  LOG_GENERAL(INFO,
+              "vote message. proposalId :" << proposalId << " vote:" << vote);
+  if (!proposalId.empty() && !vote.empty()) {
+    if (!m_mediator.m_node->storeVoteUntilPow(proposalId, vote)) {
+    }
+  }
+  return true;
 }

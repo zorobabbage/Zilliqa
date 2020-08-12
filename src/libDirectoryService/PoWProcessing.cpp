@@ -156,10 +156,12 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
   uint32_t lookupId;
   uint128_t gasPrice;
   Signature signature;
-  if (!Messenger::GetDSPoWSubmission(message, offset, blockNumber,
-                                     difficultyLevel, submitterPeer,
-                                     submitterKey, nonce, resultingHash,
-                                     mixHash, signature, lookupId, gasPrice)) {
+  uint32_t proposalId;
+  uint32_t voteValue;
+  if (!Messenger::GetDSPoWSubmission(
+          message, offset, blockNumber, difficultyLevel, submitterPeer,
+          submitterKey, nonce, resultingHash, mixHash, signature, lookupId,
+          gasPrice, proposalId, voteValue)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "DirectoryService::ProcessPowSubmission failed.");
     return false;

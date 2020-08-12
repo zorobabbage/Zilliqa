@@ -277,6 +277,7 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
   if (m_state != MICROBLOCK_CONSENSUS_PREP && m_state != MICROBLOCK_CONSENSUS) {
     SetState(WAITING_DSBLOCK);
   }
+  voteProposal.first = voteProposal.second = 0;
 
   return true;
 }
@@ -295,7 +296,8 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
   if (!Messenger::SetDSPoWSubmission(
           powmessage, MessageOffset::BODY, block_num, difficultyLevel,
           m_mediator.m_selfPeer, m_mediator.m_selfKey, winningNonce,
-          powResultHash, powMixhash, lookupId, gasPrice)) {
+          powResultHash, powMixhash, lookupId, gasPrice, voteProposal.first,
+          voteProposal.second)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetDSPoWSubmission failed.");
     return false;

@@ -3218,3 +3218,10 @@ void Node::CleanLocalRawStores() {
     }
   }
 }
+bool Node ::storeVoteUntilPow(const std::string& proposalId,
+                              const std::string& vote) {
+  voteProposal = make_pair(std::stoi(proposalId), std::stoi(vote));
+  LOG_GENERAL(INFO, "voteProposal. Id: " << voteProposal.first
+                                         << " vote: " << voteProposal.second);
+  return true;
+}

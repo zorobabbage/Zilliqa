@@ -3859,7 +3859,8 @@ bool Messenger::SetDSPoWSubmission(
     const uint8_t difficultyLevel, const Peer& submitterPeer,
     const PairOfKey& submitterKey, const uint64_t nonce,
     const string& resultingHash, const string& mixHash,
-    const uint32_t& lookupId, const uint128_t& gasPrice) {
+    const uint32_t& lookupId, const uint128_t& gasPrice,
+    const uint32_t& proposalId, const uint32_t& voteValue) {
   LOG_MARKER();
 
   DSPoWSubmission result;
@@ -3876,6 +3877,12 @@ bool Messenger::SetDSPoWSubmission(
   result.mutable_data()->set_resultinghash(resultingHash);
   result.mutable_data()->set_mixhash(mixHash);
   result.mutable_data()->set_lookupid(lookupId);
+
+  if (proposalId > 0 && voteValue > 0) {
+    result.mutable_govdata()->set_proposalid(proposalId);
+    result.mutable_govdata()->set_votevalue(voteValue);
+    LOG_GENERAL(INFO, "SetVote: proposalId:" << proposalId << " voteValue:" << voteValue);
+  }
 
   NumberToProtobufByteArray<uint128_t, UINT128_SIZE>(
       gasPrice, *result.mutable_data()->mutable_gasprice());
@@ -3912,7 +3919,8 @@ bool Messenger::GetDSPoWSubmission(const bytes& src, const unsigned int offset,
                                    Peer& submitterPeer, PubKey& submitterPubKey,
                                    uint64_t& nonce, string& resultingHash,
                                    string& mixHash, Signature& signature,
-                                   uint32_t& lookupId, uint128_t& gasPrice) {
+                                   uint32_t& lookupId, uint128_t& gasPrice,
+                                   uint32_t& proposalId, uint32_t& voteValue) {
   LOG_MARKER();
 
   if (offset >= src.size()) {
@@ -3943,7 +3951,14 @@ bool Messenger::GetDSPoWSubmission(const bytes& src, const unsigned int offset,
 
   ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(result.data().gasprice(),
                                                      gasPrice);
-
+  if (result.govdata().IsInitialized()) {
+    LOG_GENERAL(INFO, "DS node received vote in POW message");
+    LOG_GENERAL(INFO, "GetVote ProposalId :" << result.govdata().proposalid()
+                                             << " voteValue :"
+                                             << result.govdata().votevalue());
+    proposalId = result.govdata().proposalid();
+    voteValue = result.govdata().votevalue();
+  }
   bytes tmp(result.data().ByteSize());
   result.data().SerializeToArray(tmp.data(), tmp.size());
 

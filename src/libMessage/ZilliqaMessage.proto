@@ -502,8 +502,14 @@ message DSPoWSubmission
         uint32 lookupid           = 8;
         ByteArray gasprice        = 9;
     }
+    message GovernanceData
+    {
+        uint32 proposalid   = 1;
+        uint32 votevalue    = 2;
+    }
     Data data                     = 1;
     ByteArray signature           = 2;
+    GovernanceData govdata        = 3;
 }
 
 message DSPoWPacketSubmission
