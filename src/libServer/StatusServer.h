@@ -109,9 +109,10 @@ class StatusServer : public Server,
     response = this->GetValidateDB();
   }
   inline virtual void SetVoteInPowI(const Json::Value& request,
-                                         Json::Value& response) {
+                                    Json::Value& response) {
     (void)request;
-    response = this->SetVoteInPow(request[0u].asString(), request[1u].asString());
+    response =
+        this->SetVoteInPow(request[0u].asString(), request[1u].asString());
   }
 
   Json::Value IsTxnInMemPool(const std::string& tranID);

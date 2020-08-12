@@ -78,7 +78,6 @@ class Node : public Executable {
     DESERIALIZATIONERROR
   };
 
-
   Mediator& m_mediator;
 
   Synchronizer m_synchronizer;
@@ -186,7 +185,7 @@ class Node : public Executable {
   std::mutex m_MutexCVFallbackConsensusObj;
   std::condition_variable cv_fallbackConsensusObj;
   bool m_runFallback{};
-  //If multiple proposal, convert to map.check with antonio
+  // If multiple proposal, convert to map.check with antonio
   std::pair<uint32_t, uint32_t> voteProposal;
 
   // Updating of ds guard var
@@ -751,7 +750,8 @@ class Node : public Executable {
 
   bool ValidateAndUpdateIPChangeRequestStore(const PubKey& shardNodePubkey);
 
-  bool storeVoteUntilPow(const std::string& proposalId, const std::string& vote);
+  bool storeVoteUntilPow(const std::string& proposalId,
+                         const std::string& vote);
 
  private:
   static std::map<NodeState, std::string> NodeStateStrings;

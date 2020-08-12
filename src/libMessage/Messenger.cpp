@@ -1575,6 +1575,12 @@ void DSPowSolutionToProtobuf(const DSPowSolution& powSolution,
       powSolution.GetResultingHash());
   dsPowSubmission.mutable_data()->set_mixhash(powSolution.GetMixHash());
   dsPowSubmission.mutable_data()->set_lookupid(powSolution.GetLookupId());
+  if (dsPowSubmission.mutable_data()->govdata().IsInitialized()) {
+    dsPowSubmission.mutable_data()->mutable_govdata()->set_proposalid(
+        powSolution.GetProposalId());
+    dsPowSubmission.mutable_data()->mutable_govdata()->set_votevalue(
+        powSolution.GetVoteValue());
+  }
 
   NumberToProtobufByteArray<uint128_t, UINT128_SIZE>(
       powSolution.GetGasPrice(),
@@ -1604,9 +1610,12 @@ bool ProtobufToDSPowSolution(const DSPoWSubmission& dsPowSubmission,
   Signature signature;
   PROTOBUFBYTEARRAYTOSERIALIZABLE(dsPowSubmission.signature(), signature);
 
+  const uint32_t& proposalId = dsPowSubmission.data().govdata().proposalid();
+  const uint32_t& voteValue = dsPowSubmission.data().govdata().votevalue();
+
   DSPowSolution result(blockNumber, difficultyLevel, submitterPeer,
                        submitterKey, nonce, resultingHash, mixHash, lookupId,
-                       gasPrice, signature);
+                       gasPrice, proposalId, voteValue, signature);
   powSolution = result;
 
   return true;
@@ -3879,9 +3888,10 @@ bool Messenger::SetDSPoWSubmission(
   result.mutable_data()->set_lookupid(lookupId);
 
   if (proposalId > 0 && voteValue > 0) {
-    result.mutable_govdata()->set_proposalid(proposalId);
-    result.mutable_govdata()->set_votevalue(voteValue);
-    LOG_GENERAL(INFO, "SetVote: proposalId:" << proposalId << " voteValue:" << voteValue);
+    result.mutable_data()->mutable_govdata()->set_proposalid(proposalId);
+    result.mutable_data()->mutable_govdata()->set_votevalue(voteValue);
+    LOG_GENERAL(INFO, "SetVote: proposalId:" << proposalId
+                                             << " voteValue:" << voteValue);
   }
 
   NumberToProtobufByteArray<uint128_t, UINT128_SIZE>(
@@ -3951,13 +3961,14 @@ bool Messenger::GetDSPoWSubmission(const bytes& src, const unsigned int offset,
 
   ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(result.data().gasprice(),
                                                      gasPrice);
-  if (result.govdata().IsInitialized()) {
+  if (result.data().govdata().IsInitialized()) {
     LOG_GENERAL(INFO, "DS node received vote in POW message");
-    LOG_GENERAL(INFO, "GetVote ProposalId :" << result.govdata().proposalid()
-                                             << " voteValue :"
-                                             << result.govdata().votevalue());
-    proposalId = result.govdata().proposalid();
-    voteValue = result.govdata().votevalue();
+    LOG_GENERAL(INFO,
+                "GetVote ProposalId :" << result.data().govdata().proposalid()
+                                       << " voteValue :"
+                                       << result.data().govdata().votevalue());
+    proposalId = result.data().govdata().proposalid();
+    voteValue = result.data().govdata().votevalue();
   }
   bytes tmp(result.data().ByteSize());
   result.data().SerializeToArray(tmp.data(), tmp.size());

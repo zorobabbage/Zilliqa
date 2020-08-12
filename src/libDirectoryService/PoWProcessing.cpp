@@ -207,7 +207,7 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
 
   DSPowSolution powSoln(blockNumber, difficultyLevel, submitterPeer,
                         submitterKey, nonce, resultingHash, mixHash, lookupId,
-                        gasPrice, signature);
+                        gasPrice, proposalId, voteValue, signature);
 
   if (VerifyPoWSubmission(powSoln)) {
     std::unique_lock<std::mutex> lk(m_mutexPowSolution);
@@ -263,6 +263,8 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   const string& mixHash = sol.GetMixHash();
   uint32_t lookupId = sol.GetLookupId();
   const uint128_t& gasPrice = sol.GetGasPrice();
+  const uint32_t& proposalId = sol.GetProposalId();
+  const uint32_t& voteValue = sol.GetVoteValue();
 
   // Check block number
   if (!CheckWhetherDSBlockIsFresh(blockNumber)) {
@@ -285,9 +287,11 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   }
 
   // Log all values
-  LOG_GENERAL(INFO, "Key   = " << submitterPubKey);
-  LOG_GENERAL(INFO, "Peer  = " << submitterPeer);
-  LOG_GENERAL(INFO, "Diff  = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "Key          = " << submitterPubKey);
+  LOG_GENERAL(INFO, "Peer         = " << submitterPeer);
+  LOG_GENERAL(INFO, "Diff         = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "ProposalId   = " << to_string(proposalId));
+  LOG_GENERAL(INFO, "VoteValue    = " << to_string(voteValue));
 
   if (CheckPoWSubmissionExceedsLimitsForNode(submitterPubKey)) {
     LOG_GENERAL(WARNING, "Max PoW sent");
