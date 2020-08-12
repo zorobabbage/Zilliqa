@@ -267,6 +267,7 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
         }
       }
     }
+    m_govProposal.first = m_govProposal.second = 0;
   } else {
     // If failed to do PoW, try to rejoin in next DS block
     m_mediator.m_lookup->SetSyncType(SyncType::NORMAL_SYNC);
@@ -295,7 +296,7 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
   if (!Messenger::SetDSPoWSubmission(
           powmessage, MessageOffset::BODY, block_num, difficultyLevel,
           m_mediator.m_selfPeer, m_mediator.m_selfKey, winningNonce,
-          powResultHash, powMixhash, lookupId, gasPrice)) {
+          powResultHash, powMixhash, lookupId, gasPrice, m_govProposal)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetDSPoWSubmission failed.");
     return false;
