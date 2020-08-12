@@ -355,6 +355,7 @@ message ProtoPoWSolution
     bytes mixhash       = 3;
     oneof oneof4 { uint32 lookupid     = 4; }
     ByteArray gasprice  = 5;
+    GovernanceData govdata  = 6;
 }
 
 message ProtoCommittee
@@ -485,16 +486,21 @@ message PMHello
 }
 
 // ============================================================================
+// Governance message
+// ============================================================================
+
+message GovernanceData
+{
+    uint32 proposalid   = 1;
+    uint32 votevalue    = 2;
+}
+
+// ============================================================================
 // Directory Service messages
 // ============================================================================
 
 message DSPoWSubmission
 {
-    message GovernanceData
-    {
-        uint32 proposalid   = 1;
-        uint32 votevalue    = 2;
-    }
     message Data
     {
         uint64 blocknumber          = 1;

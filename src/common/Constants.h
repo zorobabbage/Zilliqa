@@ -35,6 +35,7 @@ const unsigned int RESERVED_FIELD_SIZE = 128;
 // Numeric types sizes
 const unsigned int UINT256_SIZE = 32;
 const unsigned int UINT128_SIZE = 16;
+const unsigned int UINT32_SIZE = 4;
 const unsigned int INT256_SIZE = 32;
 
 // Cryptographic sizes

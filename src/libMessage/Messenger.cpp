@@ -1106,6 +1106,8 @@ bool ProtobufToShardingStructureAnnouncement(
   std::array<unsigned char, 32> result{};
   std::array<unsigned char, 32> mixhash{};
   uint128_t gasPrice;
+  uint32_t proposalId;  // TODO: check size chetan
+  uint32_t voteValue;
 
   for (const auto& proto_shard : protoShardingStructure.shards()) {
     shards.emplace_back();
@@ -1131,9 +1133,12 @@ bool ProtobufToShardingStructureAnnouncement(
            mixhash.begin());
       ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(
           proto_member.powsoln().gasprice(), gasPrice);
+      proposalId = proto_member.powsoln().govdata().proposalid();
+      voteValue = proto_member.powsoln().govdata().proposalid();
       allPoWs.emplace(
           key, PoWSolution(proto_member.powsoln().nonce(), result, mixhash,
-                           proto_member.powsoln().lookupid(), gasPrice));
+                           proto_member.powsoln().lookupid(), gasPrice,
+                           proposalId, voteValue));
     }
   }
 
@@ -4269,6 +4274,8 @@ bool Messenger::GetDSDSBlockAnnouncement(
     std::array<unsigned char, 32> result{};
     std::array<unsigned char, 32> mixhash{};
     uint128_t gasPrice;
+    uint32_t proposalId;
+    uint32_t voteValue;
 
     PROTOBUFBYTEARRAYTOSERIALIZABLE(protoDSWinnerPoW.pubkey(), key);
 
@@ -4284,9 +4291,12 @@ bool Messenger::GetDSDSBlockAnnouncement(
          mixhash.begin());
     ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(
         protoDSWinnerPoW.powsoln().gasprice(), gasPrice);
+    proposalId = protoDSWinnerPoW.powsoln().govdata().proposalid();
+    voteValue = protoDSWinnerPoW.powsoln().govdata().proposalid();
     dsWinnerPoWs.emplace(
         key, PoWSolution(protoDSWinnerPoW.powsoln().nonce(), result, mixhash,
-                         protoDSWinnerPoW.powsoln().lookupid(), gasPrice));
+                         protoDSWinnerPoW.powsoln().lookupid(), gasPrice,
+                         proposalId, voteValue));
   }
 
   // Get the part of the announcement that should be co-signed during the first

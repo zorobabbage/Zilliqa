@@ -368,7 +368,8 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
       array<uint8_t, 32> resultingHashArr{}, mixHashArr{};
       DataConversion::HexStrToStdArray(resultingHash, resultingHashArr);
       DataConversion::HexStrToStdArray(mixHash, mixHashArr);
-      PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice);
+      PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice,
+                       proposalId, voteValue);
 
       m_allPoWConns.emplace(submitterPubKey, submitterPeer);
       if (m_allPoWs.find(submitterPubKey) == m_allPoWs.end()) {
