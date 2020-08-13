@@ -2,7 +2,7 @@
 <!-- format guideline: non-tab four-space indentation -->
 <node>
     <general>
-        <DEBUG_LEVEL>3</DEBUG_LEVEL>
+        <DEBUG_LEVEL>5</DEBUG_LEVEL>
         <ENABLE_DO_REJOIN>true</ENABLE_DO_REJOIN>
         <LOOKUP_NODE_MODE>false</LOOKUP_NODE_MODE>
         <MAX_ENTRIES_FOR_DIAGNOSTIC_DATA>25</MAX_ENTRIES_FOR_DIAGNOSTIC_DATA>

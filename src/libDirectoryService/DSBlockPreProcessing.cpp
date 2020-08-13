@@ -980,13 +980,49 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
                     "[POWS]"
                         << " Unable to convert pairPoWKey.first to hex str");
       } else {
-        LOG_GENERAL(INFO, "[POWS]" << powHashStr << " " << pairPoWKey.second);
+        LOG_GENERAL(INFO, " Governance: Miner [POWS]" << powHashStr << " "
+                                                      << pairPoWKey.second);
+      }
+    }
+    for (const auto& pairPoWKey : sortedDSPoWSolns) {
+      string powHashStr;
+      if (!DataConversion::charArrToHexStr(pairPoWKey.first, powHashStr)) {
+        LOG_GENERAL(WARNING,
+                    "[POWS]"
+                        << " Unable to convert pairPoWKey.first to hex str");
+      } else {
+        LOG_GENERAL(INFO, " Governance: DS [POWS]" << powHashStr << " "
+                                                   << pairPoWKey.second);
       }
     }
   }
 
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
+
+  // count votevalue and votes against that vote value for a proposal from
+  // mining pow winners
+  std::map<uint32_t, uint32_t> votesCount;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> voteProposal;
+  for (auto const& miner : sortedPoWSolns) {
+    auto it = allPoWs.find(miner.second);
+    if (it != allPoWs.end()) {
+      uint32_t proposalId = it->second.m_proposalId;
+      uint32_t voteValue = it->second.m_voteValue;
+      LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
+                            << proposalId << " VoteValue: " << voteValue);
+      votesCount[voteValue]++;
+      voteProposal[proposalId] = votesCount;
+    }
+  }
+  for (auto it = voteProposal.begin(); it != voteProposal.end(); ++it) {
+    LOG_GENERAL(
+        INFO, "Governance: Counting votes against proposal id: " << it->first);
+    for (auto const& vote : it->second) {
+      LOG_GENERAL(INFO,
+                  " voteValue: " << vote.first << " count: " << vote.second);
+    }
+  }
 
   vector<Peer> proposedDSMembersInfo;
   proposedDSMembersInfo.reserve(sortedDSPoWSolns.size());
