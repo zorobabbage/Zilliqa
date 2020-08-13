@@ -915,9 +915,17 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
     allPoWs.swap(tmpAllPoWs);
   }
 
-  for (auto it : allPoWs) {
-    LOG_GENERAL(INFO, "Governance: miner key :"
-                          << it.first<< " proposalId :" << it.second.m_proposalId
+  for (auto const& it : allPoWs) {
+    LOG_GENERAL(INFO, "Governance:Before creating block  miner key :"
+                          << it.first
+                          << " proposalId :" << it.second.m_proposalId
+                          << " vote: " << it.second.m_voteValue);
+  }
+
+  for (auto const& it : allDSPoWs) {
+    LOG_GENERAL(INFO, "Governance:Before creating block  ds key :"
+                          << it.first
+                          << " proposalId :" << it.second.m_proposalId
                           << " vote: " << it.second.m_voteValue);
   }
 

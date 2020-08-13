@@ -491,6 +491,8 @@ bool StatusServer::SetVoteInPow(const string& proposalId, const string& vote) {
   LOG_GENERAL(INFO,
               "Governance: vote msg received by status server. proposalId :"
                   << proposalId << " vote:" << vote);
+  // TODO: Epoch check for validity of vote
+  // proposal id and vote value validity should be done by script
   if (!proposalId.empty() && !vote.empty()) {
     if (!m_mediator.m_node->storeVoteUntilPow(proposalId, vote)) {
     }
