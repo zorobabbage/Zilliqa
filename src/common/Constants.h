@@ -370,6 +370,7 @@ extern const bool ENABLE_SCILLA_MULTI_VERSION;
 extern const std::string FIELDS_MAP_DEPTH_INDICATOR;
 extern const bool LOG_SC;
 extern const bool DISABLE_SCILLA_LIB;
+extern const bool SCILLA_VM_DEV;
 
 // Test constants
 extern const bool ENABLE_CHECK_PERFORMANCE_LOG;

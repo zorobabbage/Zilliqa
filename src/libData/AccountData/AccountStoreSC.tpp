@@ -103,20 +103,66 @@ void AccountStoreSC<MAP>::InvokeInterpreter(
                 &available_gas, &balance, &ret, &receipt]() mutable -> void {
     switch (invoke_type) {
       case CHECKER:
-        if (!ScillaClient::GetInstance().CallChecker(
-                version,
-                ScillaUtils::GetContractCheckerJson(m_root_w_version,
-                                                    is_library, available_gas),
-                interprinterPrint)) {
+        if (SCILLA_VM_DEV) {
+          try {
+            int pid = -1;
+            if (!SysCommand::ExecuteCmd(
+                    SysCommand::WITH_OUTPUT_PID,
+                    ScillaUtils::GetContractCheckerCmdStr(
+                        m_root_w_version, is_library, available_gas),
+                    interprinterPrint, pid)) {
+              LOG_GENERAL(WARNING, "ExecuteCmd failed: "
+                                       << ScillaUtils::GetContractCheckerCmdStr(
+                                              m_root_w_version, is_library,
+                                              available_gas));
+              receipt.AddError(EXECUTE_CMD_FAILED);
+              ret = false;
+            }
+          } catch (const std::exception& e) {
+            LOG_GENERAL(
+                WARNING,
+                "Exception caught in SysCommand::ExecuteCmd (1): " << e.what());
+            ret = false;
+          }
+        } else {
+          if (!ScillaClient::GetInstance().CallChecker(
+                  version,
+                  ScillaUtils::GetContractCheckerJson(
+                      m_root_w_version, is_library, available_gas),
+                  interprinterPrint)) {
+          }
         }
         break;
       case RUNNER_CREATE:
+        // if (SCILLA_VM_DEV) {
+        //   try {
+        //     int pid = -1;
+        //     if (!SysCommand::ExecuteCmd(
+        //             SysCommand::WITH_OUTPUT_PID,
+        //             ScillaUtils::GetCreateContractCmdStr(
+        //                 m_root_w_version, is_library, available_gas, balance),
+        //             interprinterPrint, pid)) {
+        //       LOG_GENERAL(
+        //           WARNING,
+        //           "ExecuteCmd failed: " << ScillaUtils::GetCreateContractCmdStr(
+        //               m_root_w_version, is_library, available_gas, balance));
+        //       receipt.AddError(EXECUTE_CMD_FAILED);
+        //       ret = false;
+        //     }
+        //   } catch (const std::exception& e) {
+        //     LOG_GENERAL(
+        //         WARNING,
+        //         "Exception caught in SysCommand::ExecuteCmd (1): " << e.what());
+        //     ret = false;
+        //   }
+        // } else {
         if (!ScillaClient::GetInstance().CallRunner(
                 version,
-                ScillaUtils::GetCreateContractJson(m_root_w_version, is_library,
-                                                   available_gas, balance),
+                ScillaUtils::GetCreateContractJson(
+                    m_root_w_version, is_library, available_gas, balance),
                 interprinterPrint)) {
         }
+        // }
         break;
       case RUNNER_CALL:
         if (!ScillaClient::GetInstance().CallRunner(
@@ -1107,9 +1153,10 @@ template <class MAP>
 bool AccountStoreSC<MAP>::ParseCreateContractOutput(
     Json::Value& jsonOutput, const std::string& runnerPrint,
     TransactionReceipt& receipt) {
-  // LOG_MARKER();
 
   if (LOG_SC) {
+    LOG_MARKER();
+
     LOG_GENERAL(
         INFO,
         "Output: " << std::endl

@@ -529,6 +529,8 @@ const bool LOG_SC{ReadConstantString("LOG_SC", "node.smart_contract.") ==
                   "true"};
 const bool DISABLE_SCILLA_LIB{
     ReadConstantString("DISABLE_SCILLA_LIB", "node.smart_contract.") == "true"};
+const bool SCILLA_VM_DEV{
+    ReadConstantString("SCILLA_VM_DEV", "node.smart_contract.") == "true"};
 
 // Test constants
 const bool ENABLE_CHECK_PERFORMANCE_LOG{

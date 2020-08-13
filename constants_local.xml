@@ -271,6 +271,7 @@
         <FIELDS_MAP_DEPTH_INDICATOR>_fields_map_depth</FIELDS_MAP_DEPTH_INDICATOR>
         <LOG_SC>true</LOG_SC>
         <DISABLE_SCILLA_LIB>true</DISABLE_SCILLA_LIB>
+	<SCILLA_VM_DEV>false</SCILLA_VM_DEV>
     </smart_contract>
     <tests>
         <ENABLE_CHECK_PERFORMANCE_LOG>false</ENABLE_CHECK_PERFORMANCE_LOG>
