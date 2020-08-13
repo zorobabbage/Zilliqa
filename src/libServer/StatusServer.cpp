@@ -489,7 +489,8 @@ string StatusServer::GetValidateDB() {
 
 bool StatusServer::SetVoteInPow(const string& proposalId, const string& vote) {
   LOG_GENERAL(INFO,
-              "vote message. proposalId :" << proposalId << " vote:" << vote);
+              "Governance: vote msg received by status server. proposalId :"
+                  << proposalId << " vote:" << vote);
   if (!proposalId.empty() && !vote.empty()) {
     if (!m_mediator.m_node->storeVoteUntilPow(proposalId, vote)) {
     }

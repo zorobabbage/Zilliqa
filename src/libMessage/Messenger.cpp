@@ -3895,7 +3895,7 @@ bool Messenger::SetDSPoWSubmission(
   if (proposalId > 0 && voteValue > 0) {
     result.mutable_data()->mutable_govdata()->set_proposalid(proposalId);
     result.mutable_data()->mutable_govdata()->set_votevalue(voteValue);
-    LOG_GENERAL(INFO, "SetVote: proposalId:" << proposalId
+    LOG_GENERAL(INFO, "Governance: SetVote: proposalId:" << proposalId
                                              << " voteValue:" << voteValue);
   }
 
@@ -3967,9 +3967,9 @@ bool Messenger::GetDSPoWSubmission(const bytes& src, const unsigned int offset,
   ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(result.data().gasprice(),
                                                      gasPrice);
   if (result.data().govdata().IsInitialized()) {
-    LOG_GENERAL(INFO, "DS node received vote in POW message");
+    LOG_GENERAL(INFO, "Governance: DS node received vote in POW message");
     LOG_GENERAL(INFO,
-                "GetVote ProposalId :" << result.data().govdata().proposalid()
+                "Governance: GetVote ProposalId :" << result.data().govdata().proposalid()
                                        << " voteValue :"
                                        << result.data().govdata().votevalue());
     proposalId = result.data().govdata().proposalid();

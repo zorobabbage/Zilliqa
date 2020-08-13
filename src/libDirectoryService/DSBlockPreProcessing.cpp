@@ -915,6 +915,12 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
     allPoWs.swap(tmpAllPoWs);
   }
 
+  for (auto it : allPoWs) {
+    LOG_GENERAL(INFO, "Governance: miner key :"
+                          << it.first<< " proposalId :" << it.second.m_proposalId
+                          << " vote: " << it.second.m_voteValue);
+  }
+
   auto sortedDSPoWSolns = SortPoWSoln(allDSPoWs);
 
   std::map<PubKey, Peer> powDSWinners;
