@@ -32,6 +32,7 @@
 #define SUCCESS 0
 #define ERROR_IN_COMMAND_LINE -1
 #define ERROR_UNHANDLED_EXCEPTION -2
+#define ERROR_UNEXPECTED -3
 
 using namespace std;
 namespace po = boost::program_options;
@@ -83,6 +84,44 @@ int main(int argc, const char* argv[]) {
 
     Mediator mediator(key, peer);
     Retriever retriever(mediator);
+
+    {
+      TxBlockSharedPtr txBlock0;
+      if (!BlockStorage::GetBlockStorage().GetTxBlock(0, txBlock0)) {
+        LOG_GENERAL(WARNING, "Missing Tx Block 0");
+        return ERROR_UNEXPECTED;
+      }
+      LOG_GENERAL(INFO, *txBlock0);
+      uint64_t origTimestamp = txBlock0->GetTimestamp();
+
+      TxBlockSharedPtr txBlock1;
+      if (!BlockStorage::GetBlockStorage().GetTxBlock(1, txBlock1)) {
+        LOG_GENERAL(WARNING, "Missing Tx Block 1");
+        return ERROR_UNEXPECTED;
+      }
+      LOG_GENERAL(INFO, "PrevHash In Tx Block 1 = "
+                            << txBlock1->GetHeader().GetPrevHash());
+      LOG_GENERAL(INFO,
+                  "Tx Block 0 Hash = " << txBlock0->GetHeader().GetMyHash());
+
+      TxBlock genTxBlock = Synchronizer::ConstructGenesisTxBlock();
+      genTxBlock.SetTimestamp(origTimestamp);
+      bytes serializedTxBlock;
+      genTxBlock.Serialize(serializedTxBlock, 0);
+      if (!BlockStorage::GetBlockStorage().PutTxBlock(
+              genTxBlock.GetHeader().GetBlockNum(), serializedTxBlock)) {
+        LOG_GENERAL(WARNING, "BlockStorage::PutTxBlock failed");
+        return ERROR_UNEXPECTED;
+      }
+
+      if (!BlockStorage::GetBlockStorage().GetTxBlock(0, txBlock0)) {
+        LOG_GENERAL(WARNING, "Missing Tx Block 0");
+        return ERROR_UNEXPECTED;
+      }
+      LOG_GENERAL(INFO, *txBlock0);
+      LOG_GENERAL(
+          INFO, "New Tx Block 0 Hash = " << txBlock0->GetHeader().GetMyHash());
+    }
 
     LOG_GENERAL(INFO, "Start Retrieving States");
 
