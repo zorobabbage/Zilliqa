@@ -347,6 +347,7 @@ extern const bool REJOIN_NODE_NOT_IN_NETWORK;
 extern const unsigned int RESUME_BLACKLIST_DELAY_IN_SECONDS;
 extern const unsigned int INCRDB_DSNUMS_WITH_STATEDELTAS;
 extern const bool CONTRACT_STATES_MIGRATED;
+extern const unsigned int MAX_IPCHANGE_REQUEST_LIMIT;
 
 // Smart contract constants
 extern const bool ENABLE_SC;
@@ -369,6 +370,7 @@ extern const bool ENABLE_SCILLA_MULTI_VERSION;
 extern const std::string FIELDS_MAP_DEPTH_INDICATOR;
 extern const bool LOG_SC;
 extern const bool DISABLE_SCILLA_LIB;
+extern const bool SCILLA_VM_DEV;
 
 // Test constants
 extern const bool ENABLE_CHECK_PERFORMANCE_LOG;

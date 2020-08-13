@@ -45,6 +45,15 @@ class ScillaUtils {
   static Json::Value GetCallContractJson(
       const std::string& root_w_version, const uint64_t& available_gas,
       const boost::multiprecision::uint128_t& balance);
+
+  static std::string GetContractCheckerCmdStr(const std::string& root_w_version,
+                                              bool is_library,
+                                              const uint64_t& available_gas);
+
+  static std::string GetCreateContractCmdStr(
+      const std::string& root_w_version, bool is_library,
+      const uint64_t& available_gas,
+      const boost::multiprecision::uint128_t& balance);
 };
 
 #endif  // ZILLIQA_SRC_LIBUTILS_SCILLAUTILS_H_

@@ -140,3 +140,40 @@ Json::Value ScillaUtils::GetCallContractJson(const string& root_w_version,
 
   return ret;
 }
+
+std::string ScillaUtils::GetContractCheckerCmdStr(
+    const std::string& root_w_version, bool is_library,
+    const uint64_t& available_gas) {
+  std::string cmdStr =
+      // "rm -rf " + SCILLA_IPC_SOCKET_PATH + "; " +
+      root_w_version + '/' + SCILLA_CHECKER + " -init " + INIT_JSON +
+      " -contractinfo -jsonerrors -libdir " + root_w_version + '/' +
+      SCILLA_LIB + ":" + EXTLIB_FOLDER + " " + INPUT_CODE +
+      (is_library ? LIBRARY_CODE_EXTENSION : CONTRACT_FILE_EXTENSION) +
+      " -gaslimit " + std::to_string(available_gas);
+
+  if (LOG_SC) {
+    LOG_GENERAL(INFO, cmdStr);
+  }
+  return cmdStr;
+}
+
+std::string ScillaUtils::GetCreateContractCmdStr(
+    const std::string& root_w_version, bool is_library,
+    const uint64_t& available_gas,
+    const boost::multiprecision::uint128_t& balance) {
+  std::string cmdStr =
+      // "rm -rf " + SCILLA_IPC_SOCKET_PATH + "; " +
+      root_w_version + '/' + SCILLA_BINARY + " -init " + INIT_JSON +
+      " -ipcaddress " + SCILLA_IPC_SOCKET_PATH + " -iblockchain " +
+      INPUT_BLOCKCHAIN_JSON + " -o " + OUTPUT_JSON + " -i " + INPUT_CODE +
+      (is_library ? LIBRARY_CODE_EXTENSION : CONTRACT_FILE_EXTENSION) +
+      " -gaslimit " + std::to_string(available_gas) + " -jsonerrors -balance " +
+      balance.convert_to<std::string>() + " -libdir " + root_w_version + '/' +
+      SCILLA_LIB + ":" + EXTLIB_FOLDER;
+
+  if (LOG_SC) {
+    LOG_GENERAL(INFO, cmdStr);
+  }
+  return cmdStr;
+}

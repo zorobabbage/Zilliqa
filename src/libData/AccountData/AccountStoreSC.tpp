@@ -103,20 +103,66 @@ void AccountStoreSC<MAP>::InvokeInterpreter(
                 &available_gas, &balance, &ret, &receipt]() mutable -> void {
     switch (invoke_type) {
       case CHECKER:
-        if (!ScillaClient::GetInstance().CallChecker(
-                version,
-                ScillaUtils::GetContractCheckerJson(m_root_w_version,
-                                                    is_library, available_gas),
-                interprinterPrint)) {
+        if (SCILLA_VM_DEV) {
+          try {
+            int pid = -1;
+            if (!SysCommand::ExecuteCmd(
+                    SysCommand::WITH_OUTPUT_PID,
+                    ScillaUtils::GetContractCheckerCmdStr(
+                        m_root_w_version, is_library, available_gas),
+                    interprinterPrint, pid)) {
+              LOG_GENERAL(WARNING, "ExecuteCmd failed: "
+                                       << ScillaUtils::GetContractCheckerCmdStr(
+                                              m_root_w_version, is_library,
+                                              available_gas));
+              receipt.AddError(EXECUTE_CMD_FAILED);
+              ret = false;
+            }
+          } catch (const std::exception& e) {
+            LOG_GENERAL(
+                WARNING,
+                "Exception caught in SysCommand::ExecuteCmd (1): " << e.what());
+            ret = false;
+          }
+        } else {
+          if (!ScillaClient::GetInstance().CallChecker(
+                  version,
+                  ScillaUtils::GetContractCheckerJson(
+                      m_root_w_version, is_library, available_gas),
+                  interprinterPrint)) {
+          }
         }
         break;
       case RUNNER_CREATE:
+        // if (SCILLA_VM_DEV) {
+        //   try {
+        //     int pid = -1;
+        //     if (!SysCommand::ExecuteCmd(
+        //             SysCommand::WITH_OUTPUT_PID,
+        //             ScillaUtils::GetCreateContractCmdStr(
+        //                 m_root_w_version, is_library, available_gas, balance),
+        //             interprinterPrint, pid)) {
+        //       LOG_GENERAL(
+        //           WARNING,
+        //           "ExecuteCmd failed: " << ScillaUtils::GetCreateContractCmdStr(
+        //               m_root_w_version, is_library, available_gas, balance));
+        //       receipt.AddError(EXECUTE_CMD_FAILED);
+        //       ret = false;
+        //     }
+        //   } catch (const std::exception& e) {
+        //     LOG_GENERAL(
+        //         WARNING,
+        //         "Exception caught in SysCommand::ExecuteCmd (1): " << e.what());
+        //     ret = false;
+        //   }
+        // } else {
         if (!ScillaClient::GetInstance().CallRunner(
                 version,
-                ScillaUtils::GetCreateContractJson(m_root_w_version, is_library,
-                                                   available_gas, balance),
+                ScillaUtils::GetCreateContractJson(
+                    m_root_w_version, is_library, available_gas, balance),
                 interprinterPrint)) {
         }
+        // }
         break;
       case RUNNER_CALL:
         if (!ScillaClient::GetInstance().CallRunner(
@@ -406,8 +452,8 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
           try {
             ScillaJIT::init();
             auto SP = buildScillaParams(toAddr);
-            auto sJIT =
-                ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(), &SCM);
+            auto sJIT = ScillaVM::ScillaJIT::create(
+                SP, llvm_ir, toAddr.hex(), toAccount->GetInitJson(), &SCM);
             // TODO: Use this JIT object to deploy.
           } catch (const ScillaVM::ScillaError& se) {
             LOG_GENERAL(WARNING,
@@ -626,8 +672,8 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
         ScillaJIT::init();
         auto SP = buildScillaParams(toAddr);
         auto llvm_ir = "";  // Assuming that the machine code is already cached.
-        auto sJIT =
-            ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(), &SCM);
+        auto sJIT = ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(),
+                                                toAccount->GetInitJson(), &SCM);
         Json::Value msgObj;
         try {
           // Message Json
@@ -646,14 +692,9 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
           receipt.AddError(JSON_OUTPUT_CORRUPTED);
           ret = false;
         }
-        sJIT->execMsg(msgObj);
-        // Let's just print a return JSON. TODO: VM should return these values.
-        Json::Value vmout;
-        vmout["scilla_major_version"] = "0";
-        vmout["gas_remaining"] = std::to_string(gasRemained);
-        vmout["_accepted"] = "false";
-        vmout["messages"] = Json::arrayValue;
-        vmout["events"] = Json::arrayValue;
+        Json::Value vmout =
+            sJIT->execMsg(toAccount->GetBalance().convert_to<std::string>(),
+                          gasRemained, msgObj);
         runnerPrint = vmout.toStyledString();
       } catch (const ScillaVM::ScillaError& se) {
         LOG_GENERAL(WARNING,
@@ -1112,9 +1153,10 @@ template <class MAP>
 bool AccountStoreSC<MAP>::ParseCreateContractOutput(
     Json::Value& jsonOutput, const std::string& runnerPrint,
     TransactionReceipt& receipt) {
-  // LOG_MARKER();
 
   if (LOG_SC) {
+    LOG_MARKER();
+
     LOG_GENERAL(
         INFO,
         "Output: " << std::endl

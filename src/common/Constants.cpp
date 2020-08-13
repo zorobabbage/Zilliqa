@@ -475,6 +475,8 @@ const unsigned int INCRDB_DSNUMS_WITH_STATEDELTAS{
     ReadConstantNumeric("INCRDB_DSNUMS_WITH_STATEDELTAS", "node.recovery.")};
 const bool CONTRACT_STATES_MIGRATED{
     ReadConstantString("CONTRACT_STATES_MIGRATED", "node.recovery.") == "true"};
+const unsigned int MAX_IPCHANGE_REQUEST_LIMIT{
+    ReadConstantNumeric("MAX_IPCHANGE_REQUEST_LIMIT", "node.recovery.")};
 
 // Smart contract constants
 const bool ENABLE_SC{ReadConstantString("ENABLE_SC", "node.smart_contract.") ==
@@ -527,6 +529,8 @@ const bool LOG_SC{ReadConstantString("LOG_SC", "node.smart_contract.") ==
                   "true"};
 const bool DISABLE_SCILLA_LIB{
     ReadConstantString("DISABLE_SCILLA_LIB", "node.smart_contract.") == "true"};
+const bool SCILLA_VM_DEV{
+    ReadConstantString("SCILLA_VM_DEV", "node.smart_contract.") == "true"};
 
 // Test constants
 const bool ENABLE_CHECK_PERFORMANCE_LOG{
