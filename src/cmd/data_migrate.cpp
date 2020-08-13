@@ -21,6 +21,7 @@
 
 #include "libData/AccountData/AccountStore.h"
 #include "libMediator/Mediator.h"
+#include "libMessage/Messenger.h"
 #include "libPersistence/BlockStorage.h"
 #include "libPersistence/Retriever.h"
 #include "libUtils/DataConversion.h"
@@ -121,6 +122,67 @@ int main(int argc, const char* argv[]) {
       LOG_GENERAL(INFO, *txBlock0);
       LOG_GENERAL(
           INFO, "New Tx Block 0 Hash = " << txBlock0->GetHeader().GetMyHash());
+    }
+
+    {
+      DSBlockSharedPtr dsBlock0;
+      if (!BlockStorage::GetBlockStorage().GetDSBlock(0, dsBlock0)) {
+        LOG_GENERAL(WARNING, "Missing DS Block 0");
+        return ERROR_UNEXPECTED;
+      }
+      LOG_GENERAL(INFO, *dsBlock0);
+
+      BlockLink blockLink0 = BlockLinkChain::GetFromPersistentStorage(0);
+
+      uint64_t origTimestamp = dsBlock0->GetTimestamp();
+
+      DSBlockSharedPtr dsBlock1;
+      if (!BlockStorage::GetBlockStorage().GetDSBlock(1, dsBlock1)) {
+        LOG_GENERAL(WARNING, "Missing DS Block 1");
+        return ERROR_UNEXPECTED;
+      }
+      LOG_GENERAL(INFO, "PrevHash In DS Block 1 = "
+                            << dsBlock1->GetHeader().GetPrevHash());
+      LOG_GENERAL(INFO,
+                  "DS Block 0 Hash = " << dsBlock0->GetHeader().GetMyHash());
+      LOG_GENERAL(INFO, "BlockLink 0 Hash = "
+                            << get<BlockLinkIndex::BLOCKHASH>(blockLink0));
+
+      DSBlock genDSBlock = Synchronizer::ConstructGenesisDSBlock();
+      genDSBlock.SetTimestamp(origTimestamp);
+      bytes serializedDSBlock;
+      genDSBlock.Serialize(serializedDSBlock, 0);
+      if (!BlockStorage::GetBlockStorage().PutDSBlock(
+              genDSBlock.GetHeader().GetBlockNum(), serializedDSBlock)) {
+        LOG_GENERAL(WARNING, "BlockStorage::PutDSBlock failed");
+        return ERROR_UNEXPECTED;
+      }
+
+      if (!BlockStorage::GetBlockStorage().GetDSBlock(0, dsBlock0)) {
+        LOG_GENERAL(WARNING, "Missing DS Block 0");
+        return ERROR_UNEXPECTED;
+      }
+      LOG_GENERAL(INFO, *dsBlock0);
+      LOG_GENERAL(
+          INFO, "New DS Block 0 Hash = " << dsBlock0->GetHeader().GetMyHash());
+
+      get<BlockLinkIndex::BLOCKHASH>(blockLink0) =
+          dsBlock0->GetHeader().GetMyHash();
+
+      bytes dst;
+
+      if (!Messenger::SetBlockLink(dst, 0, blockLink0)) {
+        LOG_GENERAL(WARNING, "Messenger::SetBlockLink failed");
+        return ERROR_UNEXPECTED;
+      }
+      if (!BlockStorage::GetBlockStorage().PutBlockLink(0, dst)) {
+        LOG_GENERAL(WARNING, "PutBlockLink failed");
+        return ERROR_UNEXPECTED;
+      }
+
+      blockLink0 = BlockLinkChain::GetFromPersistentStorage(0);
+      LOG_GENERAL(INFO, "New BlockLink 0 Hash = "
+                            << get<BlockLinkIndex::BLOCKHASH>(blockLink0));
     }
 
     LOG_GENERAL(INFO, "Start Retrieving States");
