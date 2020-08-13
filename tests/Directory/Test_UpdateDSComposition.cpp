@@ -87,13 +87,13 @@ BOOST_FIXTURE_TEST_CASE(test_UpdateWithoutRemovals, F) {
 
   // Create the nodes to be removed. This should be empty for this test case.
   std::vector<PubKey> removeDSNodePubkeys;
-
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
   // Construct the fake DS Block.
   PairOfKey leaderKeyPair = Schnorr::GenKeyPair();
   PubKey leaderPubKey = leaderKeyPair.second;
   DSBlockHeader header(DS_DIFF, SHARD_DIFF, leaderPubKey, BLOCK_NUM, EPOCH_NUM,
                        GAS_PRICE, SWInfo(), winners, removeDSNodePubkeys,
-                       DSBlockHashSet());
+                       DSBlockHashSet(), govVoteProposals);
   DSBlock block(header, CoSignatures());
 
   // Build the expected composition.
@@ -143,12 +143,14 @@ BOOST_FIXTURE_TEST_CASE(test_UpdateWithoutWinners, F) {
   // Creat the empty nodes to be removed vector.
   std::vector<PubKey> removeDSNodePubkeys;
 
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
+
   // Construct the fake DS Block.
   PairOfKey leaderKeyPair = Schnorr::GenKeyPair();
   PubKey leaderPubKey = leaderKeyPair.second;
   DSBlockHeader header(DS_DIFF, SHARD_DIFF, leaderPubKey, BLOCK_NUM, EPOCH_NUM,
                        GAS_PRICE, SWInfo(), winners, removeDSNodePubkeys,
-                       DSBlockHashSet());
+                       DSBlockHashSet(), govVoteProposals);
   DSBlock block(header, CoSignatures());
 
   // Build the expected composition.
@@ -203,12 +205,14 @@ BOOST_FIXTURE_TEST_CASE(test_UpdateWithRemovals, F) {
     removeDSNodePubkeys.emplace_back(kp.first);
   }
 
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
+
   // Construct the fake DS Block.
   PairOfKey leaderKeyPair = Schnorr::GenKeyPair();
   PubKey leaderPubKey = leaderKeyPair.second;
   DSBlockHeader header(DS_DIFF, SHARD_DIFF, leaderPubKey, BLOCK_NUM, EPOCH_NUM,
                        GAS_PRICE, SWInfo(), winners, removeDSNodePubkeys,
-                       DSBlockHashSet());
+                       DSBlockHashSet(), govVoteProposals);
   DSBlock block(header, CoSignatures());
 
   // Build the expected composition.

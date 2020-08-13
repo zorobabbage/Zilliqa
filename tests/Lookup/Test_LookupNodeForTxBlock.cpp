@@ -58,10 +58,12 @@ void SendDSBlockFirstToMatchDSBlockNum(Peer& lookup_node) {
   PairOfKey pubKey1 = Schnorr::GenKeyPair();
   std::map<PubKey, Peer> powDSWinners;
   std::vector<PubKey> removeDSNodePubkeys;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
+
   DSBlock dsblock(
       DSBlockHeader(50, 20, pubKey1.second, 0, 0, 0, SWInfo(), powDSWinners,
-                    removeDSNodePubkeys, DSBlockHashSet(), DSBLOCK_VERSION,
-                    CommitteeHash(), prevHash1),
+                    removeDSNodePubkeys, DSBlockHashSet(), govVoteProposals,
+                    DSBLOCK_VERSION, CommitteeHash(), prevHash1),
       CoSignatures());
 
   curr_offset += dsblock.Serialize(dsblockmsg, curr_offset);

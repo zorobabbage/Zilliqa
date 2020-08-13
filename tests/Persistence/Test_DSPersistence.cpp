@@ -69,12 +69,14 @@ DSBlock constructDummyDSBlock(uint64_t blocknum) {
   for (int i = 0; i < 2; i++) {
     removeDSNodePubkeys.emplace_back(Schnorr::GenKeyPair().second);
   }
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
 
-  return DSBlock(DSBlockHeader(50, 20, pubKey1.second, blocknum, 0,
-                               PRECISION_MIN_VALUE, SWInfo(), powDSWinners,
-                               removeDSNodePubkeys, DSBlockHashSet(),
-                               DSBLOCK_VERSION, CommitteeHash(), prevHash1),
-                 CoSignatures());
+  return DSBlock(
+      DSBlockHeader(50, 20, pubKey1.second, blocknum, 0, PRECISION_MIN_VALUE,
+                    SWInfo(), powDSWinners, removeDSNodePubkeys,
+                    DSBlockHashSet(), govVoteProposals, DSBLOCK_VERSION,
+                    CommitteeHash(), prevHash1),
+      CoSignatures());
 }
 
 BOOST_AUTO_TEST_CASE(testSerializationDeserialization) {

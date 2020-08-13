@@ -44,13 +44,14 @@ DSBlock Synchronizer::ConstructGenesisDSBlock() {
   uint64_t genesisEpochNumer = 0;
   std::map<PubKey, Peer> powDSWinners;
   std::vector<PubKey> removeDSNodePubkeys;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
 
   DSBlock dsBlock(
       DSBlockHeader(DS_POW_DIFFICULTY, POW_DIFFICULTY, pubKey,
                     genesisBlockNumer, genesisEpochNumer, PRECISION_MIN_VALUE,
                     SWInfo(), powDSWinners, removeDSNodePubkeys,
-                    DSBlockHashSet(), GENESIS_DSBLOCK_VERSION, CommitteeHash(),
-                    prevHash),
+                    DSBlockHashSet(), govVoteProposals, GENESIS_DSBLOCK_VERSION,
+                    CommitteeHash(), prevHash),
       CoSignatures());
   return dsBlock;
 }

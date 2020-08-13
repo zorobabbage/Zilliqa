@@ -1003,8 +1003,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   // count votevalue and votes against that vote value for a proposal from
   // mining pow winners
   std::map<uint32_t, uint32_t> votesCount;
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> voteProposal;
-  for (auto const& miner : sortedPoWSolns) {
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
+  for (const auto& miner : sortedPoWSolns) {
     auto it = allPoWs.find(miner.second);
     if (it != allPoWs.end()) {
       uint32_t proposalId = it->second.m_proposalId;
@@ -1012,13 +1012,13 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
       LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
                             << proposalId << " VoteValue: " << voteValue);
       votesCount[voteValue]++;
-      voteProposal[proposalId] = votesCount;
+      govVoteProposals[proposalId] = votesCount;
     }
   }
-  for (auto it = voteProposal.begin(); it != voteProposal.end(); ++it) {
+  for (auto it = govVoteProposals.begin(); it != govVoteProposals.end(); ++it) {
     LOG_GENERAL(
         INFO, "Governance: Counting votes against proposal id: " << it->first);
-    for (auto const& vote : it->second) {
+    for (const auto& vote : it->second) {
       LOG_GENERAL(INFO,
                   " voteValue: " << vote.first << " count: " << vote.second);
     }
@@ -1063,7 +1063,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         DSBlockHeader(dsDifficulty, difficulty, m_mediator.m_selfKey.second,
                       blockNum, m_mediator.m_currentEpochNum, GetNewGasPrice(),
                       m_mediator.m_curSWInfo, powDSWinners, removeDSNodePubkeys,
-                      dsBlockHashSet, version, committeeHash, prevHash),
+                      dsBlockHashSet, govVoteProposals, version, committeeHash,
+                      prevHash),
         CoSignatures(m_mediator.m_DSCommittee->size())));
   }
 

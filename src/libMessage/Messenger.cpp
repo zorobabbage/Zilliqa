@@ -1395,6 +1395,15 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
       SerializableToProtobufByteArray(winner.second,
                                       *powdswinner->mutable_val());
     }
+    // TODO : serialize govdata in dsblock
+    // double check on serialization and deserialization part
+    for (const auto& voteProposals : dsBlockHeader.GetGovVoteProposals()) {
+      protoDSBlockHeader.add_proposals()->set_proposalid(voteProposals.first);
+      for (const auto& vote : voteProposals.second) {
+        protoDSBlockHeader.add_proposals()->add_votes()->set_value(vote.first);
+        protoDSBlockHeader.add_proposals()->add_votes()->set_count(vote.second);
+      }
+    }
 
     ZilliqaMessage::ByteArray* dsremoved;
     for (const auto& removedPubKey : dsBlockHeader.GetDSRemovePubKeys()) {
@@ -1464,6 +1473,18 @@ bool ProtobufToDSBlockHeader(
     powDSWinners[tempPubKey] = tempWinnerNetworkInfo;
   }
 
+  // Deserialize governance vote proposal
+  // TODO: check required field
+  map<uint32_t, map<uint32_t, uint32_t>> govVoteProposals;
+  for (const auto& proposal : protoDSBlockHeader.proposals()) {
+    // govVoteProposals[proposal.proposalid()] = proposal.votes();
+    map<uint32_t, uint32_t> votes;
+    for (const auto& vote : proposal.votes()) {
+      votes[vote.value()] = vote.count();
+    }
+    govVoteProposals[proposal.proposalid()] = votes;
+  }
+
   // Deserialize removeDSNodePubkeys
   std::vector<PubKey> removeDSNodePubKeys;
   PubKey tempRemovePubKey;
@@ -1497,10 +1518,10 @@ bool ProtobufToDSBlockHeader(
   ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(
       protoDSBlockHeader.gasprice(), gasprice);
 
-  dsBlockHeader = DSBlockHeader(dsdifficulty, difficulty, leaderPubKey,
-                                protoDSBlockHeader.blocknum(),
-                                protoDSBlockHeader.epochnum(), gasprice, swInfo,
-                                powDSWinners, removeDSNodePubKeys, hash);
+  dsBlockHeader = DSBlockHeader(
+      dsdifficulty, difficulty, leaderPubKey, protoDSBlockHeader.blocknum(),
+      protoDSBlockHeader.epochnum(), gasprice, swInfo, powDSWinners,
+      removeDSNodePubKeys, hash, govVoteProposals);
 
   const ZilliqaMessage::ProtoBlockHeaderBase& protoBlockHeaderBase =
       protoDSBlockHeader.blockheaderbase();

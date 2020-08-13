@@ -42,6 +42,7 @@ class DSBlockHeader : public BlockHeaderBase {
   std::map<PubKey, Peer> m_PoWDSWinners;
   std::vector<PubKey> m_removeDSNodePubkeys;
   DSBlockHashSet m_hashset;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> m_govVoteProposal;
 
  public:
   /// Default constructor.
@@ -51,15 +52,17 @@ class DSBlockHeader : public BlockHeaderBase {
   DSBlockHeader(const bytes& src, unsigned int offset);
 
   /// Constructor with specified DS block header parameters.
-  DSBlockHeader(const uint8_t dsDifficulty, const uint8_t difficulty,
-                const PubKey& leaderPubKey, const uint64_t& blockNum,
-                const uint64_t& epochNum, const uint128_t& gasPrice,
-                const SWInfo& swInfo,
-                const std::map<PubKey, Peer>& powDSWinners,
-                const std::vector<PubKey>& removeDSNodePubkeys,
-                const DSBlockHashSet& hashset, const uint32_t version = 0,
-                const CommitteeHash& committeeHash = CommitteeHash(),
-                const BlockHash& prevHash = BlockHash());
+  DSBlockHeader(
+      const uint8_t dsDifficulty, const uint8_t difficulty,
+      const PubKey& leaderPubKey, const uint64_t& blockNum,
+      const uint64_t& epochNum, const uint128_t& gasPrice, const SWInfo& swInfo,
+      const std::map<PubKey, Peer>& powDSWinners,
+      const std::vector<PubKey>& removeDSNodePubkeys,
+      const DSBlockHashSet& hashset,
+      const std::map<uint32_t, std::map<uint32_t, uint32_t>>& m_govVoteProposal,
+      const uint32_t version = 0,
+      const CommitteeHash& committeeHash = CommitteeHash(),
+      const BlockHash& prevHash = BlockHash());
 
   /// Implements the Serialize function inherited from Serializable.
   bool Serialize(bytes& dst, unsigned int offset) const override;
@@ -97,6 +100,10 @@ class DSBlockHeader : public BlockHeaderBase {
 
   // Returns the DS PoW Winners.
   const std::map<PubKey, Peer>& GetDSPoWWinners() const;
+
+  // Returns Governance proposals and corresponding votes values count.
+  const std::map<uint32_t, std::map<uint32_t, uint32_t>>& GetGovVoteProposals()
+      const;
 
   // Returns the DS members to remove for non-performance.
   const std::vector<PubKey>& GetDSRemovePubKeys() const;

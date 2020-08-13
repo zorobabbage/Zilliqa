@@ -81,6 +81,17 @@ message ProtoDSBlock
         DSBlockHashSet hash    = 11; // Added in: v1.0, Deprecated in: N/A
         repeated ByteArray dsremoved    = 12; // Added in: v2.0, Deprecated in: N/A
         // Add new members here
+        message Vote
+        {
+            uint32 value = 1;
+            uint32 count = 2;
+        }
+        message Proposal
+        {
+            uint32 proposalid       = 1;
+            repeated Vote votes     = 2;
+        }
+        repeated Proposal proposals      = 13;
     }
     DSBlockHeader header       = 1;  // Added in: v1.0, Deprecated in: N/A
     ProtoBlockBase blockbase   = 2;  // Added in: v1.0, Deprecated in: N/A
