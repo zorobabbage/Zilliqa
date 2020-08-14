@@ -24,10 +24,10 @@
 #include "common/Serializable.h"
 #include "depends/safeserver/safehttpserver.h"
 #include "jsonrpccpp/server/connectors/tcpsocketserver.h"
-#include "libArchivalDB/ArchivalDB.h"
 #include "libCrypto/Sha2.h"
 #include "libData/AccountData/Address.h"
 #include "libNetwork/Guard.h"
+#include "libRemoteStorageDB/RemoteStorageDB.h"
 #include "libServer/GetWorkServer.h"
 #include "libServer/WebsocketServer.h"
 #include "libUtils/DataConversion.h"
@@ -404,8 +404,9 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
       }
     }
 
-    if (LOOKUP_NODE_MODE && !DB_HOST.empty()) {
-      ArchivalDB::GetInstance().Init();
+    if (LOOKUP_NODE_MODE && REMOTESTORAGE_DB_ENABLE) {
+      LOG_GENERAL(INFO, "Starting connection to mongoDB")
+      RemoteStorageDB::GetInstance().Init(REMOTESTORAGE_DB_CONFIGURE);
     }
 
     if (ENABLE_STATUS_RPC) {

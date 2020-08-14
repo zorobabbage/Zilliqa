@@ -327,7 +327,7 @@ const Json::Value JSONConversion::convertTxtoJson(const Transaction& txn) {
   _json["version"] = to_string(txn.GetVersion());
   _json["nonce"] = to_string(txn.GetNonce());
   _json["toAddr"] = txn.GetToAddr().hex();
-  _json["senderPubKey"] = static_cast<string>(txn.GetSenderPubKey());
+  _json["senderAddr"] = txn.GetSenderAddr().hex();
   _json["amount"] = txn.GetAmount().str();
   _json["signature"] = static_cast<string>(txn.GetSignature());
 

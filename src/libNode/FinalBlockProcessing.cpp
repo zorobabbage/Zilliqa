@@ -30,7 +30,6 @@
 #include "depends/libDatabase/MemoryDB.h"
 #include "depends/libTrie/TrieDB.h"
 #include "depends/libTrie/TrieHash.h"
-#include "libArchivalDB/ArchivalDB.h"
 #include "libCrypto/Sha2.h"
 #include "libData/AccountData/Account.h"
 #include "libData/AccountData/AccountStore.h"
@@ -41,6 +40,7 @@
 #include "libNetwork/Blacklist.h"
 #include "libNetwork/Guard.h"
 #include "libPOW/pow.h"
+#include "libRemoteStorageDB/RemoteStorageDB.h"
 #include "libServer/JSONConversion.h"
 #include "libServer/LookupServer.h"
 #include "libServer/WebsocketServer.h"
@@ -1121,9 +1121,9 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
       WebsocketServer::GetInstance().ParseTxn(twr);
     }
 
-    if (!DB_HOST.empty()) {
-      ArchivalDB::GetInstance().UpdateTxn(
-          txhash.hex(), 2,
+    if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+      RemoteStorageDB::GetInstance().UpdateTxn(
+          txhash.hex(), TxnStatus::CONFIRMED, m_mediator.m_currentEpochNum,
           twr.GetTransactionReceipt().GetJsonValue()["success"].asBool());
     }
 
@@ -1135,6 +1135,9 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
       LOG_GENERAL(WARNING, "BlockStorage::PutTxBody failed " << txhash);
       return;
     }
+  }
+  if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+    RemoteStorageDB::GetInstance().ExecuteWrite();
   }
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
             "Proceessed " << entry.m_transactions.size() << " of txns.");
@@ -1159,11 +1162,14 @@ void Node::SoftConfirmForwardedTransactions(const MBnForwardedTxnEntry& entry) {
   for (const auto& twr : entry.m_transactions) {
     const auto& txhash = twr.GetTransaction().GetTranID();
     m_softConfirmedTxns.emplace(txhash, twr);
-    if (!DB_HOST.empty()) {
-      ArchivalDB::GetInstance().UpdateTxn(
-          txhash.hex(), 1,
+    if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+      RemoteStorageDB::GetInstance().UpdateTxn(
+          txhash.hex(), TxnStatus::SOFT_CONFIRMED, m_mediator.m_currentEpochNum,
           twr.GetTransactionReceipt().GetJsonValue()["success"].asBool());
     }
+  }
+  if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+    RemoteStorageDB::GetInstance().ExecuteWrite();
   }
 }
 
@@ -1429,10 +1435,14 @@ bool Node::AddPendingTxn(const HashCodeMap& pendingTxns, const PubKey& pubkey,
       m_droppedTxns.insert(entry.first, entry.second, currentEpochNum);
     }
 
-    if (!DB_HOST.empty()) {
-      ArchivalDB::GetInstance().UpdateTxn(entry.first.hex(), entry.second + 3,
-                                          false);
+    if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+      RemoteStorageDB::GetInstance().UpdateTxn(
+          entry.first.hex(), entry.second, m_mediator.m_currentEpochNum, false);
     }
+  }
+
+  if (!ARCHIVAL_LOOKUP && REMOTESTORAGE_DB_ENABLE) {
+    RemoteStorageDB::GetInstance().ExecuteWrite();
   }
   return true;
 }
@@ -1473,7 +1483,7 @@ bool Node::ProcessPendingTxn(const bytes& message, unsigned int cur_offset,
     return false;
   }
   uint64_t epochNum;
-  unordered_map<TxnHash, ErrTxnStatus> hashCodeMap;
+  unordered_map<TxnHash, TxnStatus> hashCodeMap;
   uint32_t shardId;
   PubKey pubkey;
 

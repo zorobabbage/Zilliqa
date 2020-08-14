@@ -108,6 +108,16 @@ class StatusServer : public Server,
     (void)request;
     response = this->GetValidateDB();
   }
+  inline virtual void ToggleRemoteStorageI(const Json::Value& request,
+                                           Json::Value& response) {
+    (void)request;
+    response = this->ToggleRemoteStorage();
+  }
+  inline virtual void GetRemoteStorageI(const Json::Value& request,
+                                        Json::Value& response) {
+    (void)request;
+    response = this->GetRemoteStorage();
+  }
 
   Json::Value IsTxnInMemPool(const std::string& tranID);
   bool AddToBlacklistExclusion(const std::string& ipAddr);
@@ -127,6 +137,8 @@ class StatusServer : public Server,
   bool ToggleDisableTxns();
   std::string SetValidateDB();
   std::string GetValidateDB();
+  bool ToggleRemoteStorage();
+  bool GetRemoteStorage();
 };
 
 #endif  // ZILLIQA_SRC_LIBSERVER_STATUSSERVER_H_
