@@ -35,8 +35,7 @@ class DSPowSolution {
   std::string m_mixHash;
   uint32_t m_lookupId{};
   uint128_t m_gasPrice;
-  uint32_t m_proposalId{};
-  uint32_t m_voteValue{};
+  std::pair<uint32_t, uint32_t> m_voteProposal{0, 0};
   Signature m_signature;
 
  public:
@@ -53,8 +52,8 @@ class DSPowSolution {
                 const uint64_t& nonceInput,
                 const std::string& resultingHashInput,
                 const std::string& mixHashInput, const uint32_t& lookupIdInput,
-                const uint128_t& gasPriceInput, const uint32_t& proposalIdInput,
-                const uint32_t& voteValueInput,
+                const uint128_t& gasPriceInput,
+                const std::pair<uint32_t, uint32_t>& voteProposalInput,
                 const Signature& signatureInput);
 
   /// Constructor for loading DSPowSolution information from a byte stream.

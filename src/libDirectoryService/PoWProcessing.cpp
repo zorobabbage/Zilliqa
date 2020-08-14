@@ -207,7 +207,8 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
 
   DSPowSolution powSoln(blockNumber, difficultyLevel, submitterPeer,
                         submitterKey, nonce, resultingHash, mixHash, lookupId,
-                        gasPrice, proposalId, voteValue, signature);
+                        gasPrice, std::make_pair(proposalId, voteValue),
+                        signature);
 
   if (VerifyPoWSubmission(powSoln)) {
     std::unique_lock<std::mutex> lk(m_mutexPowSolution);
@@ -369,7 +370,7 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
       DataConversion::HexStrToStdArray(resultingHash, resultingHashArr);
       DataConversion::HexStrToStdArray(mixHash, mixHashArr);
       PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice,
-                       proposalId, voteValue);
+                       std::make_pair(proposalId, voteValue));
 
       m_allPoWConns.emplace(submitterPubKey, submitterPeer);
       if (m_allPoWs.find(submitterPubKey) == m_allPoWs.end()) {

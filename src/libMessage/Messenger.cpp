@@ -1096,6 +1096,12 @@ void AnnouncementShardingStructureToProtobuf(
       proto_soln->set_lookupid(soln->second.m_lookupId);
       NumberToProtobufByteArray<uint128_t, UINT128_SIZE>(
           soln->second.m_gasPrice, *proto_soln->mutable_gasprice());
+      if (proto_soln->govdata().IsInitialized()) {
+        proto_soln->mutable_govdata()->set_proposalid(
+            soln->second.m_voteProposal.first);
+        proto_soln->mutable_govdata()->set_votevalue(
+            soln->second.m_voteProposal.second);
+      }
     }
   }
 }
@@ -1106,8 +1112,8 @@ bool ProtobufToShardingStructureAnnouncement(
   std::array<unsigned char, 32> result{};
   std::array<unsigned char, 32> mixhash{};
   uint128_t gasPrice;
-  uint32_t proposalId;  // TODO: check size chetan
-  uint32_t voteValue;
+  uint32_t proposalId{};  // TODO: check size chetan
+  uint32_t voteValue{};
 
   for (const auto& proto_shard : protoShardingStructure.shards()) {
     shards.emplace_back();
@@ -1133,12 +1139,14 @@ bool ProtobufToShardingStructureAnnouncement(
            mixhash.begin());
       ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(
           proto_member.powsoln().gasprice(), gasPrice);
-      proposalId = proto_member.powsoln().govdata().proposalid();
-      voteValue = proto_member.powsoln().govdata().proposalid();
+      if (proto_member.powsoln().govdata().IsInitialized()) {
+        proposalId = proto_member.powsoln().govdata().proposalid();
+        voteValue = proto_member.powsoln().govdata().votevalue();
+      }
       allPoWs.emplace(
           key, PoWSolution(proto_member.powsoln().nonce(), result, mixhash,
                            proto_member.powsoln().lookupid(), gasPrice,
-                           proposalId, voteValue));
+                           std::make_pair(proposalId, voteValue)));
     }
   }
 
@@ -1641,7 +1649,8 @@ bool ProtobufToDSPowSolution(const DSPoWSubmission& dsPowSubmission,
 
   DSPowSolution result(blockNumber, difficultyLevel, submitterPeer,
                        submitterKey, nonce, resultingHash, mixHash, lookupId,
-                       gasPrice, proposalId, voteValue, signature);
+                       gasPrice, std::make_pair(proposalId, voteValue),
+                       signature);
   powSolution = result;
 
   return true;
@@ -4205,6 +4214,8 @@ bool Messenger::SetDSDSBlockAnnouncement(
     proto_soln->set_lookupid(soln.m_lookupId);
     NumberToProtobufByteArray<uint128_t, UINT128_SIZE>(
         soln.m_gasPrice, *proto_soln->mutable_gasprice());
+    proto_soln->mutable_govdata()->set_proposalid(soln.m_voteProposal.first);
+    proto_soln->mutable_govdata()->set_votevalue(soln.m_voteProposal.second);
   }
 
   if (!dsblock->IsInitialized()) {
@@ -4295,8 +4306,8 @@ bool Messenger::GetDSDSBlockAnnouncement(
     std::array<unsigned char, 32> result{};
     std::array<unsigned char, 32> mixhash{};
     uint128_t gasPrice;
-    uint32_t proposalId;
-    uint32_t voteValue;
+    uint32_t proposalId{};
+    uint32_t voteValue{};
 
     PROTOBUFBYTEARRAYTOSERIALIZABLE(protoDSWinnerPoW.pubkey(), key);
 
@@ -4312,12 +4323,14 @@ bool Messenger::GetDSDSBlockAnnouncement(
          mixhash.begin());
     ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(
         protoDSWinnerPoW.powsoln().gasprice(), gasPrice);
-    proposalId = protoDSWinnerPoW.powsoln().govdata().proposalid();
-    voteValue = protoDSWinnerPoW.powsoln().govdata().proposalid();
+    if (protoDSWinnerPoW.powsoln().govdata().IsInitialized()) {
+      proposalId = protoDSWinnerPoW.powsoln().govdata().proposalid();
+      voteValue = protoDSWinnerPoW.powsoln().govdata().proposalid();
+    }
     dsWinnerPoWs.emplace(
         key, PoWSolution(protoDSWinnerPoW.powsoln().nonce(), result, mixhash,
                          protoDSWinnerPoW.powsoln().lookupid(), gasPrice,
-                         proposalId, voteValue));
+                         std::make_pair(proposalId, voteValue)));
   }
 
   // Get the part of the announcement that should be co-signed during the first

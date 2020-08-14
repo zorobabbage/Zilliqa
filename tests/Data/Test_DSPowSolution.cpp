@@ -57,11 +57,11 @@ BOOST_AUTO_TEST_CASE(testDSPowSolutionClass) {
   uint32_t voteValueInput = TestUtils::DistUint32();
   DSPowSolution dsps;
 
-  dsps =
-      DSPowSolution(blockNumberInput, difficultyLevelInput, submitterPeerInput,
-                    submitterKeyInput, nonceInput, resultingHashInput,
-                    mixHashInput, lookupIdInput, gasPriceInput, proposalIdInput,
-                    voteValueInput, signatureInput);
+  dsps = DSPowSolution(
+      blockNumberInput, difficultyLevelInput, submitterPeerInput,
+      submitterKeyInput, nonceInput, resultingHashInput, mixHashInput,
+      lookupIdInput, gasPriceInput,
+      std::make_pair(proposalIdInput, voteValueInput), signatureInput);
 
   DSPowSolution dsps2 = dsps;
   BOOST_REQUIRE(dsps2 == dsps);

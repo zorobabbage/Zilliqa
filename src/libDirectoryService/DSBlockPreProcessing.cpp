@@ -915,18 +915,18 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
     allPoWs.swap(tmpAllPoWs);
   }
 
-  for (auto const& it : allPoWs) {
+  for (const auto& it : allPoWs) {
     LOG_GENERAL(INFO, "Governance:Before creating block  miner key :"
                           << it.first
-                          << " proposalId :" << it.second.m_proposalId
-                          << " vote: " << it.second.m_voteValue);
+                          << " proposalId :" << it.second.m_voteProposal.first
+                          << " vote: " << it.second.m_voteProposal.second);
   }
 
-  for (auto const& it : allDSPoWs) {
+  for (const auto& it : allDSPoWs) {
     LOG_GENERAL(INFO, "Governance:Before creating block  ds key :"
                           << it.first
-                          << " proposalId :" << it.second.m_proposalId
-                          << " vote: " << it.second.m_voteValue);
+                          << " proposalId :" << it.second.m_voteProposal.first
+                          << " vote: " << it.second.m_voteProposal.second);
   }
 
   auto sortedDSPoWSolns = SortPoWSoln(allDSPoWs);
@@ -1007,12 +1007,14 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   for (const auto& miner : sortedPoWSolns) {
     auto it = allPoWs.find(miner.second);
     if (it != allPoWs.end()) {
-      uint32_t proposalId = it->second.m_proposalId;
-      uint32_t voteValue = it->second.m_voteValue;
+      uint32_t proposalId = it->second.m_voteProposal.first;
+      uint32_t voteValue = it->second.m_voteProposal.second;
       LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
                             << proposalId << " VoteValue: " << voteValue);
-      votesCount[voteValue]++;
-      govVoteProposals[proposalId] = votesCount;
+      if (proposalId > 0 && voteValue > 0) {  // TODO: revisit this condition
+        votesCount[voteValue]++;
+        govVoteProposals[proposalId] = votesCount;
+      }
     }
   }
   for (auto it = govVoteProposals.begin(); it != govVoteProposals.end(); ++it) {
