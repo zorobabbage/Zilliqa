@@ -129,6 +129,11 @@ const unsigned int SEED_SYNC_SMALL_PULL_INTERVAL{
     ReadConstantNumeric("SEED_SYNC_SMALL_PULL_INTERVAL", "node.seed.")};
 const unsigned int SEED_SYNC_LARGE_PULL_INTERVAL{
     ReadConstantNumeric("SEED_SYNC_LARGE_PULL_INTERVAL", "node.seed.")};
+
+// Archival constants
+const string DB_HOST{ReadConstantString("DB_HOST", "node.archivalDB.")};
+const string DB_NAME{ReadConstantString("DB_NAME", "node.archivalDB.")};
+
 // Consensus constants
 const double TOLERANCE_FRACTION{
     ReadConstantDouble("TOLERANCE_FRACTION", "node.consensus.")};

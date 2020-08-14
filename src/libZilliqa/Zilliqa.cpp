@@ -24,6 +24,7 @@
 #include "common/Serializable.h"
 #include "depends/safeserver/safehttpserver.h"
 #include "jsonrpccpp/server/connectors/tcpsocketserver.h"
+#include "libArchivalDB/ArchivalDB.h"
 #include "libCrypto/Sha2.h"
 #include "libData/AccountData/Address.h"
 #include "libNetwork/Guard.h"
@@ -401,6 +402,10 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
                       "This lookup node not sync yet, don't start listen");
         }
       }
+    }
+
+    if (LOOKUP_NODE_MODE && !DB_HOST.empty()) {
+      ArchivalDB::GetInstance().Init();
     }
 
     if (ENABLE_STATUS_RPC) {

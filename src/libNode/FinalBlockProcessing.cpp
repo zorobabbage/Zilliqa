@@ -30,6 +30,7 @@
 #include "depends/libDatabase/MemoryDB.h"
 #include "depends/libTrie/TrieDB.h"
 #include "depends/libTrie/TrieHash.h"
+#include "libArchivalDB/ArchivalDB.h"
 #include "libCrypto/Sha2.h"
 #include "libData/AccountData/Account.h"
 #include "libData/AccountData/AccountStore.h"
@@ -1109,9 +1110,10 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
   }
 
   for (const auto& twr : entry.m_transactions) {
-    LOG_GENERAL(INFO, "Commit txn " << twr.GetTransaction().GetTranID().hex());
+    const auto& txhash = twr.GetTransaction().GetTranID();
+    LOG_GENERAL(INFO, "Commit txn " << txhash.hex());
     if (LOOKUP_NODE_MODE) {
-      LookupServer::AddToRecentTransactions(twr.GetTransaction().GetTranID());
+      LookupServer::AddToRecentTransactions(txhash);
     }
 
     // feed the event log holder
@@ -1119,13 +1121,18 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
       WebsocketServer::GetInstance().ParseTxn(twr);
     }
 
+    if (!DB_HOST.empty()) {
+      ArchivalDB::GetInstance().UpdateTxn(
+          txhash.hex(), 2,
+          twr.GetTransactionReceipt().GetJsonValue()["success"].asBool());
+    }
+
     // Store TxBody to disk
     bytes serializedTxBody;
     twr.Serialize(serializedTxBody, 0);
     if (!BlockStorage::GetBlockStorage().PutTxBody(
             twr.GetTransaction().GetTranID(), serializedTxBody)) {
-      LOG_GENERAL(WARNING, "BlockStorage::PutTxBody failed "
-                               << twr.GetTransaction().GetTranID());
+      LOG_GENERAL(WARNING, "BlockStorage::PutTxBody failed " << txhash);
       return;
     }
   }
@@ -1150,7 +1157,13 @@ void Node::SoftConfirmForwardedTransactions(const MBnForwardedTxnEntry& entry) {
   lock_guard<mutex> g(m_mutexSoftConfirmedTxns);
 
   for (const auto& twr : entry.m_transactions) {
-    m_softConfirmedTxns.emplace(twr.GetTransaction().GetTranID(), twr);
+    const auto& txhash = twr.GetTransaction().GetTranID();
+    m_softConfirmedTxns.emplace(txhash, twr);
+    if (!DB_HOST.empty()) {
+      ArchivalDB::GetInstance().UpdateTxn(
+          txhash.hex(), 1,
+          twr.GetTransactionReceipt().GetJsonValue()["success"].asBool());
+    }
   }
 }
 
@@ -1414,6 +1427,11 @@ bool Node::AddPendingTxn(const HashCodeMap& pendingTxns, const PubKey& pubkey,
     } else {
       LOG_GENERAL(INFO, "[DTXN]" << entry.first << " " << currentEpochNum);
       m_droppedTxns.insert(entry.first, entry.second, currentEpochNum);
+    }
+
+    if (!DB_HOST.empty()) {
+      ArchivalDB::GetInstance().UpdateTxn(entry.first.hex(), entry.second + 3,
+                                          false);
     }
   }
   return true;

@@ -31,6 +31,7 @@
 
 #include "Lookup.h"
 #include "common/Messages.h"
+#include "libArchivalDB/ArchivalDB.h"
 #include "libData/AccountData/Account.h"
 #include "libData/AccountData/AccountStore.h"
 #include "libData/AccountData/Transaction.h"
@@ -5322,6 +5323,9 @@ bool Lookup::AddToTxnShardMap(const Transaction& tx, uint32_t shardId,
   LOG_GENERAL(INFO, "Added Txn " << tx.GetTranID().hex() << " to shard "
                                  << shardId << " of fromAddr "
                                  << tx.GetSenderAddr());
+  if (!DB_HOST.empty()) {
+    ArchivalDB::GetInstance().InsertTxn(tx, 0);
+  }
 
   return true;
 }
