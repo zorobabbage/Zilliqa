@@ -1002,7 +1002,6 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
 
   // count votevalue and votes against that vote value for a proposal from
   // mining pow winners
-  std::map<uint32_t, uint32_t> votesCount;
   std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
   for (const auto& miner : sortedPoWSolns) {
     auto it = allPoWs.find(miner.second);
@@ -1012,8 +1011,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
       LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
                             << proposalId << " VoteValue: " << voteValue);
       if (proposalId > 0 && voteValue > 0) {  // TODO: revisit this condition
-        votesCount[voteValue]++;
-        govVoteProposals[proposalId] = votesCount;
+        govVoteProposals[proposalId][voteValue]++;
       }
     }
   }

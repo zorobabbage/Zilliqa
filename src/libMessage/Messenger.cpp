@@ -1403,15 +1403,43 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
       SerializableToProtobufByteArray(winner.second,
                                       *powdswinner->mutable_val());
     }
-    // TODO : serialize govdata in dsblock
+    // TODO @Chetan : serialize govdata in dsblock
     // double check on serialization and deserialization part
+    ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Proposal* protoproposal;
     for (const auto& voteProposals : dsBlockHeader.GetGovVoteProposals()) {
-      protoDSBlockHeader.add_proposals()->set_proposalid(voteProposals.first);
+      // protoDSBlockHeader.add_proposals()->set_proposalid(voteProposals.first);
+      protoproposal = protoDSBlockHeader.add_proposals();
       for (const auto& vote : voteProposals.second) {
-        protoDSBlockHeader.add_proposals()->add_votes()->set_value(vote.first);
-        protoDSBlockHeader.add_proposals()->add_votes()->set_count(vote.second);
+        // protoDSBlockHeader.add_proposals()->add_votes()->set_value(vote.first);
+        // protoDSBlockHeader.add_proposals()->add_votes()->set_count(vote.second);
+        LOG_GENERAL(INFO, "Governance: serialization ProposalId: "
+                              << voteProposals.first << " voteValue:"
+                              << vote.first << " voteCount: " << vote.second);
+
+        ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
+        protoVote = protoproposal->add_votes();
+        protoVote->set_value(vote.first);
+        protoVote->set_count(vote.second);
       }
     }
+    // temp code.Remove from here @Chetan
+    map<uint32_t, map<uint32_t, uint32_t>> tempgovVoteProposals;
+    for (const auto& proposal : protoDSBlockHeader.proposals()) {
+      // tempgovVoteProposals[proposal.proposalid()] = proposal.votes();
+      map<uint32_t, uint32_t> votes;
+      for (const auto& vote : proposal.votes()) {
+        votes[vote.value()] = vote.count();
+      }
+      tempgovVoteProposals[proposal.proposalid()] = votes;
+    }
+    for (const auto& proposals : tempgovVoteProposals) {
+      for (const auto& vote : proposals.second) {
+        LOG_GENERAL(INFO, "Governance Test serialization ProposalId:"
+                              << proposals.first << " votevalue: " << vote.first
+                              << " votecount: " << vote.second);
+      }
+    }
+    // TODO @Chetan Remove till here
 
     ZilliqaMessage::ByteArray* dsremoved;
     for (const auto& removedPubKey : dsBlockHeader.GetDSRemovePubKeys()) {
@@ -1484,13 +1512,20 @@ bool ProtobufToDSBlockHeader(
   // Deserialize governance vote proposal
   // TODO: check required field
   map<uint32_t, map<uint32_t, uint32_t>> govVoteProposals;
-  for (const auto& proposal : protoDSBlockHeader.proposals()) {
-    // govVoteProposals[proposal.proposalid()] = proposal.votes();
+  for (const auto& protoProposal : protoDSBlockHeader.proposals()) {
+    // govVoteProposals[protoProposal.proposalid()] = protoProposal.votes();
     map<uint32_t, uint32_t> votes;
-    for (const auto& vote : proposal.votes()) {
-      votes[vote.value()] = vote.count();
+    for (const auto& protovote : protoProposal.votes()) {
+      votes[protovote.value()] = protovote.count();
     }
-    govVoteProposals[proposal.proposalid()] = votes;
+    govVoteProposals[protoProposal.proposalid()] = votes;
+  }
+  for (const auto& proposals : govVoteProposals) {
+    for (const auto& vote : proposals.second) {
+      LOG_GENERAL(INFO, "Governance Deserialization ProposalId:"
+                            << proposals.first << " votevalue: " << vote.first
+                            << " votecount: " << vote.second);
+    }
   }
 
   // Deserialize removeDSNodePubkeys
@@ -4325,7 +4360,7 @@ bool Messenger::GetDSDSBlockAnnouncement(
         protoDSWinnerPoW.powsoln().gasprice(), gasPrice);
     if (protoDSWinnerPoW.powsoln().govdata().IsInitialized()) {
       proposalId = protoDSWinnerPoW.powsoln().govdata().proposalid();
-      voteValue = protoDSWinnerPoW.powsoln().govdata().proposalid();
+      voteValue = protoDSWinnerPoW.powsoln().govdata().votevalue();
     }
     dsWinnerPoWs.emplace(
         key, PoWSolution(protoDSWinnerPoW.powsoln().nonce(), result, mixhash,
