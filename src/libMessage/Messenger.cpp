@@ -1409,6 +1409,7 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
     for (const auto& voteProposals : dsBlockHeader.GetGovVoteProposals()) {
       // protoDSBlockHeader.add_proposals()->set_proposalid(voteProposals.first);
       protoproposal = protoDSBlockHeader.add_proposals();
+      protoproposal->set_proposalid(voteProposals.first);
       for (const auto& vote : voteProposals.second) {
         // protoDSBlockHeader.add_proposals()->add_votes()->set_value(vote.first);
         // protoDSBlockHeader.add_proposals()->add_votes()->set_count(vote.second);
@@ -1425,10 +1426,14 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
     // temp code.Remove from here @Chetan
     map<uint32_t, map<uint32_t, uint32_t>> tempgovVoteProposals;
     for (const auto& proposal : protoDSBlockHeader.proposals()) {
+      LOG_GENERAL(INFO,
+                  "Chetan serialized proposalId : " << proposal.proposalid());
       // tempgovVoteProposals[proposal.proposalid()] = proposal.votes();
       map<uint32_t, uint32_t> votes;
       for (const auto& vote : proposal.votes()) {
         votes[vote.value()] = vote.count();
+        LOG_GENERAL(INFO, "Chetan serialized votevalue : "
+                              << vote.value() << " count : " << vote.count());
       }
       tempgovVoteProposals[proposal.proposalid()] = votes;
     }
@@ -1513,10 +1518,14 @@ bool ProtobufToDSBlockHeader(
   // TODO: check required field
   map<uint32_t, map<uint32_t, uint32_t>> govVoteProposals;
   for (const auto& protoProposal : protoDSBlockHeader.proposals()) {
+    LOG_GENERAL(INFO, "Chetan Proposal id: " << protoProposal.proposalid());
     // govVoteProposals[protoProposal.proposalid()] = protoProposal.votes();
     map<uint32_t, uint32_t> votes;
     for (const auto& protovote : protoProposal.votes()) {
       votes[protovote.value()] = protovote.count();
+      LOG_GENERAL(INFO,
+                  "Chetan voteValue: " << protovote.value()
+                                       << " voteCount : " << protovote.count());
     }
     govVoteProposals[protoProposal.proposalid()] = votes;
   }
