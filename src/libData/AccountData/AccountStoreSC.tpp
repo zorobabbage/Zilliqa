@@ -33,7 +33,7 @@
 #include "libUtils/SysCommand.h"
 
 // TODO: Define in constants.xml
-#define SCILLAVM_CACHE_DIR "/tmp"
+#define SCILLAVM_CACHE_DIR "/tmp/scilla_vm_cache"
 
 namespace {
 using namespace ScillaVM;
@@ -61,9 +61,6 @@ ScillaParams buildScillaParams(Address toAddr) {
   ScillaParams SP(fetchStateValue, updateStateValue);
   return SP;
 }
-
-// Not thread-safe.
-ScillaCacheManager SCM;
 
 }  // namespace
 
@@ -413,53 +410,21 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       bool ret = true;
 
       if (ret_checker) {
-        // deduct scilla runner invoke gas
-        if (gasRemained < SCILLA_RUNNER_INVOKE_GAS) {
-          LOG_GENERAL(WARNING, "Not enough gas to invoke the scilla runner");
-          receipt.AddError(GAS_NOT_SUFFICIENT);
-          ret = false;
-        } else {
-          gasRemained -= SCILLA_RUNNER_INVOKE_GAS;
-        }
-
-        if (ret) {
-          std::string runnerPrint;
-
-          // invoke scilla runner
-          InvokeInterpreter(RUNNER_CREATE, runnerPrint, scilla_version,
-                            is_library, gasRemained, amount, ret, receipt);
-
-          // parse runner output
-          try {
-            if (ret && !ParseCreateContract(gasRemained, runnerPrint, receipt,
-                                            is_library)) {
-              ret = false;
-            }
-            if (!ret) {
-              gasRemained = std::min(
-                  transaction.GetGasLimit() - createGasPenalty, gasRemained);
-            }
-          } catch (const std::exception& e) {
-            LOG_GENERAL(WARNING,
-                        "Exception caught in create account (2): " << e.what());
-            ret = false;
-          }
-
           // Create contract using ScillaVM. At the moment, this JIT compiles
-          // llvm_ir to machine code and puts it in the cache. Later on, the
-          // call to scilla-runner above can be removed.
+          // llvm_ir to machine code and puts it in the cache.
+          // We also initialize the state here.
           try {
             ScillaJIT::init();
             auto SP = buildScillaParams(toAddr);
             auto sJIT = ScillaVM::ScillaJIT::create(
-                SP, llvm_ir, toAddr.hex(), toAccount->GetInitJson(), &SCM);
-            // TODO: Use this JIT object to deploy.
+                SP, llvm_ir, toAddr.hex(), toAccount->GetInitJson(), m_scillaCodeCache.get());
+            auto initOutput = sJIT->initState(gasRemained);
+            gasRemained -= initOutput["gas_remaining"].asUInt64();
           } catch (const ScillaVM::ScillaError& se) {
             LOG_GENERAL(WARNING,
                         "ScillaVM create contract failed: " << se.toString());
             ret = false;
           }
-        }
       } else {
         gasRemained =
             std::min(transaction.GetGasLimit() - createGasPenalty, gasRemained);
@@ -672,7 +637,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
         auto SP = buildScillaParams(toAddr);
         auto llvm_ir = "";  // Assuming that the machine code is already cached.
         auto sJIT = ScillaVM::ScillaJIT::create(SP, llvm_ir, toAddr.hex(),
-                                                toAccount->GetInitJson(), &SCM);
+                                                toAccount->GetInitJson(), m_scillaCodeCache.get());
         Json::Value msgObj;
         try {
           // Message Json
