@@ -419,7 +419,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
             auto sJIT = ScillaVM::ScillaJIT::create(
                 SP, llvm_ir, toAddr.hex(), toAccount->GetInitJson(), m_scillaCodeCache.get());
             auto initOutput = sJIT->initState(gasRemained);
-            gasRemained -= initOutput["gas_remaining"].asUInt64();
+            gasRemained -= std::stoi(initOutput["gas_remaining"].asString());
           } catch (const ScillaVM::ScillaError& se) {
             LOG_GENERAL(WARNING,
                         "ScillaVM create contract failed: " << se.toString());
