@@ -270,7 +270,7 @@
         <EXTLIB_FOLDER>scilla_libs</EXTLIB_FOLDER>
         <ENABLE_SCILLA_MULTI_VERSION>false</ENABLE_SCILLA_MULTI_VERSION>
         <FIELDS_MAP_DEPTH_INDICATOR>_fields_map_depth</FIELDS_MAP_DEPTH_INDICATOR>
-        <LOG_SC>false</LOG_SC>
+        <LOG_SC>true</LOG_SC>
         <DISABLE_SCILLA_LIB>true</DISABLE_SCILLA_LIB>
 	<SCILLA_VM_DEV>true</SCILLA_VM_DEV>
     </smart_contract>

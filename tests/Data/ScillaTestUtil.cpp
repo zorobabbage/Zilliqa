@@ -99,11 +99,11 @@ bool ScillaTestUtil::GetScillaTest(ScillaTest &t, const std::string &contrName,
                               testDir + "/blockchain_" + is + ".json") &&
                 ParseJsonFile(t.expOutput, testDir + "/init_output.json"))
              : (ParseJsonFile(t.init, testDir + "/init.json") &&
-                ParseJsonFile(t.state, testDir + "/state_" + is + ".json") &&
-                ParseJsonFile(t.blockchain,
-                              testDir + "/blockchain_" + is + ".json") &&
-                ParseJsonFile(t.expOutput,
-                              testDir + "/output_" + is + ".json") &&
+                // ParseJsonFile(t.state, testDir + "/state_" + is + ".json") &&
+                // ParseJsonFile(t.blockchain,
+                //               testDir + "/blockchain_" + is + ".json") &&
+                // ParseJsonFile(t.expOutput,
+                //               testDir + "/output_" + is + ".json") &&
                 ParseJsonFile(t.message, testDir + "/message_" + is + ".json"));
 }
 

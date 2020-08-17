@@ -105,12 +105,11 @@ void AccountStoreSC<MAP>::InvokeInterpreter(
       case CHECKER:
         if (SCILLA_VM_DEV) {
           try {
-            int pid = -1;
             if (!SysCommand::ExecuteCmd(
-                    SysCommand::WITH_OUTPUT_PID,
+                    SysCommand::WITH_OUTPUT,
                     ScillaUtils::GetContractCheckerCmdStr(
                         m_root_w_version, is_library, available_gas),
-                    interprinterPrint, pid)) {
+                    interprinterPrint)) {
               LOG_GENERAL(WARNING, "ExecuteCmd failed: "
                                        << ScillaUtils::GetContractCheckerCmdStr(
                                               m_root_w_version, is_library,
