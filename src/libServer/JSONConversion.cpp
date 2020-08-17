@@ -138,8 +138,8 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
     for (const auto& votes : voteProposal.second) {
       Json::Value _temp;
       _temp["ProposalId"] = voteProposal.first;
-      _temp["voteValue"] = votes.first;
-      _temp["voteCount"] = votes.second;
+      _temp["VoteValue"] = votes.first;
+      _temp["VoteCount"] = votes.second;
       ret_header["Governance"].append(_temp);
     }
   }

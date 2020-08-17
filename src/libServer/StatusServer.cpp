@@ -488,14 +488,19 @@ string StatusServer::GetValidateDB() {
 }
 
 bool StatusServer::SetVoteInPow(const string& proposalId, const string& vote) {
+  if (LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST, "Not to be queried on lookup");
+  }
   LOG_GENERAL(INFO,
               "Governance: vote msg received by status server. proposalId :"
                   << proposalId << " vote:" << vote);
-  // TODO: Epoch check for validity of vote
+  // TODO: Epoch check for validity of vote is done by script
   // proposal id and vote value validity should be done by script
-  if (!proposalId.empty() && !vote.empty()) {
-    if (!m_mediator.m_node->storeVoteUntilPow(proposalId, vote)) {
-    }
+  // what if user modify the script and send across all the epochs ?? asks
+  // @Antonio
+  if (proposalId.empty() || vote.empty()) {
+    return false;
   }
+  m_mediator.m_node->storeVoteUntilPow(proposalId, vote);
   return true;
 }
