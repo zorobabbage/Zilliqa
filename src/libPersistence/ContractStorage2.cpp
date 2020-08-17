@@ -179,6 +179,9 @@ bool ContractStorage2::FetchStateValue(
     LOG_GENERAL(INFO, "query for fetch: " << query.Name);
   }
 
+  // The default is not found.
+  foundVal = false;
+
   if (query.Name == FIELDS_MAP_DEPTH_INDICATOR) {
     LOG_GENERAL(WARNING, "query name is " << FIELDS_MAP_DEPTH_INDICATOR);
     return false;
@@ -200,7 +203,6 @@ bool ContractStorage2::FetchStateValue(
   if (d_found != t_indexToBeDeleted.end()) {
     // ignore the deleted empty placeholder
     if (query.Indices.size() == (size_t)query.MapDepth) {
-      foundVal = false;
       return true;
     }
   }
@@ -210,7 +212,6 @@ bool ContractStorage2::FetchStateValue(
       t_stateDataMap.find(key) == t_stateDataMap.end()) {
     // ignore the deleted empty placeholder
     if (query.Indices.size() == (size_t)query.MapDepth) {
-      foundVal = false;
       return true;
     }
   }
@@ -218,22 +219,22 @@ bool ContractStorage2::FetchStateValue(
   if ((int)query.Indices.size() == query.MapDepth) {
     // result will not be a map and can be just fetched into the store
     bytes bval;
-    bool found = false;
 
     const auto& t_found = t_stateDataMap.find(key);
     if (t_found != t_stateDataMap.end()) {
       bval = t_found->second;
-      found = true;
+      foundVal = true;
     }
-    if (!found) {
+    if (!foundVal) {
       const auto& m_found = m_stateDataMap.find(key);
       if (m_found != m_stateDataMap.end()) {
         bval = m_found->second;
-        found = true;
+        foundVal = true;
       }
     }
-    if (!found) {
+    if (!foundVal) {
       if (m_stateDataDB.Exists(key)) {
+        foundVal = true;
         if (query.IgnoreVal) {
           return true;
         }
@@ -244,7 +245,6 @@ bool ContractStorage2::FetchStateValue(
           return false;
         } else {
           // for in-map value, it's okay if cannot find
-          foundVal = false;
           return true;
         }
       }
@@ -294,7 +294,6 @@ bool ContractStorage2::FetchStateValue(
   if (!it->Valid() || it->key().ToString().compare(0, key.size(), key) != 0) {
     // no entry
     if (entries.empty()) {
-      foundVal = false;
       /// if querying the var without indices but still failed
       /// maybe trying to fetching an invalid vname
       /// as empty map will always have
@@ -378,7 +377,6 @@ bool ContractStorage2::FetchStateValue(
   }
 
   if (!counter) {
-    foundVal = false;
     return true;
   }
 
