@@ -133,6 +133,16 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
   for (const auto& dswinner : dshead.GetDSPoWWinners()) {
     ret_header["PoWWinners"].append(static_cast<string>(dswinner.first));
   }
+  for (const auto& voteProposal : dshead.GetGovVoteProposals()) {
+    // TODO: Just for checking. Optimize further to display nice json
+    for (const auto& votes : voteProposal.second) {
+      Json::Value _temp;
+      _temp["ProposalId"] = voteProposal.first;
+      _temp["voteValue"] = votes.first;
+      _temp["voteCount"] = votes.second;
+      ret_header["Governance"].append(_temp);
+    }
+  }
   ret_header["Timestamp"] = to_string(dsblock.GetTimestamp());
   ret["header"] = ret_header;
 
