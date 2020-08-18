@@ -42,7 +42,7 @@ class DSBlockHeader : public BlockHeaderBase {
   std::map<PubKey, Peer> m_PoWDSWinners;
   std::vector<PubKey> m_removeDSNodePubkeys;
   DSBlockHashSet m_hashset;
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> m_govVoteProposal;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> m_govProposal;
 
  public:
   /// Default constructor.
@@ -59,7 +59,7 @@ class DSBlockHeader : public BlockHeaderBase {
       const std::map<PubKey, Peer>& powDSWinners,
       const std::vector<PubKey>& removeDSNodePubkeys,
       const DSBlockHashSet& hashset,
-      const std::map<uint32_t, std::map<uint32_t, uint32_t>>& m_govVoteProposal,
+      const std::map<uint32_t, std::map<uint32_t, uint32_t>>& m_govProposal,
       const uint32_t version = 0,
       const CommitteeHash& committeeHash = CommitteeHash(),
       const BlockHash& prevHash = BlockHash());

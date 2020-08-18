@@ -3218,11 +3218,11 @@ void Node::CleanLocalRawStores() {
     }
   }
 }
-bool Node ::storeVoteUntilPow(const std::string& proposalId,
+void Node ::storeVoteUntilPow(const std::string& proposalId,
                               const std::string& vote) {
-  voteProposal = make_pair(std::stoi(proposalId), std::stoi(vote));
-  LOG_GENERAL(INFO, "Governance: ProposalId: " << voteProposal.first
+  m_govProposal = make_pair(static_cast<uint32_t>(std::stoul(proposalId)),
+                            static_cast<uint32_t>(std::stoul(vote)));
+  LOG_GENERAL(INFO, "Governance: ProposalId: " << m_govProposal.first
                                                << " voteValue: "
-                                               << voteProposal.second);
-  return true;
+                                               << m_govProposal.second);
 }

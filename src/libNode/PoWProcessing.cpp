@@ -277,7 +277,6 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
   if (m_state != MICROBLOCK_CONSENSUS_PREP && m_state != MICROBLOCK_CONSENSUS) {
     SetState(WAITING_DSBLOCK);
   }
-  voteProposal.first = voteProposal.second = 0;
 
   return true;
 }
@@ -296,12 +295,16 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
   if (!Messenger::SetDSPoWSubmission(
           powmessage, MessageOffset::BODY, block_num, difficultyLevel,
           m_mediator.m_selfPeer, m_mediator.m_selfKey, winningNonce,
-          powResultHash, powMixhash, lookupId, gasPrice, voteProposal.first,
-          voteProposal.second)) {
+          powResultHash, powMixhash, lookupId, gasPrice, m_govProposal)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetDSPoWSubmission failed.");
     return false;
   }
+  // TODO : Revisit the code
+  // unset the values after vote is sent to DS committee.
+  // miner can again cast vote in next epoch or overwrite the vote in existing
+  // epoch can be set as 0 or UINT_MAX. Chosen 0 for now
+  m_govProposal.first = m_govProposal.second = 0;
 
   vector<Peer> peerList;
 

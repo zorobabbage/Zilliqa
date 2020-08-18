@@ -49,7 +49,7 @@ struct PoWSolution {
   uint32_t m_lookupId;
   uint128_t m_gasPrice;
   std::pair<uint32_t, uint32_t>
-      m_voteProposal;  // proposal id and vote value pair
+      m_govProposal;  // proposal id and vote value pair
 
   PoWSolution()
       : m_nonce(0),
@@ -57,24 +57,24 @@ struct PoWSolution {
         m_mixhash({{0}}),
         m_lookupId(uint32_t() - 1),
         m_gasPrice(0),
-        m_voteProposal({0, 0}) {
+        m_govProposal({0, 0}) {
 
   }  // The oldest DS (and now new shard node) will have this default value
   PoWSolution(const uint64_t n, const std::array<unsigned char, 32>& r,
               const std::array<unsigned char, 32>& m, uint32_t l,
-              const uint128_t& gp, const std::pair<uint32_t, uint32_t>& vp)
+              const uint128_t& gp, const std::pair<uint32_t, uint32_t>& gvp)
       : m_nonce(n),
         m_result(r),
         m_mixhash(m),
         m_lookupId(l),
         m_gasPrice(gp),
-        m_voteProposal(vp) {}
+        m_govProposal(gvp) {}
   bool operator==(const PoWSolution& rhs) const {
     return std::tie(m_nonce, m_result, m_mixhash, m_lookupId, m_gasPrice,
-                    m_voteProposal.first, m_voteProposal.second) ==
+                    m_govProposal.first, m_govProposal.second) ==
            std::tie(rhs.m_nonce, rhs.m_result, rhs.m_mixhash, rhs.m_lookupId,
-                    rhs.m_gasPrice, rhs.m_voteProposal.first,
-                    rhs.m_voteProposal.second);
+                    rhs.m_gasPrice, rhs.m_govProposal.first,
+                    rhs.m_govProposal.second);
   }
 };
 

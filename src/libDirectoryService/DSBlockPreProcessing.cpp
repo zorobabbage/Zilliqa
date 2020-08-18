@@ -918,15 +918,15 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   for (const auto& it : allPoWs) {
     LOG_GENERAL(INFO, "Governance:Before creating block  miner key :"
                           << it.first
-                          << " proposalId :" << it.second.m_voteProposal.first
-                          << " vote: " << it.second.m_voteProposal.second);
+                          << " proposalId :" << it.second.m_govProposal.first
+                          << " vote: " << it.second.m_govProposal.second);
   }
 
   for (const auto& it : allDSPoWs) {
     LOG_GENERAL(INFO, "Governance:Before creating block  ds key :"
                           << it.first
-                          << " proposalId :" << it.second.m_voteProposal.first
-                          << " vote: " << it.second.m_voteProposal.second);
+                          << " proposalId :" << it.second.m_govProposal.first
+                          << " vote: " << it.second.m_govProposal.second);
   }
 
   auto sortedDSPoWSolns = SortPoWSoln(allDSPoWs);
@@ -1001,24 +1001,27 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   ComputeSharding(sortedPoWSolns);
 
   // count votevalue and votes against that vote value for a proposal from
-  // mining pow winners
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
+  // normal nodes(miners) pow winners.
+  // This loop will iterate every time in one DS epoch.
+  // TODO : check with team on how it can be optimized ?
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govProposal;
   for (const auto& miner : sortedPoWSolns) {
-    auto it = allPoWs.find(miner.second);
-    if (it != allPoWs.end()) {
-      uint32_t proposalId = it->second.m_voteProposal.first;
-      uint32_t voteValue = it->second.m_voteProposal.second;
+    const auto& powSolIter = allPoWs.find(miner.second);
+    if (powSolIter != allPoWs.end()) {
+      uint32_t proposalId = powSolIter->second.m_govProposal.first;
+      uint32_t voteValue = powSolIter->second.m_govProposal.second;
       LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
                             << proposalId << " VoteValue: " << voteValue);
       if (proposalId > 0 && voteValue > 0) {  // TODO: revisit this condition
-        govVoteProposals[proposalId][voteValue]++;
+        govProposal[proposalId][voteValue]++;
       }
     }
   }
-  for (auto it = govVoteProposals.begin(); it != govVoteProposals.end(); ++it) {
-    LOG_GENERAL(
-        INFO, "Governance: Counting votes against proposal id: " << it->first);
-    for (const auto& vote : it->second) {
+  // TODO : Remove once work is over.Logs for debugging.
+  for (const auto& it : govProposal) {
+    LOG_GENERAL(INFO,
+                "Governance: Counting votes against proposal id: " << it.first);
+    for (const auto& vote : it.second) {
       LOG_GENERAL(INFO,
                   " voteValue: " << vote.first << " count: " << vote.second);
     }
@@ -1063,7 +1066,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         DSBlockHeader(dsDifficulty, difficulty, m_mediator.m_selfKey.second,
                       blockNum, m_mediator.m_currentEpochNum, GetNewGasPrice(),
                       m_mediator.m_curSWInfo, powDSWinners, removeDSNodePubkeys,
-                      dsBlockHashSet, govVoteProposals, version, committeeHash,
+                      dsBlockHashSet, govProposal, version, committeeHash,
                       prevHash),
         CoSignatures(m_mediator.m_DSCommittee->size())));
   }

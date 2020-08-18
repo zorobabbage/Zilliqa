@@ -75,8 +75,8 @@ BOOST_AUTO_TEST_CASE(testDSPowSolutionClass) {
   BOOST_REQUIRE(dsps.GetMixHash() == mixHashInput);
   BOOST_REQUIRE(dsps.GetLookupId() == lookupIdInput);
   BOOST_REQUIRE(dsps.GetGasPrice() == gasPriceInput);
-  BOOST_REQUIRE(dsps.GetProposalId() == proposalIdInput);
-  BOOST_REQUIRE(dsps.GetVoteValue() == voteValueInput);
+  BOOST_REQUIRE(dsps.GetGovProposalId() == proposalIdInput);
+  BOOST_REQUIRE(dsps.GetGovVoteValue() == voteValueInput);
   BOOST_REQUIRE(dsps.GetSignature() == signatureInput);
   dsps.SetSignature(signature2);
   BOOST_REQUIRE(dsps.GetSignature() == signature2);

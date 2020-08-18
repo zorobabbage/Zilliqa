@@ -120,7 +120,7 @@ def make_options_dictionary(options_dict):
 	options_dict["disabletxns"] = "ToggleDisableTxns"
 	options_dict["set_validatedb"] = "SetValidateDB"
 	options_dict["get_validatedb"] = "GetValidateDB"
-	options_dict["vote"] = "SetVoteInPow"
+	options_dict["vote"] = "SetVoteInPow" #TODO: It's temporary.Remove later on
 
 def ProcessResponseCore(resp, param):
 	if param:
