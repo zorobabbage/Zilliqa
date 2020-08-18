@@ -134,14 +134,16 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
     ret_header["PoWWinners"].append(static_cast<string>(dswinner.first));
   }
   for (const auto& voteProposal : dshead.GetGovVoteProposals()) {
-    // TODO: Just for checking. Optimize further to display nice json
+    Json::Value _temp;
+    _temp["ProposalId"] = voteProposal.first;
     for (const auto& votes : voteProposal.second) {
-      Json::Value _temp;
-      _temp["ProposalId"] = voteProposal.first;
-      _temp["VoteValue"] = votes.first;
-      _temp["VoteCount"] = votes.second;
-      ret_header["Governance"].append(_temp);
+      Json::Value _votes;
+      // Json doesn't maintain ordered input.It's always sorted
+      _votes["VoteValue"] = votes.first;
+      _votes["VoteCount"] = votes.second;
+      _temp["Votes"].append(_votes);
     }
+    ret_header["Governance"].append(_temp);
   }
   ret_header["Timestamp"] = to_string(dsblock.GetTimestamp());
   ret["header"] = ret_header;
