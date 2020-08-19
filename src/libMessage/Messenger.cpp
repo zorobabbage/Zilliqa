@@ -1409,33 +1409,58 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
     for (const auto& govProposal : dsBlockHeader.GetGovProposalMap()) {
       protoproposal = protoDSBlockHeader.add_proposals();
       protoproposal->set_proposalid(govProposal.first);
-      for (const auto& vote : govProposal.second) {
-        LOG_GENERAL(INFO, "Governance: serialization govProposalId: "
+      for (const auto& vote : govProposal.second.first) {
+        LOG_GENERAL(INFO, "Governance: serialization DS nodes govProposalId: "
                               << govProposal.first << " govVoteValue:"
                               << vote.first << " voteCount: " << vote.second);
 
         ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
-        protoVote = protoproposal->add_votes();
+        protoVote = protoproposal->add_dsvotes();
+        protoVote->set_value(vote.first);
+        protoVote->set_count(vote.second);
+      }
+      for (const auto& vote : govProposal.second.second) {
+        LOG_GENERAL(INFO,
+                    "Governance: serialization miner nodes govProposalId: "
+                        << govProposal.first << " govVoteValue:" << vote.first
+                        << " voteCount: " << vote.second);
+
+        ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
+        protoVote = protoproposal->add_minervotes();
         protoVote->set_value(vote.first);
         protoVote->set_count(vote.second);
       }
     }
     // TODO : temp code for debugging.Remove from here @Chetan
-    map<uint32_t, map<uint32_t, uint32_t>> tempGovProposalMap;
+    std::map<uint32_t,
+             std::pair<map<uint32_t, uint32_t>, std::map<uint32_t, uint32_t>>>
+        tempGovProposalMap;
     for (const auto& proposal : protoDSBlockHeader.proposals()) {
       LOG_GENERAL(
           INFO, "Chetan serialized govProposalId : " << proposal.proposalid());
-      map<uint32_t, uint32_t> votes;
-      for (const auto& vote : proposal.votes()) {
-        votes[vote.value()] = vote.count();
-        LOG_GENERAL(INFO, "Chetan serialized govVoteValue : "
+      map<uint32_t, uint32_t> ds_votes;
+      map<uint32_t, uint32_t> miner_votes;
+      for (const auto& vote : proposal.dsvotes()) {
+        ds_votes[vote.value()] = vote.count();
+        LOG_GENERAL(INFO, "Chetan serialized ds govVoteValue : "
                               << vote.value() << " count : " << vote.count());
       }
-      tempGovProposalMap[proposal.proposalid()] = votes;
+      tempGovProposalMap[proposal.proposalid()].first = miner_votes;
+      for (const auto& vote : proposal.minervotes()) {
+        miner_votes[vote.value()] = vote.count();
+        LOG_GENERAL(INFO, "Chetan serialized miner govVoteValue : "
+                              << vote.value() << " count : " << vote.count());
+      }
+      tempGovProposalMap[proposal.proposalid()].second = miner_votes;
     }
     for (const auto& proposals : tempGovProposalMap) {
-      for (const auto& vote : proposals.second) {
-        LOG_GENERAL(INFO, "Governance Test serialization govProposalId:"
+      for (const auto& vote : proposals.second.first) {
+        LOG_GENERAL(INFO, "Governance Test serialization miner govProposalId:"
+                              << proposals.first << " govVoteValue: "
+                              << vote.first << " votecount: " << vote.second);
+      }
+      for (const auto& vote : proposals.second.second) {
+        LOG_GENERAL(INFO, "Governance Test serialization miner govProposalId:"
                               << proposals.first << " govVoteValue: "
                               << vote.first << " votecount: " << vote.second);
       }
@@ -1512,22 +1537,37 @@ bool ProtobufToDSBlockHeader(
 
   // Deserialize governance vote proposal
   // TODO: check required field
-  map<uint32_t, map<uint32_t, uint32_t>> govProposalMap;
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      govProposalMap;
   for (const auto& protoProposal : protoDSBlockHeader.proposals()) {
     LOG_GENERAL(INFO, "Chetan Proposal id: " << protoProposal.proposalid());
     // govProposalMap[protoProposal.govProposalId()] = protoProposal.votes();
-    map<uint32_t, uint32_t> votes;
-    for (const auto& protovote : protoProposal.votes()) {
-      votes[protovote.value()] = protovote.count();
+    map<uint32_t, uint32_t> ds_votes;
+    map<uint32_t, uint32_t> miner_votes;
+    for (const auto& protovote : protoProposal.dsvotes()) {
+      ds_votes[protovote.value()] = protovote.count();
       LOG_GENERAL(INFO, "Chetan govVoteValue: " << protovote.value()
                                                 << " voteCount : "
                                                 << protovote.count());
     }
-    govProposalMap[protoProposal.proposalid()] = votes;
+    for (const auto& protovote : protoProposal.minervotes()) {
+      miner_votes[protovote.value()] = protovote.count();
+      LOG_GENERAL(INFO, "Chetan govVoteValue: " << protovote.value()
+                                                << " voteCount : "
+                                                << protovote.count());
+    }
+    govProposalMap[protoProposal.proposalid()].first = ds_votes;
+    govProposalMap[protoProposal.proposalid()].second = miner_votes;
   }
   for (const auto& proposals : govProposalMap) {
-    for (const auto& vote : proposals.second) {
-      LOG_GENERAL(INFO, "Governance Deserialization govProposalId:"
+    for (const auto& vote : proposals.second.first) {
+      LOG_GENERAL(INFO, "Governance DS Deserialization govProposalId:"
+                            << proposals.first << " govVoteValue: "
+                            << vote.first << " votecount: " << vote.second);
+    }
+    for (const auto& vote : proposals.second.second) {
+      LOG_GENERAL(INFO, "Governance Miner Deserialization govProposalId:"
                             << proposals.first << " govVoteValue: "
                             << vote.first << " votecount: " << vote.second);
     }
@@ -3974,7 +4014,7 @@ bool Messenger::SetDSPoWSubmission(
   if (govProposal.first > 0 && govProposal.second > 0) {
     result.mutable_data()->mutable_govdata()->set_proposalid(govProposal.first);
     result.mutable_data()->mutable_govdata()->set_votevalue(govProposal.second);
-    LOG_GENERAL(INFO, "Governance: SetVote: GovProposalId:"
+    LOG_GENERAL(INFO, "Governance: SetVote in pow submission: GovProposalId:"
                           << govProposal.first
                           << " GovVoteValue:" << govProposal.second);
     if (!result.data().govdata().IsInitialized()) {
@@ -4041,7 +4081,10 @@ bool Messenger::GetDSPoWSubmission(
   ProtobufByteArrayToNumber<uint128_t, UINT128_SIZE>(result.data().gasprice(),
                                                      gasPrice);
   if (result.data().govdata().IsInitialized()) {
-    LOG_GENERAL(INFO, "Governance: DS node received vote in POW message");
+    LOG_GENERAL(
+        INFO,
+        "Governance: DS node received vote in POW message");  // TODO Will
+                                                              // always come here
     LOG_GENERAL(
         INFO, "Governance: GetVote govProposalId :"
                   << result.data().govdata().proposalid()

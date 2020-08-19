@@ -133,18 +133,25 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
   for (const auto& dswinner : dshead.GetDSPoWWinners()) {
     ret_header["PoWWinners"].append(static_cast<string>(dswinner.first));
   }
+
   for (const auto& govProposal : dshead.GetGovProposalMap()) {
-    Json::Value _tempProposal;
-    _tempProposal["ProposalId"] = govProposal.first;
-    for (const auto& votes : govProposal.second) {
-      Json::Value _votes;
-      // Json doesn't maintain ordered input.It's always sorted
-      _votes["VoteValue"] = votes.first;
-      _votes["VoteCount"] = votes.second;
-      _tempProposal["Votes"].append(_votes);
+    Json::Value _tempGovProposal;
+    Json::Value _dsvotes;
+    Json::Value _minervotes;
+    _tempGovProposal["ProposalId"] = govProposal.first;
+    for (const auto& votes : govProposal.second.first) {
+      _dsvotes["VoteCount"] = votes.second;
+      _dsvotes["VoteValue"] = votes.first;
+      _tempGovProposal["DSVotes"].append(_dsvotes);
     }
-    ret_header["Governance"].append(_tempProposal);
+    for (const auto& votes : govProposal.second.second) {
+      _minervotes["VoteCount"] = votes.second;
+      _minervotes["VoteValue"] = votes.first;
+      _tempGovProposal["MinerVotes"].append(_minervotes);
+    }
+    ret["Governance"].append(_tempGovProposal);
   }
+
   ret_header["Timestamp"] = to_string(dsblock.GetTimestamp());
   ret["header"] = ret_header;
 

@@ -1000,19 +1000,34 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
 
-  // Map of proposals, contains proposal id,  votes value and vote count from miners.
-  // This loop will iterate every time in one DS epoch.
+  // Map of proposals, contains proposal id,  votes value and vote count from
+  // miners. This loop will iterate every time in one DS epoch.
   // TODO : check with team on how it can be optimized ?
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> govProposalMap;
+  // typedef the long data type
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      govProposalMap;
+  for (const auto& dsnode : sortedDSPoWSolns) {
+    const auto& powSolIter = allDSPoWs.find(dsnode.second);
+    if (powSolIter != allDSPoWs.end()) {
+      uint32_t proposalId = powSolIter->second.m_govProposal.first;
+      uint32_t voteValue = powSolIter->second.m_govProposal.second;
+      LOG_GENERAL(INFO, "Governance: DS votes count : proposalId: "
+                            << proposalId << " VoteValue: " << voteValue);
+      if (proposalId > 0 && voteValue > 0) {  // TODO: revisit this condition
+        govProposalMap[proposalId].first[voteValue]++;
+      }
+    }
+  }
   for (const auto& miner : sortedPoWSolns) {
     const auto& powSolIter = allPoWs.find(miner.second);
     if (powSolIter != allPoWs.end()) {
       uint32_t proposalId = powSolIter->second.m_govProposal.first;
       uint32_t voteValue = powSolIter->second.m_govProposal.second;
-      LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
+      LOG_GENERAL(INFO, "Governance: Miner votes count : proposalId: "
                             << proposalId << " VoteValue: " << voteValue);
       if (proposalId > 0 && voteValue > 0) {  // TODO: revisit this condition
-        govProposalMap[proposalId][voteValue]++;
+        govProposalMap[proposalId].second[voteValue]++;
       }
     }
   }
@@ -1020,9 +1035,13 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   for (const auto& it : govProposalMap) {
     LOG_GENERAL(INFO,
                 "Governance: Counting votes against proposal id: " << it.first);
-    for (const auto& vote : it.second) {
-      LOG_GENERAL(INFO,
-                  " voteValue: " << vote.first << " count: " << vote.second);
+    for (const auto& vote : it.second.first) {
+      LOG_GENERAL(INFO, " DS node voteValue: " << vote.first
+                                               << " count: " << vote.second);
+    }
+    for (const auto& vote : it.second.second) {
+      LOG_GENERAL(INFO, " Miner node voteValue: " << vote.first
+                                                  << " count: " << vote.second);
     }
   }
 

@@ -125,7 +125,9 @@ DSBlockHeader GenerateRandomDSBlockHeader() {
   std::vector<PubKey> removeDSNodePubkeys;
   DSBlockHashSet hash;
   CommitteeHash committeeHash;
-  map<uint32_t, map<uint32_t, uint32_t>> govProposalMap;
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      govProposalMap;
 
   for (unsigned int i = 0, count = Dist1to99(); i < count; i++) {
     powDSWinners.emplace(GenerateRandomPubKey(), GenerateRandomPeer());
@@ -217,11 +219,13 @@ FallbackBlockHeader GenerateRandomFallbackBlockHeader() {
 }
 
 DSBlockHeader createDSBlockHeader(const uint64_t& blockNum) {
-  return DSBlockHeader(
-      DistUint8(), DistUint8(), GenerateRandomPubKey(), blockNum, DistUint64(),
-      DistUint128(), SWInfo(), map<PubKey, Peer>(), std::vector<PubKey>(),
-      DSBlockHashSet(), map<uint32_t, map<uint32_t, uint32_t>>(), DistUint32(),
-      CommitteeHash(), BlockHash());
+  return DSBlockHeader(DistUint8(), DistUint8(), GenerateRandomPubKey(),
+                       blockNum, DistUint64(), DistUint128(), SWInfo(),
+                       map<PubKey, Peer>(), std::vector<PubKey>(),
+                       DSBlockHashSet(),
+                       map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                                               std::map<uint32_t, uint32_t>>>(),
+                       DistUint32(), CommitteeHash(), BlockHash());
 }
 
 TxBlockHeader createTxBlockHeader(const uint64_t& blockNum) {

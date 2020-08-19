@@ -69,7 +69,9 @@ DSBlock constructDummyDSBlock(uint64_t blocknum) {
   for (int i = 0; i < 2; i++) {
     removeDSNodePubkeys.emplace_back(Schnorr::GenKeyPair().second);
   }
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> govProposalMap;
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      govProposalMap;
 
   return DSBlock(
       DSBlockHeader(50, 20, pubKey1.second, blocknum, 0, PRECISION_MIN_VALUE,

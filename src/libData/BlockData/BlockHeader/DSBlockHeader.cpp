@@ -48,7 +48,9 @@ DSBlockHeader::DSBlockHeader(
     const map<PubKey, Peer>& powDSWinners,
     const std::vector<PubKey>& removeDSNodePubkeys,
     const DSBlockHashSet& hashset,
-    const std::map<uint32_t, std::map<uint32_t, uint32_t>>& govProposalMap,
+    const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                                       std::map<uint32_t, uint32_t>>>&
+        govProposalMap,
     const uint32_t version, const CommitteeHash& committeeHash,
     const BlockHash& prevHash)
     : BlockHeaderBase(version, committeeHash, prevHash),
@@ -116,7 +118,8 @@ const map<PubKey, Peer>& DSBlockHeader::GetDSPoWWinners() const {
   return m_PoWDSWinners;
 }
 
-const std::map<uint32_t, std::map<uint32_t, uint32_t>>&
+const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                                   std::map<uint32_t, uint32_t>>>&
 DSBlockHeader::GetGovProposalMap() const {
   return m_govProposalMap;
 }

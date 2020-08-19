@@ -88,8 +88,9 @@ message ProtoDSBlock
         }
         message Proposal
         {
-            uint32 proposalid       = 1;
-            repeated Vote votes     = 2;
+            uint32 proposalid           = 1;
+            repeated Vote dsvotes       = 2;
+            repeated Vote minervotes    = 3;
         }
         repeated Proposal proposals      = 13;
     }

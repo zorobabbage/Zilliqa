@@ -42,7 +42,9 @@ class DSBlockHeader : public BlockHeaderBase {
   std::map<PubKey, Peer> m_PoWDSWinners;
   std::vector<PubKey> m_removeDSNodePubkeys;
   DSBlockHashSet m_hashset;
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> m_govProposalMap;
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      m_govProposalMap;
 
  public:
   /// Default constructor.
@@ -59,7 +61,9 @@ class DSBlockHeader : public BlockHeaderBase {
       const std::map<PubKey, Peer>& powDSWinners,
       const std::vector<PubKey>& removeDSNodePubkeys,
       const DSBlockHashSet& hashset,
-      const std::map<uint32_t, std::map<uint32_t, uint32_t>>& m_govProposalMap,
+      const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                                         std::map<uint32_t, uint32_t>>>&
+          m_govProposalMap,
       const uint32_t version = 0,
       const CommitteeHash& committeeHash = CommitteeHash(),
       const BlockHash& prevHash = BlockHash());
@@ -102,8 +106,9 @@ class DSBlockHeader : public BlockHeaderBase {
   const std::map<PubKey, Peer>& GetDSPoWWinners() const;
 
   // Returns Governance proposals and corresponding votes values count.
-  const std::map<uint32_t, std::map<uint32_t, uint32_t>>& GetGovProposalMap()
-      const;
+  const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                                     std::map<uint32_t, uint32_t>>>&
+  GetGovProposalMap() const;
 
   // Returns the DS members to remove for non-performance.
   const std::vector<PubKey>& GetDSRemovePubKeys() const;
