@@ -194,7 +194,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
                                          const Transaction& transaction,
                                          TransactionReceipt& receipt,
                                          ErrTxnStatus& error_code) {
-  // LOG_MARKER();
+  LOG_MARKER();
   LOG_GENERAL(INFO, "Process txn: " << transaction.GetTranID());
   std::lock_guard<std::mutex> g(m_mutexUpdateAccounts);
 
@@ -619,15 +619,15 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       m_curAmount = amount;
       m_curNumShards = numShards;
 
-      std::chrono::system_clock::time_point tpStart;
-      if (ENABLE_CHECK_PERFORMANCE_LOG) {
-        tpStart = r_timer_start();
-      }
-
       // prepare IPC with current contract address
       m_scillaIPCServer->setContractAddress(toAddr);
 
       Contract::ContractStorage2::GetContractStorage().BufferCurrentState();
+
+      std::chrono::system_clock::time_point tpStart;
+      if (ENABLE_CHECK_PERFORMANCE_LOG) {
+        tpStart = r_timer_start();
+      }
 
       std::string runnerPrint;
       bool ret = true;
@@ -1520,14 +1520,32 @@ bool AccountStoreSC<MAP>::ParseCallContractJsonOutput(
         return false;
       }
 
+      if (ENABLE_CHECK_PERFORMANCE_LOG) {
+        tpStart = r_timer_start();
+      }
+
       // prepare IPC with the recipient contract address
       m_scillaIPCServer->setContractAddress(recipient);
       std::string runnerPrint;
       bool result = true;
 
-      InvokeInterpreter(RUNNER_CALL, runnerPrint, scilla_version, is_library,
-                        gasRemained, this->GetBalance(recipient), result,
-                        receipt);
+      try {
+        ScillaJIT::init();
+        auto SP = buildScillaParams(recipient);
+        auto llvm_ir = "";  // Assuming that the machine code is already cached.
+        auto sJIT = ScillaVM::ScillaJIT::create(SP, llvm_ir, recipient.hex(),
+                                                account->GetInitJson(), m_scillaCodeCache.get());
+
+        Json::Value vmout =
+            sJIT->execMsg(account->GetBalance().convert_to<std::string>(),
+                          gasRemained, input_message);
+        runnerPrint = vmout.toStyledString();
+      } catch (const ScillaVM::ScillaError& se) {
+        LOG_GENERAL(WARNING,
+                    "ScillaVM create contract failed: " << se.toString());
+        receipt.AddError(CREATE_CONTRACT_FAILED);
+        ret = false;
+      }
 
       if (ENABLE_CHECK_PERFORMANCE_LOG) {
         LOG_GENERAL(DEBUG, "Executed " << input_message["_tag"] << " in "
