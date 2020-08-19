@@ -1406,7 +1406,7 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
     // TODO @Chetan : serialize govdata in dsblock
     // double check on serialization and deserialization part
     ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Proposal* protoproposal;
-    for (const auto& govProposal : dsBlockHeader.GetGovVoteProposals()) {
+    for (const auto& govProposal : dsBlockHeader.GetGovProposalMap()) {
       protoproposal = protoDSBlockHeader.add_proposals();
       protoproposal->set_proposalid(govProposal.first);
       for (const auto& vote : govProposal.second) {
@@ -1421,7 +1421,7 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
       }
     }
     // TODO : temp code for debugging.Remove from here @Chetan
-    map<uint32_t, map<uint32_t, uint32_t>> tempGovProposal;
+    map<uint32_t, map<uint32_t, uint32_t>> tempGovProposalMap;
     for (const auto& proposal : protoDSBlockHeader.proposals()) {
       LOG_GENERAL(
           INFO, "Chetan serialized govProposalId : " << proposal.proposalid());
@@ -1431,9 +1431,9 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
         LOG_GENERAL(INFO, "Chetan serialized govVoteValue : "
                               << vote.value() << " count : " << vote.count());
       }
-      tempGovProposal[proposal.proposalid()] = votes;
+      tempGovProposalMap[proposal.proposalid()] = votes;
     }
-    for (const auto& proposals : tempGovProposal) {
+    for (const auto& proposals : tempGovProposalMap) {
       for (const auto& vote : proposals.second) {
         LOG_GENERAL(INFO, "Governance Test serialization govProposalId:"
                               << proposals.first << " govVoteValue: "
@@ -1512,10 +1512,10 @@ bool ProtobufToDSBlockHeader(
 
   // Deserialize governance vote proposal
   // TODO: check required field
-  map<uint32_t, map<uint32_t, uint32_t>> govProposal;
+  map<uint32_t, map<uint32_t, uint32_t>> govProposalMap;
   for (const auto& protoProposal : protoDSBlockHeader.proposals()) {
     LOG_GENERAL(INFO, "Chetan Proposal id: " << protoProposal.proposalid());
-    // govProposal[protoProposal.govProposalId()] = protoProposal.votes();
+    // govProposalMap[protoProposal.govProposalId()] = protoProposal.votes();
     map<uint32_t, uint32_t> votes;
     for (const auto& protovote : protoProposal.votes()) {
       votes[protovote.value()] = protovote.count();
@@ -1523,9 +1523,9 @@ bool ProtobufToDSBlockHeader(
                                                 << " voteCount : "
                                                 << protovote.count());
     }
-    govProposal[protoProposal.proposalid()] = votes;
+    govProposalMap[protoProposal.proposalid()] = votes;
   }
-  for (const auto& proposals : govProposal) {
+  for (const auto& proposals : govProposalMap) {
     for (const auto& vote : proposals.second) {
       LOG_GENERAL(INFO, "Governance Deserialization govProposalId:"
                             << proposals.first << " govVoteValue: "
@@ -1569,7 +1569,7 @@ bool ProtobufToDSBlockHeader(
   dsBlockHeader = DSBlockHeader(
       dsdifficulty, difficulty, leaderPubKey, protoDSBlockHeader.blocknum(),
       protoDSBlockHeader.epochnum(), gasprice, swInfo, powDSWinners,
-      removeDSNodePubKeys, hash, govProposal);
+      removeDSNodePubKeys, hash, govProposalMap);
 
   const ZilliqaMessage::ProtoBlockHeaderBase& protoBlockHeaderBase =
       protoDSBlockHeader.blockheaderbase();

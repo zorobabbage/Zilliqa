@@ -132,7 +132,7 @@ StatusServer::StatusServer(Mediator& mediator,
       &StatusServer::GetValidateDBI);
   this->bindAndAddMethod(
       jsonrpc::Procedure("SetVoteInPow", jsonrpc::PARAMS_BY_POSITION,
-                         jsonrpc::JSON_OBJECT, NULL),
+                         jsonrpc::JSON_BOOLEAN, NULL),
       &StatusServer::SetVoteInPowI);
 }
 

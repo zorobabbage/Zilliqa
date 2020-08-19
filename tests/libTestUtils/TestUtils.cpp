@@ -125,7 +125,7 @@ DSBlockHeader GenerateRandomDSBlockHeader() {
   std::vector<PubKey> removeDSNodePubkeys;
   DSBlockHashSet hash;
   CommitteeHash committeeHash;
-  map<uint32_t, map<uint32_t, uint32_t>> govVoteProposals;
+  map<uint32_t, map<uint32_t, uint32_t>> govProposalMap;
 
   for (unsigned int i = 0, count = Dist1to99(); i < count; i++) {
     powDSWinners.emplace(GenerateRandomPubKey(), GenerateRandomPeer());
@@ -133,7 +133,7 @@ DSBlockHeader GenerateRandomDSBlockHeader() {
 
   return DSBlockHeader(dsDifficulty, difficulty, leaderPubKey, blockNum,
                        epochNum, gasPrice, swInfo, powDSWinners,
-                       removeDSNodePubkeys, hash, govVoteProposals, version,
+                       removeDSNodePubkeys, hash, govProposalMap, version,
                        committeeHash, prevHash);
 }
 

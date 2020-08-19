@@ -33,7 +33,7 @@ DSBlockHeader::DSBlockHeader()
       m_PoWDSWinners(),
       m_removeDSNodePubkeys(),
       m_hashset(),
-      m_govProposal() {}
+      m_govProposalMap() {}
 
 DSBlockHeader::DSBlockHeader(const bytes& src, unsigned int offset) {
   if (!Deserialize(src, offset)) {
@@ -48,7 +48,7 @@ DSBlockHeader::DSBlockHeader(
     const map<PubKey, Peer>& powDSWinners,
     const std::vector<PubKey>& removeDSNodePubkeys,
     const DSBlockHashSet& hashset,
-    const std::map<uint32_t, std::map<uint32_t, uint32_t>>& govProposal,
+    const std::map<uint32_t, std::map<uint32_t, uint32_t>>& govProposalMap,
     const uint32_t version, const CommitteeHash& committeeHash,
     const BlockHash& prevHash)
     : BlockHeaderBase(version, committeeHash, prevHash),
@@ -62,7 +62,7 @@ DSBlockHeader::DSBlockHeader(
       m_PoWDSWinners(powDSWinners),
       m_removeDSNodePubkeys(removeDSNodePubkeys),
       m_hashset(hashset),
-      m_govProposal(govProposal) {}
+      m_govProposalMap(govProposalMap) {}
 
 bool DSBlockHeader::Serialize(bytes& dst, unsigned int offset) const {
   if (!Messenger::SetDSBlockHeader(dst, offset, *this)) {
@@ -117,8 +117,8 @@ const map<PubKey, Peer>& DSBlockHeader::GetDSPoWWinners() const {
 }
 
 const std::map<uint32_t, std::map<uint32_t, uint32_t>>&
-DSBlockHeader::GetGovVoteProposals() const {
-  return m_govProposal;
+DSBlockHeader::GetGovProposalMap() const {
+  return m_govProposalMap;
 }
 
 const std::vector<PubKey>& DSBlockHeader::GetDSRemovePubKeys() const {

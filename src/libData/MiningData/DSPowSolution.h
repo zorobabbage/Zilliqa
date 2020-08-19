@@ -35,7 +35,7 @@ class DSPowSolution {
   std::string m_mixHash;
   uint32_t m_lookupId{};
   uint128_t m_gasPrice;
-  std::pair<uint32_t, uint32_t> m_govProposal;
+  std::pair<uint32_t, uint32_t> m_govProposal; //pair of governance proposal id and vote value
   Signature m_signature;
 
  public:

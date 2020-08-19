@@ -66,11 +66,11 @@ BOOST_AUTO_TEST_CASE(testDSBlockStoring) {
 
   std::map<PubKey, Peer> powDSWinners;
   std::vector<PubKey> removeDSNodePubkeys;
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> govVoteProposals;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govProposalMap;
 
   DSBlock dsblock(
       DSBlockHeader(50, 20, pubKey1.second, 0, 0, 0, SWInfo(), powDSWinners,
-                    removeDSNodePubkeys, DSBlockHashSet(), govVoteProposals,
+                    removeDSNodePubkeys, DSBlockHashSet(), govProposalMap,
                     DSBLOCK_VERSION, CommitteeHash(), BlockHash()),
       CoSignatures());
 

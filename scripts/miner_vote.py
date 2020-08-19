@@ -21,7 +21,7 @@ proposal_description = " "
 proposal_question="Rock(1), Paper(2), Scissors(3) ?"
 proposal_id='12345'
 vote_options   = [1,2,3]
-ds_epoch_start  = 0
+ds_epoch_start  = 2
 ds_epoch_end    = 14
 
 

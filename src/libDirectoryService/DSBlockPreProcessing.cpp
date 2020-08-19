@@ -1000,11 +1000,10 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
 
-  // count votevalue and votes against that vote value for a proposal from
-  // normal nodes(miners) pow winners.
+  // Map of proposals, contains proposal id,  votes value and vote count from miners.
   // This loop will iterate every time in one DS epoch.
   // TODO : check with team on how it can be optimized ?
-  std::map<uint32_t, std::map<uint32_t, uint32_t>> govProposal;
+  std::map<uint32_t, std::map<uint32_t, uint32_t>> govProposalMap;
   for (const auto& miner : sortedPoWSolns) {
     const auto& powSolIter = allPoWs.find(miner.second);
     if (powSolIter != allPoWs.end()) {
@@ -1013,12 +1012,12 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
       LOG_GENERAL(INFO, "Governance: votesCount : proposalId: "
                             << proposalId << " VoteValue: " << voteValue);
       if (proposalId > 0 && voteValue > 0) {  // TODO: revisit this condition
-        govProposal[proposalId][voteValue]++;
+        govProposalMap[proposalId][voteValue]++;
       }
     }
   }
   // TODO : Remove once work is over.Logs for debugging.
-  for (const auto& it : govProposal) {
+  for (const auto& it : govProposalMap) {
     LOG_GENERAL(INFO,
                 "Governance: Counting votes against proposal id: " << it.first);
     for (const auto& vote : it.second) {
@@ -1066,7 +1065,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         DSBlockHeader(dsDifficulty, difficulty, m_mediator.m_selfKey.second,
                       blockNum, m_mediator.m_currentEpochNum, GetNewGasPrice(),
                       m_mediator.m_curSWInfo, powDSWinners, removeDSNodePubkeys,
-                      dsBlockHashSet, govProposal, version, committeeHash,
+                      dsBlockHashSet, govProposalMap, version, committeeHash,
                       prevHash),
         CoSignatures(m_mediator.m_DSCommittee->size())));
   }

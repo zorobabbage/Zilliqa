@@ -133,7 +133,7 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
   for (const auto& dswinner : dshead.GetDSPoWWinners()) {
     ret_header["PoWWinners"].append(static_cast<string>(dswinner.first));
   }
-  for (const auto& govProposal : dshead.GetGovVoteProposals()) {
+  for (const auto& govProposal : dshead.GetGovProposalMap()) {
     Json::Value _tempProposal;
     _tempProposal["ProposalId"] = govProposal.first;
     for (const auto& votes : govProposal.second) {
