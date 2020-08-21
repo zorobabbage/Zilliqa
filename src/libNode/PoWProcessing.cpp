@@ -267,6 +267,11 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
         }
       }
     }
+    // TODO : Revisit the code
+    // unset the values after vote is sent to DS committee.
+    // miner can again cast vote in next epoch or overwrite the vote in existing
+    // epoch can be set as 0 or UINT_MAX. Chosen 0 for now
+    m_govProposal.first = m_govProposal.second = 0;
   } else {
     // If failed to do PoW, try to rejoin in next DS block
     m_mediator.m_lookup->SetSyncType(SyncType::NORMAL_SYNC);
@@ -300,11 +305,6 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
               "Messenger::SetDSPoWSubmission failed.");
     return false;
   }
-  // TODO : Revisit the code
-  // unset the values after vote is sent to DS committee.
-  // miner can again cast vote in next epoch or overwrite the vote in existing
-  // epoch can be set as 0 or UINT_MAX. Chosen 0 for now
-  m_govProposal.first = m_govProposal.second = 0;
 
   vector<Peer> peerList;
 
