@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019 Zilliqa
+# Copyright (C) 2020 Zilliqa
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ def main():
                 print("Try again !!! Please provide valid voting input from the proposal question")
                 count+=1
                 if count >= max_count :
-                    print("Exiting the program !!!")
+                    print("Exiting the program after entering incorrect vote option for {} times !!!".format(max_count))
                     return 1
                 continue 
             break

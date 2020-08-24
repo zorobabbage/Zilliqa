@@ -1007,8 +1007,12 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
                                std::map<uint32_t, uint32_t>>>
       govProposalMap;
-  for (const auto& dsnode : sortedDSPoWSolns) {
-    const auto& powSolIter = allDSPoWs.find(dsnode.second);
+
+  // TODO: check ?  I suppose winner should be take from powDSWinners instead of
+  // sortedDSPoWSolns. powDSWinners will hold the latest node which is in DS
+  // committee.
+  for (const auto& dsnode : powDSWinners) {
+    const auto& powSolIter = allDSPoWs.find(dsnode.first);
     if (powSolIter != allDSPoWs.end()) {
       uint32_t proposalId = powSolIter->second.m_govProposal.first;
       uint32_t voteValue = powSolIter->second.m_govProposal.second;
@@ -1019,6 +1023,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
       }
     }
   }
+
   for (const auto& miner : sortedPoWSolns) {
     const auto& powSolIter = allPoWs.find(miner.second);
     if (powSolIter != allPoWs.end()) {

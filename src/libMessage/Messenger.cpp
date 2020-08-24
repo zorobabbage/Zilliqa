@@ -4084,7 +4084,8 @@ bool Messenger::GetDSPoWSubmission(
     LOG_GENERAL(
         INFO,
         "Governance: DS node received vote in POW message");  // TODO Will
-                                                              // always come here
+                                                              // always come
+                                                              // here
     LOG_GENERAL(
         INFO, "Governance: GetVote govProposalId :"
                   << result.data().govdata().proposalid()

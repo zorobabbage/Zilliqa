@@ -137,7 +137,7 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
   for (const auto& govProposal : dshead.GetGovProposalMap()) {
     Json::Value _tempGovProposal;
     Json::Value _dsvotes;
-    Json::Value _minervotes;
+    Json::Value _shardvotes;
     _tempGovProposal["ProposalId"] = govProposal.first;
     for (const auto& votes : govProposal.second.first) {
       _dsvotes["VoteValue"] = votes.first;
@@ -145,9 +145,9 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
       _tempGovProposal["DSVotes"].append(_dsvotes);
     }
     for (const auto& votes : govProposal.second.second) {
-      _minervotes["VoteValue"] = votes.first;
-      _minervotes["VoteCount"] = votes.second;
-      _tempGovProposal["MinerVotes"].append(_minervotes);
+      _shardvotes["VoteValue"] = votes.first;
+      _shardvotes["VoteCount"] = votes.second;
+      _tempGovProposal["ShardVotes"].append(_shardvotes);
     }
     ret["Governance"].append(_tempGovProposal);
   }
