@@ -382,7 +382,7 @@ void Node::BeginNextConsensusRound() {
 
   ScheduleMicroBlockConsensus();
 
-  CommitTxnPacketBuffer();
+  // CommitTxnPacketBuffer();
 }
 
 bool Node::FindTxnInProcessedTxnsList(
@@ -1288,11 +1288,11 @@ bool Node::ProcessMBnForwardTransaction(const bytes& message,
     return false;
   }
 
-  bool isDSMB;
+  bool isDSMB = false;
 
   {
     std::lock_guard<mutex> g(m_mediator.m_ds->m_mutexShards);
-    isDSMB = entry.m_microBlock.GetHeader().GetShardId() !=
+    isDSMB = entry.m_microBlock.GetHeader().GetShardId() ==
              m_mediator.m_ds->m_shards.size();
   }
 

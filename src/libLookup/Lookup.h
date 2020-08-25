@@ -309,10 +309,16 @@ class Lookup : public Executable {
 
   bool GetIsServer();
 
-  void SenderTxnBatchThread(const uint32_t);
+  void SenderTxnBatchThread(const uint32_t, bool newDSEpoch = false);
 
-  void SendTxnPacketToDS(const uint32_t, const uint32_t);
+  void SendTxnPacketPrepare(const uint32_t oldNumShards,
+                            const uint32_t newNumShards);
+  void SendTxnPacketToNodes(const uint32_t oldNumShards,
+                            const uint32_t newNumShards);
+  void SendTxnPacketToDS(const uint32_t oldNumShards,
+                         const uint32_t newNumShards);
   void SendTxnPacketToShard(const uint32_t shardId, bool toDS);
+
   bool ProcessEntireShardingStructure();
   bool ProcessGetDSInfoFromSeed(const bytes& message, unsigned int offset,
                                 const Peer& from);

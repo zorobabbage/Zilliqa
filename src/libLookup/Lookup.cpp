@@ -5357,7 +5357,8 @@ bool Lookup::DeleteTxnShardMap(uint32_t shardId) {
   return true;
 }
 
-void Lookup::SenderTxnBatchThread(const uint32_t oldNumShards) {
+void Lookup::SenderTxnBatchThread(const uint32_t oldNumShards,
+                                  bool newDSEpoch) {
   if (!LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Lookup::SenderTxnBatchThread not expected to be called from "
@@ -5372,13 +5373,17 @@ void Lookup::SenderTxnBatchThread(const uint32_t oldNumShards) {
     return;
   }
 
-  auto main_func = [this, oldNumShards]() mutable -> void {
+  auto main_func = [this, oldNumShards, newDSEpoch]() mutable -> void {
     m_startedTxnBatchThread = true;
     uint32_t numShards = 0;
     while (true) {
       if (!m_mediator.GetIsVacuousEpoch()) {
         numShards = m_mediator.m_ds->GetNumShards();
-        SendTxnPacketToDS(oldNumShards, numShards);
+        if (newDSEpoch) {
+          SendTxnPacketToNodes(oldNumShards, numShards);
+        } else {
+          SendTxnPacketToDS(oldNumShards, numShards);
+        }
       }
       break;
     }
@@ -5563,9 +5568,16 @@ void Lookup::SendTxnPacketToDS(const uint32_t oldNumShards,
                                const uint32_t newNumShards) {
   LOG_MARKER();
 
+  SendTxnPacketPrepare(oldNumShards, newNumShards);
+
+  SendTxnPacketToShard(newNumShards, true);
+}
+
+void Lookup::SendTxnPacketPrepare(const uint32_t oldNumShards,
+                                  const uint32_t newNumShards) {
   if (!LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
-                "Lookup::SendTxnPacketToNodes not expected to be called from "
+                "Lookup::SendTxnPacketPrepare not expected to be called from "
                 "other than the LookUp node.");
     return;
   }
@@ -5598,8 +5610,24 @@ void Lookup::SendTxnPacketToDS(const uint32_t oldNumShards,
 
   this_thread::sleep_for(
       chrono::milliseconds(LOOKUP_DELAY_SEND_TXNPACKET_IN_MS));
+}
 
-  SendTxnPacketToShard(numShards, true);
+void Lookup::SendTxnPacketToNodes(const uint32_t oldNumShards,
+                                  const uint32_t newNumShards) {
+  LOG_MARKER();
+
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Lookup::SendTxnPacketToNodes not expected to be called from "
+                "other than the LookUp node.");
+    return;
+  }
+
+  SendTxnPacketToShard(oldNumShards, newNumShards);
+
+  for (unsigned int i = 0; i < newNumShards + 1; i++) {
+    SendTxnPacketToShard(i, i == newNumShards);
+  }
 }
 
 void Lookup::SetServerTrue() {
