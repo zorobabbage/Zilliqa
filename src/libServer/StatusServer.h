@@ -111,8 +111,8 @@ class StatusServer : public Server,
   inline virtual void SetVoteInPowI(const Json::Value& request,
                                     Json::Value& response) {
     (void)request;
-    response =
-        this->SetVoteInPow(request[0u].asString(), request[1u].asString());
+    response = this->SetVoteInPow(
+        request[0u].asString(), request[1u].asString(), request[2u].asString());
   }
 
   Json::Value IsTxnInMemPool(const std::string& tranID);
@@ -133,8 +133,8 @@ class StatusServer : public Server,
   bool ToggleDisableTxns();
   std::string SetValidateDB();
   std::string GetValidateDB();
-  bool SetVoteInPow(const std::string& proposalId,
-                    const std::string& voteValue);
+  bool SetVoteInPow(const std::string& proposalId, const std::string& voteValue,
+                    const std::string& maxVoteAttempt);
 };
 
 #endif  // ZILLIQA_SRC_LIBSERVER_STATUSSERVER_H_

@@ -3225,11 +3225,20 @@ void Node::CleanLocalRawStores() {
     }
   }
 }
-void Node ::storeVoteUntilPow(const std::string& proposalId,
-                              const std::string& vote) {
-  m_govProposal = make_pair(static_cast<uint32_t>(std::stoul(proposalId)),
-                            static_cast<uint32_t>(std::stoul(vote)));
-  LOG_GENERAL(INFO, "Governance: storeVoteUntilPow ProposalId: "
-                        << m_govProposal.first
-                        << " voteValue: " << m_govProposal.second);
+bool Node ::StoreVoteUntilPow(const std::string& proposalId,
+                              const std::string& voteValue,
+                              const std::string& voteAttempt) {
+  try {
+    m_govProposal = make_pair(static_cast<uint32_t>(std::stoul(proposalId)),
+                              static_cast<uint32_t>(std::stoul(voteValue)));
+    m_govMaxVoteAttempt = static_cast<uint32_t>(std::stoul(voteAttempt));
+    LOG_GENERAL(INFO, "Gov StoreVoteUntilPow ProposalId="
+                          << m_govProposal.first
+                          << " Value=" << m_govProposal.second
+                          << " Attempt=" << m_govMaxVoteAttempt);
+  } catch (const std::exception& e) {
+    LOG_GENERAL(WARNING, "Exception raised!!!" << e.what());
+    return false;
+  }
+  return true;
 }

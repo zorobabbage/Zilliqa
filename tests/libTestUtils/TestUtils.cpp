@@ -125,9 +125,7 @@ DSBlockHeader GenerateRandomDSBlockHeader() {
   std::vector<PubKey> removeDSNodePubkeys;
   DSBlockHashSet hash;
   CommitteeHash committeeHash;
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
+  GovDSShardVotesMap govProposalMap;
   govProposalMap[DistUint32()].first[1]++;
   govProposalMap[DistUint32()].second[2]++;
   govProposalMap[DistUint32()].first[1]++;

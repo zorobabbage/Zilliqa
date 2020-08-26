@@ -42,10 +42,8 @@ class DSBlockHeader : public BlockHeaderBase {
   std::map<PubKey, Peer> m_PoWDSWinners;
   std::vector<PubKey> m_removeDSNodePubkeys;
   DSBlockHashSet m_hashset;
-  //map of proposal id , ds vote map, shard vote map
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      m_govProposalMap;
+  // map of proposal id , ds votes map, shard votes map
+  GovDSShardVotesMap m_govProposalMap;
 
  public:
   /// Default constructor.
@@ -55,19 +53,17 @@ class DSBlockHeader : public BlockHeaderBase {
   DSBlockHeader(const bytes& src, unsigned int offset);
 
   /// Constructor with specified DS block header parameters.
-  DSBlockHeader(
-      const uint8_t dsDifficulty, const uint8_t difficulty,
-      const PubKey& leaderPubKey, const uint64_t& blockNum,
-      const uint64_t& epochNum, const uint128_t& gasPrice, const SWInfo& swInfo,
-      const std::map<PubKey, Peer>& powDSWinners,
-      const std::vector<PubKey>& removeDSNodePubkeys,
-      const DSBlockHashSet& hashset,
-      const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                                         std::map<uint32_t, uint32_t>>>&
-          m_govProposalMap,
-      const uint32_t version = 0,
-      const CommitteeHash& committeeHash = CommitteeHash(),
-      const BlockHash& prevHash = BlockHash());
+  DSBlockHeader(const uint8_t dsDifficulty, const uint8_t difficulty,
+                const PubKey& leaderPubKey, const uint64_t& blockNum,
+                const uint64_t& epochNum, const uint128_t& gasPrice,
+                const SWInfo& swInfo,
+                const std::map<PubKey, Peer>& powDSWinners,
+                const std::vector<PubKey>& removeDSNodePubkeys,
+                const DSBlockHashSet& hashset,
+                const GovDSShardVotesMap& m_govProposalMap,
+                const uint32_t version = 0,
+                const CommitteeHash& committeeHash = CommitteeHash(),
+                const BlockHash& prevHash = BlockHash());
 
   /// Implements the Serialize function inherited from Serializable.
   bool Serialize(bytes& dst, unsigned int offset) const override;
@@ -107,9 +103,9 @@ class DSBlockHeader : public BlockHeaderBase {
   const std::map<PubKey, Peer>& GetDSPoWWinners() const;
 
   // Returns Governance proposals and corresponding votes values count.
-  const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                                     std::map<uint32_t, uint32_t>>>&
-  GetGovProposalMap() const;
+  inline const GovDSShardVotesMap& GetGovProposalMap() const {
+    return m_govProposalMap;
+  }
 
   // Returns the DS members to remove for non-performance.
   const std::vector<PubKey>& GetDSRemovePubKeys() const;

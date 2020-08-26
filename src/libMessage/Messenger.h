@@ -261,7 +261,7 @@ class Messenger {
       const PairOfKey& submitterKey, const uint64_t nonce,
       const std::string& resultingHash, const std::string& mixHash,
       const uint32_t& lookupId, const uint128_t& gasPrice,
-      const std::pair<uint32_t, uint32_t>& govProposal);
+      const GovProposalIdVotePair& govProposal);
 
   static bool GetDSPoWSubmission(const bytes& src, const unsigned int offset,
                                  uint64_t& blockNumber,

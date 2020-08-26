@@ -487,13 +487,26 @@ string StatusServer::GetValidateDB() {
   return result;
 }
 
-bool StatusServer::SetVoteInPow(const string& proposalId, const string& vote) {
+bool StatusServer::SetVoteInPow(const string& proposalId,
+                                const string& voteValue,
+                                const string& maxVoteAttempt) {
   if (LOOKUP_NODE_MODE) {
     throw JsonRpcException(RPC_INVALID_REQUEST, "Not to be queried on lookup");
   }
-  if (proposalId.empty() || vote.empty()) {
+  if (proposalId.empty() || voteValue.empty() || maxVoteAttempt.empty()) {
     return false;
   }
-  m_mediator.m_node->storeVoteUntilPow(proposalId, vote);
+  try {
+    if (!m_mediator.m_node->StoreVoteUntilPow(proposalId, voteValue,
+                                              maxVoteAttempt)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "Invalid request parameters");
+    }
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
   return true;
 }

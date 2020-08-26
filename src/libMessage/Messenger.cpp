@@ -1410,9 +1410,9 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
       protoproposal = protoDSBlockHeader.add_proposals();
       protoproposal->set_proposalid(govProposal.first);
       for (const auto& vote : govProposal.second.first) {
-        LOG_GENERAL(INFO, "Governance: serialization DS nodes govProposalId: "
-                              << govProposal.first << " govVoteValue:"
-                              << vote.first << " voteCount: " << vote.second);
+        LOG_GENERAL(INFO, "Gov DS Proposal=" << govProposal.first
+                                             << " Value=" << vote.first
+                                             << " Count=" << vote.second);
 
         ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
         protoVote = protoproposal->add_dsvotes();
@@ -1420,10 +1420,9 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
         protoVote->set_count(vote.second);
       }
       for (const auto& vote : govProposal.second.second) {
-        LOG_GENERAL(INFO,
-                    "Governance: serialization miner nodes govProposalId: "
-                        << govProposal.first << " govVoteValue:" << vote.first
-                        << " voteCount: " << vote.second);
+        LOG_GENERAL(INFO, "GOV Shards Proposal" << govProposal.first
+                                                << " Value=" << vote.first
+                                                << " Count=" << vote.second);
 
         ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
         protoVote = protoproposal->add_minervotes();
@@ -3936,7 +3935,7 @@ bool Messenger::SetDSPoWSubmission(
     const PairOfKey& submitterKey, const uint64_t nonce,
     const string& resultingHash, const string& mixHash,
     const uint32_t& lookupId, const uint128_t& gasPrice,
-    const std::pair<uint32_t, uint32_t>& govProposal) {
+    const GovProposalIdVotePair& govProposal) {
   LOG_MARKER();
 
   DSPoWSubmission result;

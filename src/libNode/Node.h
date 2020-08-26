@@ -185,8 +185,9 @@ class Node : public Executable {
   std::mutex m_MutexCVFallbackConsensusObj;
   std::condition_variable cv_fallbackConsensusObj;
   bool m_runFallback{};
-  // pair of proposal id and vote value
-  std::pair<uint32_t, uint32_t> m_govProposal;
+  // pair of proposal id and vote value and vote duration in epoch
+  GovProposalIdVotePair m_govProposal;
+  uint32_t m_govMaxVoteAttempt{};
 
   // Updating of ds guard var
   std::atomic_bool m_requestedForDSGuardNetworkInfoUpdate = {false};
@@ -750,8 +751,9 @@ class Node : public Executable {
 
   bool ValidateAndUpdateIPChangeRequestStore(const PubKey& shardNodePubkey);
 
-  void storeVoteUntilPow(const std::string& proposalId,
-                         const std::string& vote);
+  bool StoreVoteUntilPow(const std::string& proposalId,
+                         const std::string& voteValue,
+                         const std::string& maxVoteAttempt);
 
  private:
   static std::map<NodeState, std::string> NodeStateStrings;

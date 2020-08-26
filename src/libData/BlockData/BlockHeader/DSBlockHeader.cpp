@@ -47,10 +47,7 @@ DSBlockHeader::DSBlockHeader(
     const uint64_t& epochNum, const uint128_t& gasPrice, const SWInfo& swInfo,
     const map<PubKey, Peer>& powDSWinners,
     const std::vector<PubKey>& removeDSNodePubkeys,
-    const DSBlockHashSet& hashset,
-    const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                                       std::map<uint32_t, uint32_t>>>&
-        govProposalMap,
+    const DSBlockHashSet& hashset, const GovDSShardVotesMap& govProposalMap,
     const uint32_t version, const CommitteeHash& committeeHash,
     const BlockHash& prevHash)
     : BlockHeaderBase(version, committeeHash, prevHash),
@@ -116,12 +113,6 @@ const SWInfo& DSBlockHeader::GetSWInfo() const { return m_swInfo; }
 
 const map<PubKey, Peer>& DSBlockHeader::GetDSPoWWinners() const {
   return m_PoWDSWinners;
-}
-
-const std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                                   std::map<uint32_t, uint32_t>>>&
-DSBlockHeader::GetGovProposalMap() const {
-  return m_govProposalMap;
 }
 
 const std::vector<PubKey>& DSBlockHeader::GetDSRemovePubKeys() const {

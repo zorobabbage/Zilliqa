@@ -288,11 +288,11 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   }
 
   // Log all values
-  LOG_GENERAL(INFO, "Key          = " << submitterPubKey);
-  LOG_GENERAL(INFO, "Peer         = " << submitterPeer);
-  LOG_GENERAL(INFO, "Diff         = " << to_string(difficultyLevel));
-  LOG_GENERAL(INFO, "GovProposalId   = " << to_string(govProposalId));
-  LOG_GENERAL(INFO, "GovVoteValue    = " << to_string(govVoteValue));
+  LOG_GENERAL(INFO, "Key            = " << submitterPubKey);
+  LOG_GENERAL(INFO, "Peer           = " << submitterPeer);
+  LOG_GENERAL(INFO, "Diff           = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "GovProposalId  = " << to_string(govProposalId));
+  LOG_GENERAL(INFO, "GovVoteValue   = " << to_string(govVoteValue));
 
   if (CheckPoWSubmissionExceedsLimitsForNode(submitterPubKey)) {
     LOG_GENERAL(WARNING, "Max PoW sent");
