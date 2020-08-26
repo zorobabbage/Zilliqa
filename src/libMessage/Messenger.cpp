@@ -1403,15 +1403,14 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
       SerializableToProtobufByteArray(winner.second,
                                       *powdswinner->mutable_val());
     }
-    // TODO @Chetan : serialize govdata in dsblock
-    // double check on serialization and deserialization part
+
     ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Proposal* protoproposal;
     for (const auto& govProposal : dsBlockHeader.GetGovProposalMap()) {
       protoproposal = protoDSBlockHeader.add_proposals();
       protoproposal->set_proposalid(govProposal.first);
       for (const auto& vote : govProposal.second.first) {
         LOG_GENERAL(INFO, "Gov DS Proposal=" << govProposal.first
-                                             << " Value=" << vote.first
+                                             << " Vote=" << vote.first
                                              << " Count=" << vote.second);
 
         ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
@@ -1421,7 +1420,7 @@ void DSBlockHeaderToProtobuf(const DSBlockHeader& dsBlockHeader,
       }
       for (const auto& vote : govProposal.second.second) {
         LOG_GENERAL(INFO, "GOV Shards Proposal" << govProposal.first
-                                                << " Value=" << vote.first
+                                                << " Vote=" << vote.first
                                                 << " Count=" << vote.second);
 
         ZilliqaMessage::ProtoDSBlock::DSBlockHeader::Vote* protoVote;
@@ -1499,29 +1498,23 @@ bool ProtobufToDSBlockHeader(
     powDSWinners[tempPubKey] = tempWinnerNetworkInfo;
   }
 
-  // Deserialize governance vote proposal
-  // TODO: check required field
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
+  GovDSShardVotesMap govProposalMap;
   for (const auto& protoProposal : protoDSBlockHeader.proposals()) {
-    LOG_GENERAL(INFO, "Governance Proposal id: " << protoProposal.proposalid());
-    map<uint32_t, uint32_t> ds_votes;
-    map<uint32_t, uint32_t> miner_votes;
+    LOG_GENERAL(INFO, "Gov ProposalId=" << protoProposal.proposalid());
+    std::map<uint32_t, uint32_t> dsVotes;
+    std::map<uint32_t, uint32_t> shardVotes;
     for (const auto& protovote : protoProposal.dsvotes()) {
-      ds_votes[protovote.value()] = protovote.count();
-      LOG_GENERAL(INFO, "Governance govVoteValue: " << protovote.value()
-                                                    << " voteCount : "
-                                                    << protovote.count());
+      dsVotes[protovote.value()] = protovote.count();
+      LOG_GENERAL(INFO, "Gov DS Vote=" << protovote.value()
+                                       << " Count=" << protovote.count());
     }
     for (const auto& protovote : protoProposal.minervotes()) {
-      miner_votes[protovote.value()] = protovote.count();
-      LOG_GENERAL(INFO, "Governance govVoteValue: " << protovote.value()
-                                                    << " voteCount : "
-                                                    << protovote.count());
+      shardVotes[protovote.value()] = protovote.count();
+      LOG_GENERAL(INFO, "Gov Shard Vote=" << protovote.value()
+                                          << " Count=" << protovote.count());
     }
-    govProposalMap[protoProposal.proposalid()].first = ds_votes;
-    govProposalMap[protoProposal.proposalid()].second = miner_votes;
+    govProposalMap[protoProposal.proposalid()].first = dsVotes;
+    govProposalMap[protoProposal.proposalid()].second = shardVotes;
   }
 
   // Deserialize removeDSNodePubkeys
