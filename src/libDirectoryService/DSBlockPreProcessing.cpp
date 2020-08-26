@@ -974,14 +974,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
 
-  // TODO : typedef the long data type
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
-
-  // TODO: check ?  I suppose winner should be take from powDSWinners instead of
-  // sortedDSPoWSolns. powDSWinners will hold the latest node which is in DS
-  // committee.
+  GovDSShardVotesMap govProposalMap;
   for (const auto& dsnode : powDSWinners) {
     if (GUARD_MODE && !Guard::GetInstance().IsNodeInDSGuardList(dsnode.first)) {
       const auto& powSolIter = allDSPoWs.find(dsnode.first);
@@ -989,8 +982,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
         const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
         if (proposalId > 0 && voteValue > 0) {
-          LOG_GENERAL(INFO, "Gov DS Votes: ProposalId="
-                                << proposalId << " Value=" << voteValue);
+          LOG_GENERAL(INFO, "Gov DS ProposalId=" << proposalId
+                                                 << " Vote=" << voteValue);
           govProposalMap[proposalId].first[voteValue]++;
         }
       }
@@ -1005,8 +998,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
         const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
         if (proposalId > 0 && voteValue > 0) {
-          LOG_GENERAL(INFO, "Gov Shards Votes ProposalId="
-                                << proposalId << " Value=" << voteValue);
+          LOG_GENERAL(INFO, "Gov Shard ProposalId=" << proposalId
+                                                    << " Vote=" << voteValue);
           govProposalMap[proposalId].second[voteValue]++;
         }
       }

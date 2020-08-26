@@ -273,8 +273,12 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
     StartSynchronization();
     return false;
   }
+  // Allow voting only if vote attempt > 0
+  // If node is shard or ds member then reset the vote
   if (m_govMaxVoteAttempt > 0) {
     --m_govMaxVoteAttempt;
+  } else {
+    m_govProposal = std::make_pair(0, 0);
   }
 
   if (m_state != MICROBLOCK_CONSENSUS_PREP && m_state != MICROBLOCK_CONSENSUS) {
