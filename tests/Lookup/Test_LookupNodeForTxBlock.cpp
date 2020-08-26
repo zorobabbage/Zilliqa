@@ -61,10 +61,7 @@ void SendDSBlockFirstToMatchDSBlockNum(Peer& lookup_node) {
   PairOfKey pubKey1 = Schnorr::GenKeyPair();
   std::map<PubKey, Peer> powDSWinners;
   std::vector<PubKey> removeDSNodePubkeys;
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
-
+  GovDSShardVotesMap govProposalMap;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
   govProposalMap[TestUtils::DistUint32()].second[2]++;
   govProposalMap[TestUtils::DistUint32()].first[1]++;

@@ -85,16 +85,6 @@ const std::string& DSPowSolution::GetMixHash() const { return m_mixHash; }
 /// Returns lookupid
 const uint32_t& DSPowSolution::GetLookupId() const { return m_lookupId; }
 
-/// Returns governance proposal id
-const uint32_t& DSPowSolution::GetGovProposalId() const {
-  return m_govProposal.first;
-}
-
-/// Returns governance vote value
-const uint32_t& DSPowSolution::GetGovVoteValue() const {
-  return m_govProposal.second;
-}
-
 /// Returns gas price
 const uint128_t& DSPowSolution::GetGasPrice() const { return m_gasPrice; }
 
@@ -114,8 +104,7 @@ bool DSPowSolution::operator==(const DSPowSolution& sol) const {
           (m_resultingHash == sol.m_resultingHash) &&
           (m_mixHash == sol.m_mixHash) && (m_lookupId == sol.m_lookupId) &&
           (m_gasPrice == sol.m_gasPrice) &&
-          (m_govProposal.first == sol.m_govProposal.first) &&
-          (m_govProposal.second == sol.m_govProposal.second) &&
+          (m_govProposal == sol.m_govProposal) &&
           (m_signature == sol.m_signature));
 }
 

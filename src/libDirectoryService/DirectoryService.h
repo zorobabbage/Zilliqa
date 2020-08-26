@@ -48,8 +48,7 @@ struct PoWSolution {
   std::array<unsigned char, 32> m_mixhash;
   uint32_t m_lookupId;
   uint128_t m_gasPrice;
-  std::pair<uint32_t, uint32_t>
-      m_govProposal;  // proposal id and vote value pair
+  GovProposalIdVotePair m_govProposal;  // proposal id and vote value pair
 
   PoWSolution()
       : m_nonce(0),
@@ -71,10 +70,9 @@ struct PoWSolution {
         m_govProposal(gvp) {}
   bool operator==(const PoWSolution& rhs) const {
     return std::tie(m_nonce, m_result, m_mixhash, m_lookupId, m_gasPrice,
-                    m_govProposal.first, m_govProposal.second) ==
+                    m_govProposal) ==
            std::tie(rhs.m_nonce, rhs.m_result, rhs.m_mixhash, rhs.m_lookupId,
-                    rhs.m_gasPrice, rhs.m_govProposal.first,
-                    rhs.m_govProposal.second);
+                    rhs.m_gasPrice, rhs.m_govProposal);
   }
 };
 

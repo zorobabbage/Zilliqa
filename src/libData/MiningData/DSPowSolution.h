@@ -35,7 +35,7 @@ class DSPowSolution {
   std::string m_mixHash;
   uint32_t m_lookupId{};
   uint128_t m_gasPrice;
-  std::pair<uint32_t, uint32_t>
+  GovProposalIdVotePair
       m_govProposal;  // pair of governance proposal id and vote value
   Signature m_signature;
 
@@ -87,11 +87,15 @@ class DSPowSolution {
   /// Returns gas price
   const uint128_t& GetGasPrice() const;
 
-  /// Returns proposal id
-  const uint32_t& GetGovProposalId() const;
+  /// Returns governance proposal id
+  inline const uint32_t& GetGovProposalId() const {
+    return m_govProposal.first;
+  }
 
-  /// Returns vote value
-  const uint32_t& GetGovVoteValue() const;
+  /// Returns governance vote value
+  inline const uint32_t& GetGovVoteValue() const {
+    return m_govProposal.second;
+  }
 
   /// Return signature
   const Signature& GetSignature() const;

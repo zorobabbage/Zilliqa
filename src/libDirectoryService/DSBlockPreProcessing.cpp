@@ -983,27 +983,32 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   // sortedDSPoWSolns. powDSWinners will hold the latest node which is in DS
   // committee.
   for (const auto& dsnode : powDSWinners) {
-    const auto& powSolIter = allDSPoWs.find(dsnode.first);
-    if (powSolIter != allDSPoWs.end()) {
-      uint32_t proposalId = powSolIter->second.m_govProposal.first;
-      uint32_t voteValue = powSolIter->second.m_govProposal.second;
-      LOG_GENERAL(INFO, "Governance: DS votes count : proposalId: "
-                            << proposalId << " VoteValue: " << voteValue);
-      if (proposalId > 0 && voteValue > 0) {
-        govProposalMap[proposalId].first[voteValue]++;
+    if (GUARD_MODE && !Guard::GetInstance().IsNodeInDSGuardList(dsnode.first)) {
+      const auto& powSolIter = allDSPoWs.find(dsnode.first);
+      if (powSolIter != allDSPoWs.end()) {
+        const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
+        const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
+        if (proposalId > 0 && voteValue > 0) {
+          LOG_GENERAL(INFO, "Gov DS Votes: ProposalId="
+                                << proposalId << " Value=" << voteValue);
+          govProposalMap[proposalId].first[voteValue]++;
+        }
       }
     }
   }
 
   for (const auto& miner : sortedPoWSolns) {
-    const auto& powSolIter = allPoWs.find(miner.second);
-    if (powSolIter != allPoWs.end()) {
-      uint32_t proposalId = powSolIter->second.m_govProposal.first;
-      uint32_t voteValue = powSolIter->second.m_govProposal.second;
-      LOG_GENERAL(INFO, "Governance: Miner votes count : proposalId: "
-                            << proposalId << " VoteValue: " << voteValue);
-      if (proposalId > 0 && voteValue > 0) {
-        govProposalMap[proposalId].second[voteValue]++;
+    if (GUARD_MODE &&
+        !Guard::GetInstance().IsNodeInShardGuardList(miner.second)) {
+      const auto& powSolIter = allPoWs.find(miner.second);
+      if (powSolIter != allPoWs.end()) {
+        const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
+        const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
+        if (proposalId > 0 && voteValue > 0) {
+          LOG_GENERAL(INFO, "Gov Shards Votes ProposalId="
+                                << proposalId << " Value=" << voteValue);
+          govProposalMap[proposalId].second[voteValue]++;
+        }
       }
     }
   }

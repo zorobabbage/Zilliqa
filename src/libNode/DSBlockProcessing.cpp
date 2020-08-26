@@ -634,6 +634,9 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
                 "committee member with id "
                     << m_mediator.m_ds->GetConsensusMyID());
 
+      // reset the governance proposal and vote if DS member
+      m_govProposal = std::make_pair(0, 0);
+
       // Process sharding structure as a DS node
       if (!m_mediator.m_ds->ProcessShardingStructure(
               m_mediator.m_ds->m_shards,
@@ -670,6 +673,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
       // If I am a shard node
       LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
                 "I lost PoW (DS level) :-( Better luck next time!");
+      // reset the governance proposal and vote if shard member
+      m_govProposal = std::make_pair(0, 0);
 
       // Process sharding structure as a shard node
       if (!LoadShardingStructure()) {

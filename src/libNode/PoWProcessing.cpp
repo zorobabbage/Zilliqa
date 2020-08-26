@@ -267,12 +267,14 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
         }
       }
     }
-    m_govProposal.first = m_govProposal.second = 0;
   } else {
     // If failed to do PoW, try to rejoin in next DS block
     m_mediator.m_lookup->SetSyncType(SyncType::NORMAL_SYNC);
     StartSynchronization();
     return false;
+  }
+  if (m_govMaxVoteAttempt > 0) {
+    --m_govMaxVoteAttempt;
   }
 
   if (m_state != MICROBLOCK_CONSENSUS_PREP && m_state != MICROBLOCK_CONSENSUS) {

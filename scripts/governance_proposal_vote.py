@@ -54,23 +54,24 @@ def get_response(methodName,params=None):
 
 def ProcessResponse(resp):
     if "error" in resp:
-        print("Error!!! Querying to wrong node")
+        print("Error!!! Invalid request.Please send valid request parameter")
     elif "result" in resp:
         if resp["result"] == True:
             print("Hurray !!! vote is successfully set")
         else:
-            print("Failed to set vote in the epoch.Please try again later.")
+            print("Request parameter either empty or invalid")
     else:
         print("Error:Response from the miner node is not recognized")
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--proposal_description","-prop_desc",help="proposal description of the governance proposal, default=Zilliqa proposed your vote on the game Rock, paper and Scissors.Please select options mentioned in the proposal question", default="Zilliqa proposed your vote on the game Rock, paper and Scissors.Please select options mentioned in the proposal question")
-    parser.add_argument("--proposal_id","-prop_id",help="proposal id of the governance proposal, default=12345", default=12345)
-    parser.add_argument("--proposal_question","-prop_ques",help="proposal question of the governance proposal, default=Rock(1), Paper(2), Scissors(3) ?", default="Rock(1), Paper(2), Scissors(3) ?")
-    parser.add_argument("--vote_options","-vo",help="voting options, default=[1,2,3]",default=[1,2,3],type=int, nargs='*')
-    parser.add_argument("--start_epoch","-start_epoch",help="starting epoch for voting, default=1", default=1)
-    parser.add_argument("--end_epoch","-end_epoch",help="ending epoch for voting, default=15", default=15)
+    parser.add_argument("--proposal_description","-pd",help="proposal description of the governance proposal, default=Zilliqa proposed your vote on the game Rock, paper and Scissors.Please select options mentioned in the proposal question", default="Zilliqa proposed your vote on the game Rock, paper and Scissors.Please select options mentioned in the proposal question")
+    parser.add_argument("--proposal_id","-pi",help="proposal id of the governance proposal, default=12345", default=12345)
+    parser.add_argument("--proposal_question","-pq",help="proposal question of the governance proposal, default=Rock(1), Paper(2), Scissors(3) ?", default="Rock(1), Paper(2), Scissors(3) ?")
+    parser.add_argument("--vote_options","-vo",help="vo, default=[1,2,3]",default=[1,2,3],type=int, nargs='*')
+    parser.add_argument("--max_vote_attempt","-mve",help="Number of times to send vote in pows upon failure to be DS or shard member, default=5", default=5)
+    parser.add_argument("--start_epoch","-se",help="starting epoch for voting, default=1", default=1)
+    parser.add_argument("--end_epoch","-ee",help="ending epoch for voting, default=15", default=15)
     args = parser.parse_args()
     return args
 
@@ -82,10 +83,12 @@ def main():
     vote_options = args.vote_options
     ds_epoch_start  = args.start_epoch
     ds_epoch_end    = args.end_epoch
+    max_vote_attempt    = args.max_vote_attempt
     print("\n##### Welcome To Vote On Zilliqa Governance Proposal #####\n")
     print("# Proposal Description   : ", proposal_description)
     print("# Proposal Id            : ", proposal_id)
     print("# Proposal Question      : ", proposal_question)
+    print("# Max Vote Attempt       : ", max_vote_attempt)
     max_count = 3
     count = 0
     while True:
@@ -110,7 +113,7 @@ def main():
     if not int(response["result"]) in range(ds_epoch_start,ds_epoch_end+1):
         print("Error:Epoch interval either not started or is expired for voting")
         return 1
-    response = get_response("SetVoteInPow", [proposal_id,vote_value])
+    response = get_response("SetVoteInPow", [proposal_id,vote_value, max_vote_attempt])
     if response == None:
         print("Error:Failed to send vote in ds epoch range")
     else:

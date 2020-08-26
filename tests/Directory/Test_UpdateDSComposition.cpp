@@ -90,9 +90,7 @@ BOOST_FIXTURE_TEST_CASE(test_UpdateWithoutRemovals, F) {
 
   // Create the nodes to be removed. This should be empty for this test case.
   std::vector<PubKey> removeDSNodePubkeys;
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
+  GovDSShardVotesMap govProposalMap;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
   govProposalMap[TestUtils::DistUint32()].second[2]++;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
@@ -152,9 +150,7 @@ BOOST_FIXTURE_TEST_CASE(test_UpdateWithoutWinners, F) {
   // Creat the empty nodes to be removed vector.
   std::vector<PubKey> removeDSNodePubkeys;
 
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
+  GovDSShardVotesMap govProposalMap;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
   govProposalMap[TestUtils::DistUint32()].second[2]++;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
@@ -220,9 +216,7 @@ BOOST_FIXTURE_TEST_CASE(test_UpdateWithRemovals, F) {
     removeDSNodePubkeys.emplace_back(kp.first);
   }
 
-  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
-                               std::map<uint32_t, uint32_t>>>
-      govProposalMap;
+  GovDSShardVotesMap govProposalMap;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
   govProposalMap[TestUtils::DistUint32()].second[2]++;
   govProposalMap[TestUtils::DistUint32()].first[1]++;
