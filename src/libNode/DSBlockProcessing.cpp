@@ -636,6 +636,7 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
 
       // reset the governance proposal and vote if DS member
       m_govProposal = std::make_pair(0, 0);
+      m_govMaxVoteAttempt = 0;
 
       // Process sharding structure as a DS node
       if (!m_mediator.m_ds->ProcessShardingStructure(
@@ -675,6 +676,7 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
                 "I lost PoW (DS level) :-( Better luck next time!");
       // reset the governance proposal and vote if shard member
       m_govProposal = std::make_pair(0, 0);
+      m_govMaxVoteAttempt = 0;
 
       // Process sharding structure as a shard node
       if (!LoadShardingStructure()) {
