@@ -186,8 +186,8 @@ class Node : public Executable {
   std::condition_variable cv_fallbackConsensusObj;
   bool m_runFallback{};
   // pair of proposal id and vote value and vote duration in epoch
-  GovProposalIdVotePair m_govProposal;
-  uint32_t m_govMaxVoteAttempt{};
+  std::pair<std::atomic<uint32_t>, std::atomic<uint32_t>> m_govProposal;
+  std::atomic<uint32_t> m_govMaxVoteAttempt{};
 
   // Updating of ds guard var
   std::atomic_bool m_requestedForDSGuardNetworkInfoUpdate = {false};
