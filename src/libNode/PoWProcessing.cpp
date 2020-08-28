@@ -79,6 +79,28 @@ bool Node::GetLatestDSBlock() {
   return true;
 }
 
+// TODO remove debug logs
+void Node ::UpdateGovProposalVoteAttemptInfo() {
+  LOG_MARKER();
+  lock_guard<mutex> g(m_mutexGovProposal);
+  if (m_govProposalInfo.isGovProposalActive) {
+    uint64_t curDSEpochNo =
+        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+    LOG_GENERAL(INFO, "[Gov] CurDSEpoch=" << curDSEpochNo);
+    if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
+        curDSEpochNo <= m_govProposalInfo.endDSEpoch &&
+        m_govProposalInfo.maxVoteAttempt > 1) {
+      LOG_GENERAL(
+          INFO, "[Gov] If maxVoteAttempt=" << m_govProposalInfo.maxVoteAttempt);
+      --m_govProposalInfo.maxVoteAttempt;
+    } else {
+      LOG_GENERAL(INFO, "[Gov] reset governanceInfo maxVoteAttempt="
+                            << m_govProposalInfo.maxVoteAttempt);
+      m_govProposalInfo.reset();
+    }
+  }
+}
+
 bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
                     uint8_t difficulty,
                     const array<unsigned char, UINT256_SIZE>& rand1,
@@ -178,6 +200,9 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
         LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
                   "Time out while waiting for DS Block");
 
+        // update govinfo if node fails to get sharded or ds member
+        UpdateGovProposalVoteAttemptInfo();
+
         if (GetLatestDSBlock()) {
           LOG_GENERAL(INFO, "DS block created, means I lost PoW");
           if (m_mediator.m_lookup->GetSyncType() == SyncType::NO_SYNC) {
@@ -273,19 +298,26 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
     StartSynchronization();
     return false;
   }
-  // Allow voting only if vote attempt > 0
-  // If node is shard or ds member then reset the vote
-  if (m_govMaxVoteAttempt > 0) {
-    --m_govMaxVoteAttempt;
-  } else {
-    m_govProposal = std::make_pair(0, 0);
-  }
 
   if (m_state != MICROBLOCK_CONSENSUS_PREP && m_state != MICROBLOCK_CONSENSUS) {
     SetState(WAITING_DSBLOCK);
   }
 
   return true;
+}
+
+bool Node::IsGovProposalActive() {
+  LOG_MARKER();
+  uint64_t curDSEpochNo =
+      m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+  LOG_GENERAL(INFO, "[Gov] CurDSEpoch=" << curDSEpochNo);
+  curDSEpochNo++;
+  if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
+      curDSEpochNo <= m_govProposalInfo.endDSEpoch) {
+    m_govProposalInfo.isGovProposalActive = true;
+    return true;
+  }
+  return false;
 }
 
 bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
@@ -297,12 +329,24 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
                                  const uint128_t& gasPrice) {
   LOG_MARKER();
 
+  // If governance proposal is active, send vote in pow in ds epoch range
+  GovProposalIdVotePair govProposal{0, 0};
+  {
+    lock_guard<mutex> g(m_mutexGovProposal);
+    if (IsGovProposalActive()) {
+      govProposal = m_govProposalInfo.proposal;
+      LOG_GENERAL(INFO, "[Gov] sending in pow proposal=" << govProposal.first
+                                                         << " vote="
+                                                         << govProposal.second);
+    }
+  }
+
   bytes powmessage = {MessageType::DIRECTORY, DSInstructionType::POWSUBMISSION};
 
   if (!Messenger::SetDSPoWSubmission(
           powmessage, MessageOffset::BODY, block_num, difficultyLevel,
           m_mediator.m_selfPeer, m_mediator.m_selfKey, winningNonce,
-          powResultHash, powMixhash, lookupId, gasPrice, m_govProposal)) {
+          powResultHash, powMixhash, lookupId, gasPrice, govProposal)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetDSPoWSubmission failed.");
     return false;

@@ -172,6 +172,28 @@ bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
   return true;
 }
 
+// TODO remove debug logs
+void Node ::UpdateGovProposalRemainingVoteInfo() {
+  LOG_MARKER();
+  lock_guard<mutex> g(m_mutexGovProposal);
+  if (m_govProposalInfo.isGovProposalActive) {
+    uint64_t curDSEpochNo =
+        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+    LOG_GENERAL(INFO, "[Gov] CurDSEpoch=" << curDSEpochNo);
+    if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
+        curDSEpochNo <= m_govProposalInfo.endDSEpoch &&
+        m_govProposalInfo.remainingVoteCount > 1) {
+      LOG_GENERAL(INFO, "[Gov] remainingVoteCount="
+                            << m_govProposalInfo.remainingVoteCount);
+      --m_govProposalInfo.remainingVoteCount;
+    } else {
+      LOG_GENERAL(INFO, "[Gov] reset governanceinfo remainingVoteCount="
+                            << m_govProposalInfo.remainingVoteCount);
+      m_govProposalInfo.reset();
+    }
+  }
+}
+
 void Node::LogReceivedDSBlockDetails([[gnu::unused]] const DSBlock& dsblock) {
   LOG_GENERAL(INFO,
               "DS Diff   = " << (int)dsblock.GetHeader().GetDSDifficulty());
@@ -634,10 +656,6 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
                 "committee member with id "
                     << m_mediator.m_ds->GetConsensusMyID());
 
-      // reset the governance proposal and vote if DS member
-      m_govProposal = std::make_pair(0, 0);
-      m_govMaxVoteAttempt = 0;
-
       // Process sharding structure as a DS node
       if (!m_mediator.m_ds->ProcessShardingStructure(
               m_mediator.m_ds->m_shards,
@@ -668,15 +686,14 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
                     "I am now DS backup for the next round");
         }
       }
+      // reset the governance proposal and vote if DS member
+      UpdateGovProposalRemainingVoteInfo();
 
       m_mediator.m_ds->StartFirstTxEpoch();
     } else {
       // If I am a shard node
       LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
                 "I lost PoW (DS level) :-( Better luck next time!");
-      // reset the governance proposal and vote if shard member
-      m_govProposal = std::make_pair(0, 0);
-      m_govMaxVoteAttempt = 0;
 
       // Process sharding structure as a shard node
       if (!LoadShardingStructure()) {
@@ -696,6 +713,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
           SendDSBlockToOtherShardNodes(message2);
         }
       }
+      // reset the governance proposal and vote if DS member
+      UpdateGovProposalRemainingVoteInfo();
 
       // Finally, start as a shard node
       StartFirstTxEpoch();

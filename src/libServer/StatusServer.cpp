@@ -487,18 +487,24 @@ string StatusServer::GetValidateDB() {
   return result;
 }
 
-bool StatusServer::SetVoteInPow(const string& proposalId,
-                                const string& voteValue,
-                                const string& maxVoteAttempt) {
+bool StatusServer::SetVoteInPow(const std::string& proposalId,
+                                const std::string& voteValue,
+                                const std::string& maxVoteAttempt,
+                                const std::string& remainingVoteCount,
+                                const std::string& startDSEpoch,
+                                const std::string& endDSEpoch) {
   if (LOOKUP_NODE_MODE) {
     throw JsonRpcException(RPC_INVALID_REQUEST, "Not to be queried on lookup");
   }
-  if (proposalId.empty() || voteValue.empty() || maxVoteAttempt.empty()) {
+  if (proposalId.empty() || voteValue.empty() || maxVoteAttempt.empty() ||
+      remainingVoteCount.empty() || startDSEpoch.empty() ||
+      endDSEpoch.empty()) {
     return false;
   }
   try {
-    if (!m_mediator.m_node->StoreVoteUntilPow(proposalId, voteValue,
-                                              maxVoteAttempt)) {
+    if (!m_mediator.m_node->StoreVoteUntilPow(
+            proposalId, voteValue, maxVoteAttempt, remainingVoteCount,
+            startDSEpoch, endDSEpoch)) {
       throw JsonRpcException(RPC_INVALID_PARAMETER,
                              "Invalid request parameters");
     }
