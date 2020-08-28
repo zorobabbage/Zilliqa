@@ -3227,15 +3227,32 @@ void Node::CleanLocalRawStores() {
 }
 bool Node ::StoreVoteUntilPow(const std::string& proposalId,
                               const std::string& voteValue,
-                              const std::string& voteAttempt) {
+                              const std::string& voteAttempt,
+                              const std::string& remainingVoteCount,
+                              const std::string& startDSEpoch,
+                              const std::string& endDSEpoch) {
   try {
-    m_govProposal = make_pair(static_cast<uint32_t>(std::stoul(proposalId)),
-                              static_cast<uint32_t>(std::stoul(voteValue)));
-    m_govMaxVoteAttempt = static_cast<uint32_t>(std::stoul(voteAttempt));
+    lock_guard<mutex> g(m_mutexGovProposal);
+    m_govProposalInfo.proposal =
+        make_pair(static_cast<uint32_t>(std::stoul(proposalId)),
+                  static_cast<uint32_t>(std::stoul(voteValue)));
+    m_govProposalInfo.maxVoteAttempt =
+        static_cast<int32_t>(std::stoul(voteAttempt));
+    m_govProposalInfo.remainingVoteCount =
+        static_cast<int32_t>(std::stoul(remainingVoteCount));
+    m_govProposalInfo.startDSEpoch =
+        static_cast<uint32_t>(std::stoul(startDSEpoch));
+    m_govProposalInfo.endDSEpoch =
+        static_cast<uint32_t>(std::stoul(endDSEpoch));
+    m_govProposalInfo.isGovProposalActive = false;
     LOG_GENERAL(INFO, "Gov StoreVoteUntilPow ProposalId="
-                          << m_govProposal.first
-                          << " Value=" << m_govProposal.second
-                          << " Attempt=" << m_govMaxVoteAttempt);
+                          << m_govProposalInfo.proposal.first
+                          << " Value=" << m_govProposalInfo.proposal.second
+                          << " Attempt=" << m_govProposalInfo.maxVoteAttempt
+                          << " RemainingVoteCount="
+                          << m_govProposalInfo.remainingVoteCount
+                          << " StartDSEpoch=" << m_govProposalInfo.startDSEpoch
+                          << " EndDSEpoch=" << m_govProposalInfo.endDSEpoch);
   } catch (const std::exception& e) {
     LOG_GENERAL(WARNING, "Exception raised!!!" << e.what());
     return false;
