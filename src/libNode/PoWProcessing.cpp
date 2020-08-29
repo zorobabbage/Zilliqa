@@ -79,28 +79,6 @@ bool Node::GetLatestDSBlock() {
   return true;
 }
 
-// TODO remove debug logs
-void Node ::UpdateGovProposalVoteAttemptInfo() {
-  LOG_MARKER();
-  lock_guard<mutex> g(m_mutexGovProposal);
-  if (m_govProposalInfo.isGovProposalActive) {
-    uint64_t curDSEpochNo =
-        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
-    LOG_GENERAL(INFO, "[Gov] CurDSEpoch=" << curDSEpochNo);
-    if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
-        curDSEpochNo <= m_govProposalInfo.endDSEpoch &&
-        m_govProposalInfo.maxVoteAttempt > 1) {
-      LOG_GENERAL(
-          INFO, "[Gov] If maxVoteAttempt=" << m_govProposalInfo.maxVoteAttempt);
-      --m_govProposalInfo.maxVoteAttempt;
-    } else {
-      LOG_GENERAL(INFO, "[Gov] reset governanceInfo maxVoteAttempt="
-                            << m_govProposalInfo.maxVoteAttempt);
-      m_govProposalInfo.reset();
-    }
-  }
-}
-
 bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
                     uint8_t difficulty,
                     const array<unsigned char, UINT256_SIZE>& rand1,
@@ -199,9 +177,6 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
 
         LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
                   "Time out while waiting for DS Block");
-
-        // update govinfo if node fails to get sharded or ds member
-        UpdateGovProposalVoteAttemptInfo();
 
         if (GetLatestDSBlock()) {
           LOG_GENERAL(INFO, "DS block created, means I lost PoW");
@@ -306,7 +281,7 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
   return true;
 }
 
-bool Node::IsGovProposalActive() {
+bool Node::CheckIfGovProposalActive() {
   LOG_MARKER();
   uint64_t curDSEpochNo =
       m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
@@ -316,6 +291,8 @@ bool Node::IsGovProposalActive() {
       curDSEpochNo <= m_govProposalInfo.endDSEpoch) {
     m_govProposalInfo.isGovProposalActive = true;
     return true;
+  } else {
+    m_govProposalInfo.isGovProposalActive = false;
   }
   return false;
 }
@@ -333,7 +310,7 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
   GovProposalIdVotePair govProposal{0, 0};
   {
     lock_guard<mutex> g(m_mutexGovProposal);
-    if (IsGovProposalActive()) {
+    if (CheckIfGovProposalActive()) {
       govProposal = m_govProposalInfo.proposal;
       LOG_GENERAL(INFO, "[Gov] sending in pow proposal=" << govProposal.first
                                                          << " vote="
