@@ -69,7 +69,6 @@ def parse_arguments():
     parser.add_argument("--proposal_id","-pi",help="proposal id of the governance proposal, default=12345", default=12345)
     parser.add_argument("--proposal_question","-pq",help="proposal question of the governance proposal, default=Rock(1), Paper(2), Scissors(3) ?", default="Rock(1), Paper(2), Scissors(3) ?")
     parser.add_argument("--vote_options","-vo",help="Voting options to vote, default=[range(1,999)]",default=[*range(1,31)],type=int, nargs='*')
-    parser.add_argument("--max_vote_attempt","-mv",help="Number of times to send vote in pows upon failure to be DS or shard member, default=5", default=5)
     parser.add_argument("--remaining_vote_count","-rv",help="Number of multiple votes, default=2", default=2)
     parser.add_argument("--start_epoch","-se",help="Starting epoch for voting, default=1", default=1)
     parser.add_argument("--end_epoch","-ee",help="Ending epoch for voting, default=1500", default=1500)
@@ -82,7 +81,6 @@ def main():
     proposal_id = args.proposal_id
     proposal_question = args.proposal_question
     vote_options = args.vote_options
-    max_vote_attempt    = args.max_vote_attempt
     remaining_vote_count    = args.remaining_vote_count
     ds_epoch_start  = args.start_epoch
     ds_epoch_end    = args.end_epoch
@@ -92,7 +90,6 @@ def main():
     print("# Proposal Id            : ", proposal_id)
     print("# Proposal Question      : ", proposal_question)
     print("# Vote Options           : ", vote_options)
-    print("# Max Vote Attempt       : ", max_vote_attempt)
     print("# Remaining Vote Count   : ", remaining_vote_count)
     print("# Start Epoch            : ", ds_epoch_start)
     print("# End Epoch              : ", ds_epoch_end)
@@ -113,7 +110,7 @@ def main():
                     return 1
                 continue 
             break
-    response = get_response("SetVoteInPow", [proposal_id,vote_value, max_vote_attempt, remaining_vote_count, ds_epoch_start, ds_epoch_end])
+    response = get_response("SetVoteInPow", [proposal_id,vote_value, remaining_vote_count, ds_epoch_start, ds_epoch_end])
     if response == None:
         print("Error:Failed to send vote in ds epoch range")
     else:

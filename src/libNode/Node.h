@@ -82,7 +82,6 @@ class Node : public Executable {
     GovProposalIdVotePair proposal;
     uint64_t startDSEpoch;
     uint64_t endDSEpoch;
-    int32_t maxVoteAttempt;
     int32_t remainingVoteCount;
     // flag taken to minimize reset variables everytime
     bool isGovProposalActive{false};
@@ -90,12 +89,11 @@ class Node : public Executable {
         : proposal({0, 0}),
           startDSEpoch(0),
           endDSEpoch(0),
-          maxVoteAttempt(0),
           remainingVoteCount(0) {}
     void reset() {
       proposal = std::make_pair(0, 0);
       isGovProposalActive = false;
-      startDSEpoch = endDSEpoch = maxVoteAttempt = remainingVoteCount = 0;
+      startDSEpoch = endDSEpoch = remainingVoteCount = 0;
     }
   };
 
@@ -418,9 +416,8 @@ class Node : public Executable {
 
   void SoftConfirmForwardedTransactions(const MBnForwardedTxnEntry& entry);
   void ClearSoftConfirmedTransactions();
-  void UpdateGovProposalVoteAttemptInfo();
   void UpdateGovProposalRemainingVoteInfo();
-  bool IsGovProposalActive();
+  bool CheckIfGovProposalActive();
 
  public:
   enum NodeState : unsigned char {
@@ -777,7 +774,6 @@ class Node : public Executable {
 
   bool StoreVoteUntilPow(const std::string& proposalId,
                          const std::string& voteValue,
-                         const std::string& voteAttempt,
                          const std::string& remainingVoteCount,
                          const std::string& startDSEpoch,
                          const std::string& endDSEpoch);
