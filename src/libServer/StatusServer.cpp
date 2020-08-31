@@ -495,15 +495,14 @@ bool StatusServer::SetVoteInPow(const std::string& proposalId,
   if (LOOKUP_NODE_MODE) {
     throw JsonRpcException(RPC_INVALID_REQUEST, "Not to be queried on lookup");
   }
-  if (proposalId.empty() || voteValue.empty() ||
-      remainingVoteCount.empty() || startDSEpoch.empty() ||
-      endDSEpoch.empty()) {
+  if (proposalId.empty() || voteValue.empty() || remainingVoteCount.empty() ||
+      startDSEpoch.empty() || endDSEpoch.empty()) {
     return false;
   }
   try {
-    if (!m_mediator.m_node->StoreVoteUntilPow(
-            proposalId, voteValue, remainingVoteCount,
-            startDSEpoch, endDSEpoch)) {
+    if (!m_mediator.m_node->StoreVoteUntilPow(proposalId, voteValue,
+                                              remainingVoteCount, startDSEpoch,
+                                              endDSEpoch)) {
       throw JsonRpcException(RPC_INVALID_PARAMETER,
                              "Invalid request parameters");
     }
