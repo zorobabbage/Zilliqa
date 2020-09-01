@@ -26,6 +26,7 @@
 #     ./scripts/make_image_for_test.sh -n vc2 COMMIT # for vc2 at a specific commit
 
 Test_scenarios=("-DVC_TEST_DS_SUSPEND_3=1 "
+                "-DGOVVC_TEST_DS_SUSPEND_3=1 "
                 "-DVC_TEST_FB_SUSPEND_3=1 "
                 "-DVC_TEST_DS_SUSPEND_1=1 -DVC_TEST_VC_SUSPEND_3=1 "
                 "-DVC_TEST_FB_SUSPEND_3=1 -DVC_TEST_VC_SUSPEND_3=1 "

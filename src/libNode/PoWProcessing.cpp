@@ -283,6 +283,25 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
 
 bool Node::CheckIfGovProposalActive() {
   LOG_MARKER();
+
+  #ifdef GOVVC_TEST_DS_SUSPEND_3
+  srand(time(0));
+  m_govProposalInfo.startDSEpoch = 1;
+  m_govProposalInfo.endDSEpoch = 5;
+  m_govProposalInfo.remainingVoteCount = 3;
+  m_govProposalInfo.proposal.first = rand()/100;
+  m_govProposalInfo.proposal.second = rand()/10;
+  LOG_GENERAL(
+      INFO,
+      "[GOVVCTEST] m_govProposalInfo startDSEpoch="
+          << m_govProposalInfo.startDSEpoch
+          << " endDSEpoch=" << m_govProposalInfo.endDSEpoch
+          << " isGovProposalActive=" << m_govProposalInfo.isGovProposalActive
+          << " remainingVoteCount=" << m_govProposalInfo.remainingVoteCount
+          << " proposalId=" << m_govProposalInfo.proposal.first
+          << " voteValue=" << m_govProposalInfo.proposal.second);
+#endif
+
   uint64_t curDSEpochNo =
       m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
   LOG_GENERAL(INFO, "[Gov] CurDSEpoch=" << curDSEpochNo);

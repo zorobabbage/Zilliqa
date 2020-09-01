@@ -1069,11 +1069,11 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   }
 #endif  // VC_TEST_DS_SUSPEND_1
 
-#ifdef VC_TEST_DS_SUSPEND_3
+#if defined(VC_TEST_DS_SUSPEND_3) || defined(GOVVC_TEST_DS_SUSPEND_3)
   if (m_mode == PRIMARY_DS && m_viewChangeCounter < 3) {
     LOG_EPOCH(
         WARNING, m_mediator.m_currentEpochNum,
-        "I am suspending myself to test viewchange (VC_TEST_DS_SUSPEND_3)");
+         "I am suspending myself to test viewchange (VC_TEST_DS_SUSPEND_3) or (VC_TEST_DS_SUSPEND_3)");
     return false;
   }
 #endif  // VC_TEST_DS_SUSPEND_3
