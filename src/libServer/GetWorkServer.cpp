@@ -134,6 +134,43 @@ ethash_mining_result_t GetWorkServer::GetResult(int waitTime) {
   return m_curResult;
 }
 
+bool GetWorkServer::submitWorkNew(const string& _nonce, const string& _header,
+                                  const string& _mixdigest,
+                                  const string& _boundary,
+                                  const ethash_mining_result_t& result) {
+  LOG_MARKER();
+
+  if (!m_isMining) {
+    LOG_GENERAL(WARNING, "PoW is not running, ignore submit");
+    return false;
+  }
+
+  const uint8_t difficulty = m_currentTargetDifficulty;
+
+  string nonce = _nonce;
+  string header = _header;
+  string mixdigest = _mixdigest;
+  string boundary = _boundary;
+
+  LOG_GENERAL(INFO, "Got PoW Result: ");
+  LOG_GENERAL(INFO, "    nonce: " << nonce);
+  LOG_GENERAL(INFO, "    header: " << header);
+  LOG_GENERAL(INFO, "    mixdigest: " << mixdigest);
+  LOG_GENERAL(INFO, "    boundary: " << boundary);
+
+  if (!DataConversion::NormalizeHexString(nonce) ||
+      !DataConversion::NormalizeHexString(header) ||
+      !DataConversion::NormalizeHexString(mixdigest) ||
+      !DataConversion::NormalizeHexString(boundary)) {
+    LOG_GENERAL(WARNING, "Invalid input parameters");
+    return false;
+  }
+
+  // auto result = VerifySubmit(nonce, header, mixdigest, boundary);
+
+  return UpdateCurrentResult(result, difficulty);
+}
+
 // VerifySubmit verify and create ethash result
 ethash_mining_result_t GetWorkServer::VerifySubmit(const string& nonce,
                                                    const string& header,

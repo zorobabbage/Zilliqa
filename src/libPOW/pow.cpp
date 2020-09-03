@@ -257,6 +257,29 @@ bool POW::EthashConfigureClient(uint64_t block_number, bool fullDataset) {
 
   return true;
 }
+ethash_mining_result_t POW::MineGetWork(ethash_hash256 const& headerHash,
+                                        ethash_hash256 const& boundary,
+                                        uint64_t startNonce, int timeWindow,
+                                        uint64_t blockNum, uint8_t difficulty) {
+  LOG_MARKER();
+  int ethash_epoch = ethash::get_epoch_number(blockNum);
+  std::string seed = BlockhashToHexString(ethash::calculate_seed(ethash_epoch));
+  std::string boundary1 =
+      BlockhashToHexString(DifficultyLevelInIntDevided(difficulty));
+  std::string headerStr = BlockhashToHexString(headerHash);
+
+  PoWWorkPackage work = {headerStr, seed, boundary1, blockNum, difficulty};
+
+  GetWorkServer::GetInstance().StartMining(work);
+  // auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
+  auto result = MineLight(headerHash, boundary, startNonce, timeWindow);
+  std::ostringstream oss;
+  oss << result.winning_nonce;
+  GetWorkServer::GetInstance().submitWorkNew(
+      oss.str(), headerStr, result.mix_hash, boundary1, result);
+  GetWorkServer::GetInstance().StopMining();
+  return result;
+}
 
 ethash_mining_result_t POW::MineGetWork(uint64_t blockNum,
                                         ethash_hash256 const& headerHash,
@@ -789,7 +812,9 @@ ethash_mining_result_t POW::PoWMine(uint64_t blockNum, uint8_t difficulty,
   if (REMOTE_MINE) {
     result = RemoteMine(pairOfKey, blockNum, headerHash, boundary, timeWindow);
   } else if (GETWORK_SERVER_MINE) {
-    result = MineGetWork(blockNum, headerHash, difficulty, timeWindow);
+    // result = MineGetWork(blockNum, headerHash, difficulty, timeWindow);
+    result = MineGetWork(headerHash, boundary, startNonce, timeWindow, blockNum,
+                         difficulty);
   } else if (OPENCL_GPU_MINE || CUDA_GPU_MINE) {
     result =
         MineFullGPU(blockNum, headerHash, difficulty, startNonce, timeWindow);

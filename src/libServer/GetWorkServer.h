@@ -162,6 +162,9 @@ class GetWorkServer : public AbstractStubServer {
                           const std::string &boundary,
                           const std::string &miner_wallet,
                           const std::string &worker);
+  bool submitWorkNew(const std::string &nonce, const std::string &header,
+                     const std::string &mixdigest, const std::string &boundary,
+                     const ethash_mining_result_t &result);
 };
 
 #endif  // ZILLIQA_SRC_LIBSERVER_GETWORKSERVER_H_
