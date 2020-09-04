@@ -90,6 +90,8 @@ bool GetWorkServer::StartMining(const PoWWorkPackage& wp) {
 
 // StopMining stops mining and clear result
 void GetWorkServer::StopMining() {
+ LOG_GENERAL(INFO, "[Chetan] StopMining");
+  
   m_isMining = false;
 
   lock_guard<mutex> g(m_mutexResult);

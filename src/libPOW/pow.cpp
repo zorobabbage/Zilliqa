@@ -293,23 +293,34 @@ ethash_mining_result_t POW::MineGetWork(ethash_hash256 const& headerHash,
 
   GetWorkServer::GetInstance().StartMining(work);
   // auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
-  auto func = [this, headerHash, boundary, startNonce, timeWindow, headerStr,
+  auto func1 = [this, headerHash, boundary, startNonce, timeWindow, headerStr,
                boundary1]() mutable -> void {
     auto result = this->MineLight(headerHash, boundary, startNonce, timeWindow);
-    LOG_GENERAL(INFO, "[Chetan] I am waiting inside the thread");
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::ostringstream oss;
+    oss << result.winning_nonce;
+    LOG_GENERAL(INFO, "[Chetan] Inside func1 ");
+    //std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    GetWorkServer::GetInstance().submitWorkNew(
+        oss.str(), headerStr, result.mix_hash, boundary1, result);
+  };
+  auto func2 = [this, headerHash, boundary, startNonce, timeWindow, headerStr,
+               boundary1]() mutable -> void {
+    auto result = this->MineLight(headerHash, boundary, startNonce, timeWindow);
+    LOG_GENERAL(INFO, "[Chetan] Inside func2 ");
+    //std::this_thread::sleep_for(std::chrono::milliseconds(10));
     std::ostringstream oss;
     oss << result.winning_nonce;
     GetWorkServer::GetInstance().submitWorkNew(
         oss.str(), headerStr, result.mix_hash, boundary1, result);
+    GetWorkServer::GetInstance().StopMining();
   };
-  DetachedFunction(1, func);
-  if (dSDiff == false) {
-    GetWorkServer::GetInstance().StartMining(work);
-    DetachedFunction(1, func);
-  }
+  DetachedFunction(1, func1);
   auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
   GetWorkServer::GetInstance().StopMining();
+  if (dSDiff == false) {
+    GetWorkServer::GetInstance().StartMining(work);
+    DetachedFunction(1, func2);
+  }
   return result;
 }
 
