@@ -244,7 +244,8 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
         if (powTimeWindow > 1) {
           EthashMiningResult ds_pow_winning_result = POW::GetInstance().PoWMine(
               block_num, ds_difficulty, m_mediator.m_selfKey, headerHash,
-              FULL_DATASET_MINE, winning_result.winning_nonce, powTimeWindow);
+              FULL_DATASET_MINE, winning_result.winning_nonce, powTimeWindow,
+              true);
 
           if (ds_pow_winning_result.success) {
             LOG_GENERAL(INFO,

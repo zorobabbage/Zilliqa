@@ -83,7 +83,7 @@ class POW {
                                  const PairOfKey& pairOfKey,
                                  const ethash_hash256& headerHash,
                                  bool fullDataset, uint64_t startNonce,
-                                 int timeWindow);
+                                 int timeWindow, bool isDSDiff = false);
 
   /// Terminates proof-of-work mining.
   void StopMining();
@@ -154,7 +154,8 @@ class POW {
   ethash_mining_result_t MineGetWork(ethash_hash256 const& headerHash,
                                      ethash_hash256 const& boundary,
                                      uint64_t startNonce, int timeWindow,
-                                     uint64_t blockNum, uint8_t difficulty);
+                                     uint64_t blockNum, uint8_t difficulty,
+                                     bool isDSDiff = false);
   ethash_mining_result_t MineFullGPU(uint64_t blockNum,
                                      ethash_hash256 const& headerHash,
                                      uint8_t difficulty, uint64_t startNonce,

@@ -261,7 +261,8 @@ bool POW::EthashConfigureClient(uint64_t block_number, bool fullDataset) {
 ethash_mining_result_t POW::MineGetWork(ethash_hash256 const& headerHash,
                                         ethash_hash256 const& boundary,
                                         uint64_t startNonce, int timeWindow,
-                                        uint64_t blockNum, uint8_t difficulty) {
+                                        uint64_t blockNum, uint8_t difficulty,
+                                        bool dSDiff) {
   LOG_MARKER();
   int ethash_epoch = ethash::get_epoch_number(blockNum);
   std::string seed = BlockhashToHexString(ethash::calculate_seed(ethash_epoch));
@@ -284,8 +285,10 @@ ethash_mining_result_t POW::MineGetWork(ethash_hash256 const& headerHash,
         oss.str(), headerStr, result.mix_hash, boundary1, result);
   };
   DetachedFunction(1, func);
-  GetWorkServer::GetInstance().StartMining(work);
-  DetachedFunction(1, func);
+  if (dSDiff == false) {
+    GetWorkServer::GetInstance().StartMining(work);
+    DetachedFunction(1, func);
+  }
   auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
   GetWorkServer::GetInstance().StopMining();
   return result;
@@ -806,7 +809,7 @@ ethash_mining_result_t POW::PoWMine(uint64_t blockNum, uint8_t difficulty,
                                     const PairOfKey& pairOfKey,
                                     const ethash_hash256& headerHash,
                                     bool fullDataset, uint64_t startNonce,
-                                    int timeWindow) {
+                                    int timeWindow, bool isDSDiff) {
   LOG_MARKER();
   // mutex required to prevent a new mining to begin before previous mining
   // operation has ended(ie. m_shouldMine=false has been processed) and
@@ -824,7 +827,7 @@ ethash_mining_result_t POW::PoWMine(uint64_t blockNum, uint8_t difficulty,
   } else if (GETWORK_SERVER_MINE) {
     // result = MineGetWork(blockNum, headerHash, difficulty, timeWindow);
     result = MineGetWork(headerHash, boundary, startNonce, timeWindow, blockNum,
-                         difficulty);
+                         difficulty, isDSDiff);
   } else if (OPENCL_GPU_MINE || CUDA_GPU_MINE) {
     result =
         MineFullGPU(blockNum, headerHash, difficulty, startNonce, timeWindow);
