@@ -27,6 +27,7 @@
 #include "libCrypto/Sha2.h"
 #include "libServer/GetWorkServer.h"
 #include "libUtils/DataConversion.h"
+#include "libUtils/DetachedFunction.h"
 #include "pow.h"
 
 #ifdef OPENCL_MINE
@@ -272,11 +273,19 @@ ethash_mining_result_t POW::MineGetWork(ethash_hash256 const& headerHash,
 
   GetWorkServer::GetInstance().StartMining(work);
   // auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
-  auto result = MineLight(headerHash, boundary, startNonce, timeWindow);
-  std::ostringstream oss;
-  oss << result.winning_nonce;
-  GetWorkServer::GetInstance().submitWorkNew(
-      oss.str(), headerStr, result.mix_hash, boundary1, result);
+  auto func = [this, headerHash, boundary, startNonce, timeWindow, headerStr,
+               boundary1]() mutable -> void {
+    auto result = this->MineLight(headerHash, boundary, startNonce, timeWindow);
+    LOG_GENERAL(INFO, "[Chetan] I am waiting inside the thread");
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::ostringstream oss;
+    oss << result.winning_nonce;
+    GetWorkServer::GetInstance().submitWorkNew(
+        oss.str(), headerStr, result.mix_hash, boundary1, result);
+  };
+  DetachedFunction(1, func);
+  DetachedFunction(1, func);
+  auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
   GetWorkServer::GetInstance().StopMining();
   return result;
 }
