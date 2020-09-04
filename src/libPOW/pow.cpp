@@ -284,6 +284,7 @@ ethash_mining_result_t POW::MineGetWork(ethash_hash256 const& headerHash,
         oss.str(), headerStr, result.mix_hash, boundary1, result);
   };
   DetachedFunction(1, func);
+  GetWorkServer::GetInstance().StartMining(work);
   DetachedFunction(1, func);
   auto result = GetWorkServer::GetInstance().GetResult(timeWindow);
   GetWorkServer::GetInstance().StopMining();
