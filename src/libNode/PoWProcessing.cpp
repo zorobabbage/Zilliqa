@@ -248,8 +248,10 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
               true);
 
           if (ds_pow_winning_result.success) {
-            LOG_GENERAL(INFO,
-                        "DS diff soln = " << ds_pow_winning_result.result);
+            LOG_GENERAL(
+                INFO, "DS diff soln = " << ds_pow_winning_result.result
+                                        << " winning nonce="
+                                        << ds_pow_winning_result.winning_nonce);
 
             // Submission of PoW for ds commitee
             if (!SendPoWResultToDSComm(block_num, ds_difficulty,
@@ -290,6 +292,10 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
                                  const uint32_t& lookupId,
                                  const uint128_t& gasPrice) {
   LOG_MARKER();
+  LOG_GENERAL(INFO, "SendPowResultToDSComm diff="
+                        << to_string(difficultyLevel) << " winning nounce=" << winningNonce
+                        << " powMixHash=" << powMixhash
+                        << " powResultHash=" << powResultHash);
 
   bytes powmessage = {MessageType::DIRECTORY, DSInstructionType::POWSUBMISSION};
 

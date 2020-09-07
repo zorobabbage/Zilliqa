@@ -67,6 +67,7 @@ bool GetWorkServer::StartServer() {
 // StartMining starts mining
 bool GetWorkServer::StartMining(const PoWWorkPackage& wp) {
   // Keep track of current difficulty for this round of mining
+  LOG_GENERAL(INFO, "StartMining");
   m_currentTargetDifficulty = wp.difficulty;
 
   // clear the last result
@@ -92,6 +93,7 @@ bool GetWorkServer::StartMining(const PoWWorkPackage& wp) {
 
 // StopMining stops mining and clear result
 void GetWorkServer::StopMining() {
+  LOG_GENERAL(INFO, "StopMining");
   m_isMining = false;
   m_currentTargetDifficulty = 0;
 
@@ -227,6 +229,9 @@ bool GetWorkServer::UpdateCurrentResult(const ethash_mining_result_t& newResult,
 
   if (!m_curResult.success) {
     // accept the new result directly if current result is false
+    LOG_GENERAL(INFO, "[Chetan] if difficulty=" << to_string(difficulty)
+                                           << " m_currentTargetDifficulty= "
+                                           << to_string(m_currentTargetDifficulty));
     accept = (difficulty == m_currentTargetDifficulty);
   } else {
     // accept the new result if it less or equal than current one
@@ -234,10 +239,14 @@ bool GetWorkServer::UpdateCurrentResult(const ethash_mining_result_t& newResult,
     auto cur_hash = POW::StringToBlockhash(m_curResult.result);
     accept = ethash::is_less_or_equal(new_hash, cur_hash) &&
              (difficulty == m_currentTargetDifficulty);
+    LOG_GENERAL(INFO, "[Chetan] else difficulty=" << to_string(difficulty)
+                                           << " m_currentTargetDifficulty= "
+                                           << to_string(m_currentTargetDifficulty));
   }
 
   if (accept) {
     // save new result, and notify other threads to get new result
+    LOG_GENERAL(INFO,"[Chetan] newResult.success="<<newResult.success);
     m_curResult = newResult;
     m_cvGotResult.notify_all();
     LOG_GENERAL(INFO, "newResult accepted!");
@@ -292,6 +301,7 @@ bool GetWorkServer::submitWork(const string& _nonce, const string& _header,
   LOG_GENERAL(INFO, "    header: " << header);
   LOG_GENERAL(INFO, "    mixdigest: " << mixdigest);
   LOG_GENERAL(INFO, "    boundary: " << boundary);
+  LOG_GENERAL(INFO, "    diff: " << to_string(difficulty));
 
   if (!DataConversion::NormalizeHexString(nonce) ||
       !DataConversion::NormalizeHexString(header) ||
