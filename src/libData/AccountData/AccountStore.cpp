@@ -102,7 +102,7 @@ void AccountStore::InitTemp() {
   m_accountStoreTemp->Init();
   m_stateDeltaSerialized.clear();
 
-  ContractStorage2::GetContractStorage().InitTempState(true);
+  ContractStorage2::GetContractStorage().InitTempState();
 }
 
 void AccountStore::InitRevertibles() {

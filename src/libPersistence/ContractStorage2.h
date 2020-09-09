@@ -108,18 +108,12 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
 
   bool CleanEmptyMapPlaceholders(const std::string& key);
 
-  dev::h256 GetContractStateHashCore(const dev::h160& addr,
-                                     const dev::h256& root, bool temp,
-                                     bool revertible);
-
   dev::h256 UpdateContractTrie(const dev::h256& root,
                                const std::map<std::string, bytes>& states,
                                const std::vector<std::string>& toDeletedIndices,
                                bool temp, bool revertible);
 
   dev::h256 DirectHashState(const std::map<std::string, bytes>& states);
-
-  void InitTempStateCore();
 
   ContractStorage2();
 
@@ -214,12 +208,11 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   bool CommitStateDB();
 
   /// Clean t_maps
-  void InitTempState(bool callFromExternal = false);
+  void InitTempState();
 
   /// Get the state hash of a contract account
   dev::h256 GetContractStateHash(const dev::h160& addr, const dev::h256& root,
-                                 bool temp, bool revertible = false,
-                                 bool fromExternal = false);
+                                 bool temp, bool revertible = false);
 
   /// Clean the databases
   void Reset();
