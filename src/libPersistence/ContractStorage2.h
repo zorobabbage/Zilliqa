@@ -108,11 +108,9 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
 
   bool CleanEmptyMapPlaceholders(const std::string& key);
 
-  dev::h256 GetContractStateHashCore(
-      const dev::h160& addr, const dev::h256& root,
-      const std::map<std::string, bytes>& states,
-      const std::vector<std::string>& toDeletedIndices, bool temp,
-      bool revertible);
+  dev::h256 GetContractStateHashCore(const dev::h160& addr,
+                                     const dev::h256& root, bool temp,
+                                     bool revertible);
 
   dev::h256 UpdateContractTrie(const dev::h256& root,
                                const std::map<std::string, bytes>& states,

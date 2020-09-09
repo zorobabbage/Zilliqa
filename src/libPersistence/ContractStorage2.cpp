@@ -1151,6 +1151,10 @@ void ContractStorage2::InitTempState(bool callFromExternal) {
 
 dev::h256 ContractStorage2::DirectHashState(
     const std::map<std::string, bytes>& states) {
+  if (LOG_SC) {
+    LOG_MARKER();
+  }
+
   // iterate the raw protobuf string and hash
   SHA2<HashType::HASH_VARIANT_256> sha2;
   for (const auto& state : states) {
@@ -1173,6 +1177,10 @@ dev::h256 ContractStorage2::UpdateContractTrie(
     const dev::h256& root, const std::map<std::string, bytes>& states,
     const std::vector<std::string>& toDeletedIndices, bool temp,
     bool revertible) {
+  if (LOG_SC) {
+    LOG_MARKER();
+  }
+
   if (temp) {
     if (root == dev::h256()) {
       m_tempTrie.init();
@@ -1207,6 +1215,11 @@ dev::h256 ContractStorage2::UpdateContractTrie(
     }
 
     for (const auto& state : states) {
+      if (LOG_SC) {
+        LOG_GENERAL(INFO, "state key: " << state.first << " value: "
+                                        << DataConversion::CharArrayToString(
+                                               state.second));
+      }
       m_permTrie.insert(
           DataConversion::StringToCharArray(RemoveAddrFromKey(state.first)),
           state.second);
@@ -1228,11 +1241,10 @@ dev::h256 ContractStorage2::UpdateContractTrie(
   }
 }
 
-dev::h256 ContractStorage2::GetContractStateHashCore(
-    const dev::h160& addr, const dev::h256& root,
-    const std::map<std::string, bytes>& states,
-    const std::vector<std::string>& toDeletedIndices, bool temp,
-    bool revertible) {
+dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& addr,
+                                                     const dev::h256& root,
+                                                     bool temp,
+                                                     bool revertible) {
   std::map<std::string, bytes> t_hasMap;
   std::string hasMap_key = GenerateStorageKey(addr, HAS_MAP_INDICATOR, {});
   FetchStateDataForKey(t_hasMap, hasMap_key, temp);
@@ -1249,6 +1261,15 @@ dev::h256 ContractStorage2::GetContractStateHashCore(
       LOG_GENERAL(WARNING, "Invalid hasMap: " << hasMap_key << endl
                                               << e.what());
     }
+  }
+
+  std::map<std::string, bytes> states;
+  std::vector<std::string> toDeletedIndices;
+
+  if (hasMap) {
+    FetchUpdatedStateValuesForAddress(addr, states, toDeletedIndices, temp);
+  } else {
+    FetchStateDataForContract(states, addr, "", {}, temp);
   }
 
   return hasMap ? UpdateContractTrie(root, states, toDeletedIndices, temp,
@@ -1269,17 +1290,11 @@ dev::h256 ContractStorage2::GetContractStateHash(const dev::h160& addr,
     return dev::h256();
   }
 
-  std::map<std::string, bytes> states;
-  std::vector<std::string> toDeletedIndices;
-  FetchUpdatedStateValuesForAddress(addr, states, toDeletedIndices, temp);
-
   if (fromExternal) {
     lock_guard<mutex> g(m_stateDataMutex);
-    return GetContractStateHashCore(addr, root, states, toDeletedIndices, temp,
-                                    revertible);
+    return GetContractStateHashCore(addr, root, temp, revertible);
   } else {
-    return GetContractStateHashCore(addr, root, states, toDeletedIndices, temp,
-                                    revertible);
+    return GetContractStateHashCore(addr, root, temp, revertible);
   }
 }
 
