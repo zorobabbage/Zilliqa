@@ -592,6 +592,11 @@ bool AccountStore::MigrateContractStates2(
     os_2.close();
   }
 
+  if (!UpdateStateTrieAll()) {
+    LOG_GENERAL(WARNING, "UpdateStateTrieAll failed");
+    return false;
+  }
+
   /// repopulate trie and discard old persistence
   if (!MoveUpdatesToDisk()) {
     LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed");

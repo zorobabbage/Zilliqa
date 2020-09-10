@@ -95,9 +95,10 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   dev::GenericTrieDB<PermOverlayMap> m_permTrie;
   dev::GenericTrieDB<TempOverlayMap> m_tempTrie;
 
-  mutable std::mutex m_codeMutex;
-  mutable std::mutex m_initDataMutex;
-  mutable std::mutex m_stateDataMutex;
+  std::mutex m_codeMutex;
+  std::mutex m_initDataMutex;
+  std::mutex m_stateDataMutex;
+  std::mutex m_stateMPTMutex;
 
   void DeleteByPrefix(const std::string& prefix);
 

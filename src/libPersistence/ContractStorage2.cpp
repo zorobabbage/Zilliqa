@@ -452,7 +452,6 @@ bool ContractStorage2::FetchExternalStateValue(
 }
 
 void ContractStorage2::DeleteByPrefix(const string& prefix) {
-
   lock_guard<mutex> g(m_stateDataMutex);
 
   auto p = t_stateDataMap.lower_bound(prefix);
@@ -1114,7 +1113,8 @@ bool ContractStorage2::CommitStateDB() {
     batch.clear();
     // ADDS
     for (const auto& i : *mp_stateDataMap) {
-      batch.insert({i.first.hex(), DataConversion::CharArrayToString(i.second)});
+      batch.insert(
+          {i.first.hex(), DataConversion::CharArrayToString(i.second)});
     }
     if (!mp_stateDataDB->BatchInsert(batch)) {
       LOG_GENERAL(WARNING, "BatchInsert m_stateDataDB failed");
@@ -1182,6 +1182,8 @@ dev::h256 ContractStorage2::UpdateContractTrie(
     LOG_MARKER();
   }
 
+  lock_guard<mutex> g(m_stateMPTMutex);
+
   if (temp) {
     if (root == dev::h256()) {
       m_tempTrie.init();
@@ -1243,9 +1245,8 @@ dev::h256 ContractStorage2::UpdateContractTrie(
 }
 
 dev::h256 ContractStorage2::GetContractStateHash(const dev::h160& addr,
-                                                     const dev::h256& root,
-                                                     bool temp,
-                                                     bool revertible) {
+                                                 const dev::h256& root,
+                                                 bool temp, bool revertible) {
   if (IsNullAddress(addr)) {
     LOG_GENERAL(WARNING, "Null address rejected");
     return dev::h256();
@@ -1308,7 +1309,9 @@ void ContractStorage2::Reset() {
 
     m_stateDataMap.clear();
     m_indexToBeDeleted.clear();
-
+  }
+  {
+    lock_guard<mutex> g(m_stateMPTMutex);
     mp_stateDataDB->ResetDB();
     m_tempADMap->reset();
     m_permADMap->reset();
