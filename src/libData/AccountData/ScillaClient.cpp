@@ -50,13 +50,19 @@ bool ScillaClient::OpenServer(uint32_t version) {
   auto func = [&cmdStr]() mutable -> void {
     LOG_GENERAL(INFO, "cmdStr: " << cmdStr);
 
+    int pid = -1;
+    std::string prints;
+
     try {
-      if (!SysCommand::ExecuteCmd(SysCommand::WITHOUT_OUTPUT, cmdStr)) {
+      if (!SysCommand::ExecuteCmd(SysCommand::WITH_OUTPUT_PID, cmdStr, prints,
+                                  pid)) {
         LOG_GENERAL(WARNING, "ExecuteCmd failed: " << cmdStr);
       }
     } catch (const std::exception& e) {
       LOG_GENERAL(WARNING,
                   "Exception caught in SysCommand::ExecuteCmd: " << e.what());
+    } catch (...) {
+      LOG_GENERAL(WARNING, "Unknown error encountered");
     }
 
     LOG_GENERAL(WARNING, "terminated: " << cmdStr);
