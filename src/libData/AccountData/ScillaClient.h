@@ -34,7 +34,9 @@ class ScillaClient {
   ScillaClient(){};
   ~ScillaClient(){};
 
-  bool CheckClient(uint32_t version);
+  bool OpenServer(uint32_t version);
+
+  bool CheckClient(uint32_t version, bool enforce = false);
 
  public:
   static ScillaClient& GetInstance() {

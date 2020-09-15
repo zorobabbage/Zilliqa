@@ -22,6 +22,40 @@
 #include "libUtils/ScillaUtils.h"
 #include "libUtils/SysCommand.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/range/iterator_range.hpp>
+
+using namespace boost::filesystem;
+
+void ScillaClient::Init() {
+  LOG_MARKER();
+  if (ENABLE_SCILLA_MULTI_VERSION) {
+    path scilla_root_path(SCILLA_ROOT);
+    // scan existing versions
+    for (auto& entry :
+         boost::make_iterator_range(directory_iterator(scilla_root_path), {})) {
+      LOG_GENERAL(INFO, "scilla-server path: " << entry.path().string());
+      std::string folder_name = entry.path().string();
+      folder_name.erase(0, SCILLA_ROOT.size() + 1);
+      LOG_GENERAL(INFO, "folder_name: " << folder_name);
+      uint32_t version = 0;
+      try {
+        version = boost::lexical_cast<uint32_t>(folder_name);
+        if (!CheckClient(version)) {
+          LOG_GENERAL(WARNING,
+                      "OpenServer for version " << version << "failed");
+          continue;
+        }
+      } catch (...) {
+        continue;
+      }
+    }
+  } else {
+    CheckClient(0, false);
+  }
+}
+
 bool ScillaClient::OpenServer(uint32_t version) {
   LOG_MARKER();
 
@@ -62,19 +96,38 @@ bool ScillaClient::OpenServer(uint32_t version) {
     LOG_GENERAL(WARNING, "terminated: " << cmdStr);
   };
 
+<<<<<<< HEAD
   DetachedFunction(1, func);
 
   usleep(200 * 1000);
+=======
+  std::this_thread::sleep_for(
+      std::chrono::milliseconds(SCILLA_SERVER_PENDING_IN_MS));
+>>>>>>> 443fa36f2... Let Scilla Client sleep as a constant
 
   return true;
 }
 
+<<<<<<< HEAD
 bool ScillaClient::CheckClient(uint32_t version) {
   if (m_clients.find(version) == m_clients.end()) {
     if (!OpenServer(version)) {
       LOG_GENERAL(WARNING, "OpenServer for version " << version << "failed");
       return false;
     }
+=======
+bool ScillaClient::CheckClient(uint32_t version, bool enforce) {
+  std::lock_guard<std::mutex> g(m_mutexMain);
+
+  if (m_clients.find(version) != m_clients.end() && !enforce) {
+    return true;
+  }
+
+  if (!OpenServer(version)) {
+    LOG_GENERAL(WARNING, "OpenServer for version " << version << "failed");
+    return false;
+  }
+>>>>>>> 443fa36f2... Let Scilla Client sleep as a constant
 
     std::shared_ptr<jsonrpc::UnixDomainSocketClient> conn =
         std::make_shared<jsonrpc::UnixDomainSocketClient>(
@@ -109,8 +162,13 @@ bool ScillaClient::CallChecker(uint32_t version, const Json::Value& _json,
     LOG_GENERAL(WARNING, "CallChecker failed: " << e.what());
     if (std::string(e.what()).find(SCILLA_SERVER_SOCKET_PATH) !=
         std::string::npos) {
+<<<<<<< HEAD
       if (!OpenServer(version)) {
         LOG_GENERAL(WARNING, "OpenServer for version " << version << "failed");
+=======
+      if (!CheckClient(version, true)) {
+        LOG_GENERAL(WARNING, "CheckClient for version " << version << "failed");
+>>>>>>> 443fa36f2... Let Scilla Client sleep as a constant
         return CallChecker(version, _json, result, counter - 1);
       }
     } else {
@@ -140,9 +198,15 @@ bool ScillaClient::CallRunner(uint32_t version, const Json::Value& _json,
     LOG_GENERAL(WARNING, "CallRunner failed: " << e.what());
     if (std::string(e.what()).find(SCILLA_SERVER_SOCKET_PATH) !=
         std::string::npos) {
+<<<<<<< HEAD
       if (!OpenServer(version)) {
         LOG_GENERAL(WARNING, "OpenServer for version " << version << "failed");
         return CallChecker(version, _json, result, counter - 1);
+=======
+      if (!CheckClient(version, true)) {
+        LOG_GENERAL(WARNING, "CheckClient for version " << version << "failed");
+        return CallRunner(version, _json, result, counter - 1);
+>>>>>>> 443fa36f2... Let Scilla Client sleep as a constant
       }
     } else {
       result = e.what();
