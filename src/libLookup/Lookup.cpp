@@ -95,6 +95,7 @@ Lookup::~Lookup() {}
 void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
+    LOG_GENERAL(INFO, "Chetan initsync thread id=" << this_thread::get_id());
     uint64_t dsBlockNum = 0;
     uint64_t txBlockNum = 0;
 

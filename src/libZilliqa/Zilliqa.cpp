@@ -142,6 +142,9 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
 {
   LOG_MARKER();
+  LOG_GENERAL(INFO, "Chetan toRetrieveHistory="
+                        << toRetrieveHistory << " multiplierSyncMode="
+                        << multiplierSyncMode << " syncType=" << syncType);
 
   if (LOG_PARAMETERS) {
     LOG_STATE("[IDENT] " << string(key.second).substr(0, 8));
@@ -150,6 +153,8 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   // Launch the thread that reads messages from the queue
   auto funcCheckMsgQueue = [this]() mutable -> void {
     pair<bytes, Peer>* message = NULL;
+    LOG_GENERAL(INFO,
+                "Chetan funcCheckMsgQueue threadid=" << this_thread::get_id());
     while (true) {
       while (m_msgQueue.pop(message)) {
         // For now, we use a thread pool to handle this message
@@ -215,6 +220,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   BlockStorage::GetBlockStorage().ResetDB(BlockStorage::DIAGNOSTIC_COINBASE);
 
   if (SyncType::NEW_LOOKUP_SYNC == syncType || SyncType::NEW_SYNC == syncType) {
+    LOG_GENERAL(INFO, "Chetan Downloading persistence")
     while (!m_n.DownloadPersistenceFromS3()) {
       LOG_GENERAL(
           WARNING,
@@ -231,7 +237,10 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
   auto func = [this, toRetrieveHistory, syncType, key, peer]() mutable -> void {
     LogSelfNodeInfo(key, peer);
+    LOG_GENERAL(INFO, "Chetan func threadid=" << this_thread::get_id());
     while (!m_n.Install((SyncType)syncType, toRetrieveHistory)) {
+      LOG_GENERAL(
+          INFO, "Chetan Inside while loop threadid=" << this_thread::get_id());
       if (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP) {
         syncType = SyncType::LOOKUP_SYNC;
         m_mediator.m_lookup->SetSyncType(SyncType::LOOKUP_SYNC);
@@ -387,6 +396,8 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
     }
 
     if (LOOKUP_NODE_MODE) {
+      LOG_GENERAL(INFO,
+                  "Chetan starting rpc on LOOKUP_RPC_PORT=" << LOOKUP_RPC_PORT);
       m_lookupServerConnector = make_unique<SafeHttpServer>(LOOKUP_RPC_PORT);
       m_lookupServer =
           make_shared<LookupServer>(m_mediator, *m_lookupServerConnector);
