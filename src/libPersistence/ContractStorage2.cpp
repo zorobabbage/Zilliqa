@@ -1034,11 +1034,12 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   // iterate the raw protobuf string and hash
   SHA2<HashType::HASH_VARIANT_256> sha2;
   for (const auto& state : states) {
-    if (LOG_SC) {
-      LOG_GENERAL(INFO, "state key: "
-                            << state.first << " value: "
-                            << DataConversion::CharArrayToString(state.second));
-    }
+    // if (LOG_SC) {
+    //   LOG_GENERAL(INFO, "state key: "
+    //                         << state.first << " value: "
+    //                         <<
+    //                         DataConversion::CharArrayToString(state.second));
+    // }
     sha2.Update(DataConversion::StringToCharArray(state.first));
     if (!state.second.empty()) {
       sha2.Update(state.second);

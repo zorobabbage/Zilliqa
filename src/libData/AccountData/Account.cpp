@@ -375,10 +375,11 @@ bool Account::FetchStateJson(Json::Value& root, const string& vname,
     root["_balance"] = GetBalance().convert_to<string>();
   }
 
-  if (LOG_SC) {
-    LOG_GENERAL(INFO,
-                "States: " << JSONUtils::GetInstance().convertJsontoStr(root));
-  }
+  // if (LOG_SC) {
+  //   LOG_GENERAL(INFO,
+  //               "States: " <<
+  //               JSONUtils::GetInstance().convertJsontoStr(root));
+  // }
 
   return true;
 }
