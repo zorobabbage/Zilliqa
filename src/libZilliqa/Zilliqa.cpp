@@ -154,7 +154,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   auto funcCheckMsgQueue = [this]() mutable -> void {
     pair<bytes, Peer>* message = NULL;
     LOG_GENERAL(INFO,
-                "Chetan funcCheckMsgQueue threadid=" << this_thread::get_id());
+                "Chetan funcCheckMsgQueue threadid =" << this_thread::get_id());
     while (true) {
       while (m_msgQueue.pop(message)) {
         // For now, we use a thread pool to handle this message
