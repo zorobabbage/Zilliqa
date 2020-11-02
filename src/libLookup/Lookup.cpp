@@ -95,7 +95,7 @@ Lookup::~Lookup() {}
 void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
-    LOG_GENERAL(INFO, "Chetan initsync thread id=" << this_thread::get_id());
+    LOG_GENERAL(INFO, "Chetan initsync thread id=" << Logger::GetPid());
     uint64_t dsBlockNum = 0;
     uint64_t txBlockNum = 0;
 
@@ -3136,6 +3136,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
 
   if (m_syncType == SyncType::NEW_SYNC || m_syncType == SyncType::NORMAL_SYNC) {
     if (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0) {
+      LOG_GENERAL(INFO, "Chetan set sync type to 0")
       SetSyncType(SyncType::NO_SYNC);
       m_isFirstLoop = true;
       m_currDSExpired = false;
@@ -3169,6 +3170,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
                         .GetEpochNum() < m_mediator.m_currentEpochNum) {
               GetDSInfo();
               m_isFirstLoop = true;
+              LOG_GENERAL(INFO, "Chetan set sync type to 0")
               SetSyncType(SyncType::NO_SYNC);
 
               if (ipChanged) {
@@ -3198,6 +3200,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
         m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetEpochNum() <
             m_mediator.m_currentEpochNum) {
       m_isFirstLoop = true;
+      LOG_GENERAL(INFO, "Chetan set sync type to 0")
       SetSyncType(SyncType::NO_SYNC);
 
       m_mediator.m_ds->FinishRejoinAsDS(lowBlockNum % NUM_FINAL_BLOCK_PER_POW ==
@@ -3213,6 +3216,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       if (!m_currDSExpired) {
         if (ARCHIVAL_LOOKUP || (!ARCHIVAL_LOOKUP && FinishRejoinAsLookup())) {
           SetSyncType(SyncType::NO_SYNC);
+          LOG_GENERAL(INFO, "Chetan set sync type to 0")
 
           if (m_lookupServer) {
             if (m_lookupServer->StartListening()) {
@@ -3827,6 +3831,7 @@ bool Lookup::InitMining(uint32_t lookupIndex) {
   m_startedPoW = true;
   // set the node as synced
   SetSyncType(NO_SYNC);
+  LOG_GENERAL(INFO, "Chetan set sync type to 0")
   dsBlockRand = m_mediator.m_dsBlockRand;
   txBlockRand = m_mediator.m_txBlockRand;
 

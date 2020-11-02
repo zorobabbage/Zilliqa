@@ -70,6 +70,7 @@ struct HashCompare {
 
 static void close_socket(int* cli_sock) {
   if (cli_sock != NULL) {
+    LOG_GENERAL(INFO, "Closing the socket")
     shutdown(*cli_sock, SHUT_RDWR);
     close(*cli_sock);
   }
@@ -128,9 +129,11 @@ P2PComm& P2PComm::GetInstance() {
 
 uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
                            const uint32_t message_length) {
+  LOG_GENERAL(INFO, "SendJob::writeMsg()");
   uint32_t written_length = 0;
 
   while (written_length < message_length) {
+    LOG_GENERAL(INFO, "Chetan writing peer:" << from.GetPrintableIPAddress())
     ssize_t n = write(cli_sock, (unsigned char*)buf + written_length,
                       message_length - written_length);
 
@@ -189,8 +192,8 @@ uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
                                     const bytes& msg_hash) {
-  // LOG_MARKER();
-  LOG_PAYLOAD(DEBUG, "Sending to " << peer, message,
+  LOG_MARKER();
+  LOG_PAYLOAD(INFO, "Sending to " << peer, message,
               Logger::MAX_BYTES_TO_DISPLAY);
 
   if (peer.m_ipAddress == 0 && peer.m_listenPortHost == 0) {
@@ -315,6 +318,7 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
 
 void SendJob::SendMessageCore(const Peer& peer, const bytes& message,
                               unsigned char startbyte, const bytes& hash) {
+  LOG_GENERAL(INFO, "SendJob::SendMessageCore()");
   uint32_t retry_counter = 0;
   while (!SendMessageSocketCore(peer, message, startbyte, hash)) {
     if (Blacklist::GetInstance().Exist(peer.m_ipAddress)) {
@@ -336,6 +340,7 @@ void SendJob::SendMessageCore(const Peer& peer, const bytes& message,
 }
 
 void SendJobPeer::DoSend() {
+  LOG_GENERAL(INFO, "DoSend()");
   if (Blacklist::GetInstance().Exist(m_peer.m_ipAddress)) {
     LOG_GENERAL(INFO, m_peer << " is blacklisted - blocking all messages");
     return;
@@ -402,8 +407,10 @@ void SendJobPeers<T>::DoSend() {
 }
 
 void P2PComm::ProcessSendJob(SendJob* job) {
+  LOG_GENERAL(INFO, "P2PComm::ProcessSendJob");
   auto funcSendMsg = [job]() mutable -> void {
     job->DoSend();
+    LOG_GENERAL(INFO, "Deleting job P2PComm::ProcessSendJob");
     delete job;
   };
   m_SendPool.AddJob(funcSendMsg);
@@ -542,6 +549,7 @@ void P2PComm::ClearPeerConnectionCount() {
 
 void P2PComm::EventCallback(struct bufferevent* bev, short events,
                             [[gnu::unused]] void* ctx) {
+  LOG_GENERAL(INFO, "P2PComm::EventCallback()")
   unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       socket_closer(bev, CloseAndFreeBufferEvent);
 
@@ -711,6 +719,7 @@ void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
   struct evbuffer* input = bufferevent_get_input(bev);
 
   size_t len = evbuffer_get_length(input);
+  LOG_GENERAL(INFO, "P2PComm::ReadCallback() len:" << len);
   if (len >= MAX_READ_WATERMARK_IN_BYTES) {
     // Get the IP info
     int fd = bufferevent_getfd(bev);
@@ -736,7 +745,8 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
   Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
             ((struct sockaddr_in*)cli_addr)->sin_port);
 
-  LOG_GENERAL(DEBUG, "Incoming message from " << from);
+  LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallback");
+  LOG_GENERAL(INFO, "Incoming message from " << from);
   if (Blacklist::GetInstance().Exist(from.m_ipAddress,
                                      false /* for incoming message */)) {
     LOG_GENERAL(INFO, "The node "
@@ -818,6 +828,7 @@ void P2PComm::StartMessagePump(uint32_t listen_port_host,
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(listen_port_host);
   serv_addr.sin_addr.s_addr = INADDR_ANY;
+  LOG_GENERAL(INFO, "Chetan listen_port_host=" << listen_port_host);
 
   // Create the listener
   struct event_base* base = event_base_new();
