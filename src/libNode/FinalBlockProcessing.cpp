@@ -745,6 +745,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
             LOG_GENERAL(INFO,
                         "I am lagging behind actual ds epoch. Will Rejoin!");
             m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+            LOG_GENERAL(INFO, "Chetan set sync type to 0")
             if (ARCHIVAL_LOOKUP) {
               // Sync from S3
               m_mediator.m_lookup->RejoinAsNewLookup(false);
@@ -754,6 +755,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
             }
           } else {
             m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+            LOG_GENERAL(INFO, "Chetan set sync type to 0")
           }
         };
         DetachedFunction(1, func);

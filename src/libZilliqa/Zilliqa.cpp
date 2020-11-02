@@ -154,7 +154,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   auto funcCheckMsgQueue = [this]() mutable -> void {
     pair<bytes, Peer>* message = NULL;
     LOG_GENERAL(INFO,
-                "Chetan funcCheckMsgQueue threadid =" << this_thread::get_id());
+                "Chetan funcCheckMsgQueue threadid =" << Logger::GetPid());
     while (true) {
       while (m_msgQueue.pop(message)) {
         // For now, we use a thread pool to handle this message
@@ -178,6 +178,9 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
       LOG_GENERAL(WARNING, "Unable to load initial DS comm");
     }
   }
+  LOG_GENERAL(INFO, "Chetan LOOKUP_NODE_MODE:" << LOOKUP_NODE_MODE
+                                               << " ARCHIVAL_LOOKUP:"
+                                               << ARCHIVAL_LOOKUP);
 
   if (ARCHIVAL_LOOKUP && !LOOKUP_NODE_MODE) {
     LOG_GENERAL(FATAL, "Archvial lookup is true but not lookup ");
@@ -237,10 +240,11 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
   auto func = [this, toRetrieveHistory, syncType, key, peer]() mutable -> void {
     LogSelfNodeInfo(key, peer);
-    LOG_GENERAL(INFO, "Chetan func threadid=" << this_thread::get_id());
+    LOG_GENERAL(INFO,
+                "Chetan now call install func threadid=" << Logger::GetPid());
     while (!m_n.Install((SyncType)syncType, toRetrieveHistory)) {
-      LOG_GENERAL(
-          INFO, "Chetan Inside while loop threadid=" << this_thread::get_id());
+      LOG_GENERAL(INFO,
+                  "Chetan Inside while loop threadid=" << Logger::GetPid());
       if (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP) {
         syncType = SyncType::LOOKUP_SYNC;
         m_mediator.m_lookup->SetSyncType(SyncType::LOOKUP_SYNC);
@@ -265,6 +269,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
           LOG_GENERAL(WARNING, "AccountStore::RefreshDB failed");
         }
       } else {
+        LOG_GENERAL(INFO, "Chetan setting sync type to 0")
         m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
         bool isDsNode = false;
         for (const auto& ds : *m_mediator.m_DSCommittee) {

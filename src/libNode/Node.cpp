@@ -679,6 +679,7 @@ void Node::WaitForNextTwoBlocksBeforeRejoin() {
   }
 
   m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+  LOG_GENERAL(INFO, "Chetan Setting sync type to no sync")
 }
 
 bool Node::StartRetrieveHistory(const SyncType syncType,
@@ -880,6 +881,7 @@ bool Node::StartRetrieveHistory(const SyncType syncType,
                cv_status::timeout);
 
       m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+      LOG_GENERAL(INFO, "Chetan Setting sync type to no sync")
 
       /// If node recovery lagging behind too much, apply re-join
       /// process instead of node recovery
@@ -908,6 +910,7 @@ bool Node::StartRetrieveHistory(const SyncType syncType,
                cv_status::timeout);
 
       m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+      LOG_GENERAL(INFO, "Chetan Setting sync type to no sync")
     }
   }
 

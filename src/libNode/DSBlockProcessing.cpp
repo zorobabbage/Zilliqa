@@ -518,6 +518,7 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     }
 
     m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+    LOG_GENERAL(INFO, "Chetan set sync type to 0")
     m_mediator.m_lookup->cv_waitJoined.notify_all();
     if (m_fromNewProcess) {
       m_fromNewProcess = false;
