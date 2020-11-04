@@ -272,6 +272,7 @@ void Lookup::SetLookupNodes() {
 }
 
 void Lookup::SetAboveLayer(VectorOfNode& aboveLayer, const string& xml_node) {
+  LOG_GENERAL(INFO, "Chetan Lookup::SetAboveLaye()" << xml_node);
   using boost::property_tree::ptree;
   ptree pt;
   read_xml("constants.xml", pt);
@@ -294,6 +295,10 @@ void Lookup::SetAboveLayer(VectorOfNode& aboveLayer, const string& xml_node) {
       }
       aboveLayer.emplace_back(pubKey, node);
     }
+  }
+  for (const auto& nn : aboveLayer) {
+    LOG_GENERAL(INFO,
+                "Chetan aboveLayer:" << nn.second.GetPrintableIPAddress());
   }
 }
 
@@ -485,6 +490,10 @@ bool Lookup::GenTxnToSend(size_t num_txn,
 VectorOfNode Lookup::GetLookupNodes() const {
   LOG_MARKER();
   lock_guard<mutex> lock(m_mutexLookupNodes);
+  for (const auto& nn : m_lookupNodes) {
+    LOG_GENERAL(INFO,
+                "Chetan  m_lookupNodes:" << nn.second.GetPrintableIPAddress());
+  }
   return m_lookupNodes;
 }
 

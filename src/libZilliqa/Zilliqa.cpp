@@ -80,6 +80,7 @@ void Zilliqa::LogSelfNodeInfo(const PairOfKey& key, const Peer& peer) {
 }
 
 void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
+  LOG_GENERAL(INFO, "Chetan Zilliqa::ProcessMessage()");
   if (message->first.size() >= MessageOffset::BODY) {
     const unsigned char msg_type = message->first.at(MessageOffset::TYPE);
 
@@ -106,7 +107,8 @@ void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
 
         tpStart = std::chrono::high_resolution_clock::now();
       }
-
+      LOG_GENERAL(
+          INFO, "Chetan calling Execute on msg handler msg_type:" << msg_type);
       bool result = msg_handlers[msg_type]->Execute(
           message->first, MessageOffset::INST, message->second);
 
@@ -159,6 +161,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
       while (m_msgQueue.pop(message)) {
         // For now, we use a thread pool to handle this message
         // Eventually processing will be single-threaded
+        LOG_GENERAL(INFO, "Chetan m_msgQueue pop message");
         m_queuePool.AddJob(
             [this, message]() mutable -> void { ProcessMessage(message); });
       }
@@ -486,7 +489,7 @@ Zilliqa::~Zilliqa() {
 }
 
 void Zilliqa::Dispatch(pair<bytes, Peer>* message) {
-  // LOG_MARKER();
+  LOG_MARKER();
 
   // Queue message
   if (!m_msgQueue.bounded_push(message)) {
