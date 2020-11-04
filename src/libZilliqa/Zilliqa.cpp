@@ -99,16 +99,14 @@ void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
 
       std::chrono::time_point<std::chrono::high_resolution_clock> tpStart;
       std::string msgName;
-      if (ENABLE_CHECK_PERFORMANCE_LOG) {
-        const auto ins_byte = message->first.at(MessageOffset::INST);
-        msgName = FormatMessageName(msg_type, ins_byte);
-        LOG_GENERAL(INFO, MessageSizeKeyword << msgName << " "
-                                             << message->first.size());
-
-        tpStart = std::chrono::high_resolution_clock::now();
-      }
+      const auto ins_byte = message->first.at(MessageOffset::INST);
+      msgName = FormatMessageName(msg_type, ins_byte);
       LOG_GENERAL(
-          INFO, "Chetan calling Execute on msg handler msg_type:" << msg_type);
+          INFO, MessageSizeKeyword << msgName << " " << message->first.size());
+
+      tpStart = std::chrono::high_resolution_clock::now();
+      LOG_GENERAL(INFO, "Chetan calling Execute on msg handler msg_type:"
+                            << static_cast<unsigned>(msg_type));
       bool result = msg_handlers[msg_type]->Execute(
           message->first, MessageOffset::INST, message->second);
 
