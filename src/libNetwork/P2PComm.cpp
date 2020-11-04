@@ -549,7 +549,7 @@ void P2PComm::ClearPeerConnectionCount() {
 
 void P2PComm::EventCallback(struct bufferevent* bev, short events,
                             [[gnu::unused]] void* ctx) {
-  LOG_GENERAL(INFO, "P2PComm::EventCallback()")
+  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallback()");
   unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       socket_closer(bev, CloseAndFreeBufferEvent);
 
@@ -578,6 +578,7 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
     return;
   }
   size_t len = evbuffer_get_length(input);
+  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallback() len:" << len);
   if (len == 0) {
     LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
     return;
