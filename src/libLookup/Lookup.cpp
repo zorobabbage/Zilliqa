@@ -3050,32 +3050,16 @@ void Lookup::PrepareForStartPow() {
   LOG_MARKER();
 
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-            "At new DS epoch now, already have state. Getting ready to "
-            "know for pow");
+            "At new DS epoch now, already have state. Getting DSInfo.");
 
   if (!GetDSInfo()) {
+    LOG_GENERAL(WARNING, "DSInfo not received!");
     return;
   }
 
-  LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-            "DSInfo received -> Ask lookup to let me know when to "
-            "start PoW");
+  LOG_GENERAL(INFO, "DSInfo received -> Starting PoW now");
 
-  // Ask lookup to inform me when it's time to do PoW
-  bytes getpowsubmission_message = {MessageType::LOOKUP,
-                                    LookupInstructionType::GETSTARTPOWFROMSEED};
-
-  if (!Messenger::SetLookupGetStartPoWFromSeed(
-          getpowsubmission_message, MessageOffset::BODY,
-          m_mediator.m_selfPeer.m_listenPortHost,
-          m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum(),
-          m_mediator.m_selfKey)) {
-    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
-              "Messenger::SetLookupGetStartPoWFromSeed failed.");
-    return;
-  }
-
-  m_mediator.m_lookup->SendMessageToRandomSeedNode(getpowsubmission_message);
+  InitMining(0);
 }
 
 void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
