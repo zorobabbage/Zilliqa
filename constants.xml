@@ -420,7 +420,7 @@
         <peer>
             <hostname></hostname>
             <ip></ip>
-            <port>33133</port>
+            <port>33135</port>
             <pubkey></pubkey>
         </peer>
         -->
