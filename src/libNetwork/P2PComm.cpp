@@ -51,6 +51,7 @@ using namespace boost::multiprecision;
 const unsigned char START_BYTE_NORMAL = 0x11;
 const unsigned char START_BYTE_BROADCAST = 0x22;
 const unsigned char START_BYTE_GOSSIP = 0x33;
+const unsigned char START_BYTE_SEED_TO_SEED = 0x44;
 const unsigned int HDR_LEN = 8;
 const unsigned int HASH_LEN = 32;
 const unsigned int GOSSIP_MSGTYPE_LEN = 1;
@@ -189,9 +190,25 @@ uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
   return written_length;
 }
 
+void eventcb(struct bufferevent* bev, short events, [[gnu::unused]] void* ptr) {
+  LOG_GENERAL(INFO, "eventcb");
+  if (events & BEV_EVENT_CONNECTED) {
+    bufferevent_write(bev, "Hello from client", 17);
+    /* We're connected to 127.0.0.1:8080.   Ordinarily we'd do
+       something here, like start reading or writing. */
+  } else if (events & BEV_EVENT_ERROR) {
+    /* An error occured while connecting. */
+  }
+}
+
+void readcb([[gnu::unused]] struct bufferevent* bev,
+            [[gnu::unused]] void* ctx) {
+  LOG_GENERAL(INFO, "readcb");
+}
+
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
-                                    const bytes& msg_hash) {
+                                    const bytes& msg_hash, event_base* base) {
   LOG_MARKER();
   LOG_PAYLOAD(INFO, "Sending to " << peer, message,
               Logger::MAX_BYTES_TO_DISPLAY);
@@ -204,6 +221,22 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
     LOG_GENERAL(INFO, "I am sending to " << peer.GetPrintableIPAddress()
                                          << " at port 0. Investigate why!");
     return true;
+  }
+  if (start_byte == START_BYTE_SEED_TO_SEED) {
+    struct bufferevent* bev =
+        bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
+    bufferevent_setcb(bev, readcb, NULL, eventcb, NULL);
+    bufferevent_enable(bev, EV_READ | EV_WRITE);
+    struct sockaddr_in serv_addr {};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = peer.m_ipAddress.convert_to<unsigned long>();
+    serv_addr.sin_port = htons(peer.m_listenPortHost);
+    if (bufferevent_socket_connect(bev, (struct sockaddr*)&serv_addr,
+                                   sizeof(serv_addr)) < 0) {
+      /* Error starting connection */
+      bufferevent_free(bev);
+      return -1;
+    }
   }
 
   try {
@@ -316,11 +349,12 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
   return true;
 }
 
-void SendJob::SendMessageCore(const Peer& peer, const bytes& message,
-                              unsigned char startbyte, const bytes& hash) {
-  LOG_GENERAL(INFO, "SendJob::SendMessageCore()");
+void SendJob::SendMessageCoreBufferEvent(const Peer& peer, const bytes& message,
+                                         unsigned char startbyte,
+                                         const bytes& hash, event_base* base) {
+  LOG_GENERAL(INFO, "SendJob::SendMessageCoreBufferEvent()");
   uint32_t retry_counter = 0;
-  while (!SendMessageSocketCore(peer, message, startbyte, hash)) {
+  while (!SendMessageSocketCore(peer, message, startbyte, hash, base)) {
     if (Blacklist::GetInstance().Exist(peer.m_ipAddress)) {
       return;
     }
@@ -346,7 +380,30 @@ void SendJobPeer::DoSend() {
     return;
   }
 
-  SendMessageCore(m_peer, m_message, m_startbyte, m_hash);
+  SendMessageCoreBufferEvent(m_peer, m_message, m_startbyte, m_hash, base);
+}
+
+void SendJob::SendMessageCore(const Peer& peer, const bytes& message,
+                              unsigned char startbyte, const bytes& hash) {
+  LOG_GENERAL(INFO, "SendJob::SendMessageCore()");
+  uint32_t retry_counter = 0;
+  while (!SendMessageSocketCore(peer, message, startbyte, hash)) {
+    if (Blacklist::GetInstance().Exist(peer.m_ipAddress)) {
+      return;
+    }
+
+    LOG_GENERAL(WARNING, "Socket connect failed " << retry_counter << "/"
+                                                  << MAXRETRYCONN
+                                                  << ". IP address: " << peer);
+
+    if (++retry_counter > MAXRETRYCONN) {
+      LOG_GENERAL(WARNING,
+                  "Socket connect failed over " << MAXRETRYCONN << " times.");
+      return;
+    }
+    this_thread::sleep_for(
+        chrono::milliseconds(rand() % PUMPMESSAGE_MILLISECONDS + 1));
+  }
 }
 
 template <class T>
@@ -716,11 +773,203 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
   }
 }
 
+void P2PComm::EventCallbackForSeed(struct bufferevent* bev, short events,
+                                   [[gnu::unused]] void* ctx) {
+  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallbackForSeed()");
+  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+      socket_closer(bev, CloseAndFreeBufferEvent);
+
+  if (events & BEV_EVENT_ERROR) {
+    LOG_GENERAL(WARNING, "Error from bufferevent.");
+    return;
+  }
+
+  // Not all bytes read out
+  if (!(events & (BEV_EVENT_EOF | BEV_EVENT_ERROR))) {
+    LOG_GENERAL(WARNING, "Unknown error from bufferevent.");
+    return;
+  }
+
+  // Get the IP info
+  int fd = bufferevent_getfd(bev);
+  struct sockaddr_in cli_addr {};
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+  Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
+
+  // Get the data stored in buffer
+  struct evbuffer* input = bufferevent_get_input(bev);
+  if (input == NULL) {
+    LOG_GENERAL(WARNING, "bufferevent_get_input failure.");
+    return;
+  }
+  size_t len = evbuffer_get_length(input);
+  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallbackForSeed() len:" << len);
+  if (len == 0) {
+    LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
+    return;
+  }
+  bytes message(len);
+  if (evbuffer_copyout(input, message.data(), len) !=
+      static_cast<ev_ssize_t>(len)) {
+    LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
+    return;
+  }
+  if (evbuffer_drain(input, len) != 0) {
+    LOG_GENERAL(WARNING, "evbuffer_drain failure.");
+    return;
+  }
+
+  // Reception format:
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x11 - start byte
+  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of message
+  // <message>
+
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x22 - start byte (broadcast)
+  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of hash + message
+  // <32-byte hash> <message>
+
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x33 - start byte (gossip)
+  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of message
+  // 0x01 ~ 0x04 - Gossip_Message_Type
+  // <4-byte Age> <message>
+
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x33 - start byte (report)
+  // 0x00 0x00 0x00 0x01 - 4-byte length of message
+  // 0x00
+
+  // Check for minimum message size
+  if (message.size() <= HDR_LEN) {
+    LOG_GENERAL(WARNING, "Empty message received.");
+    return;
+  }
+
+  const unsigned char version = message[0];
+
+  // Check for version requirement
+  if (version != (unsigned char)(MSG_VERSION & 0xFF)) {
+    LOG_GENERAL(WARNING, "Header version wrong, received ["
+                             << version - 0x00 << "] while expected ["
+                             << MSG_VERSION << "].");
+    return;
+  }
+
+  const uint16_t chainId = (message[1] << 8) + message[2];
+  if (chainId != CHAIN_ID) {
+    LOG_GENERAL(WARNING, "Header chainid wrong, received ["
+                             << chainId << "] while expected [" << CHAIN_ID
+                             << "].");
+    return;
+  }
+
+  const unsigned char startByte = message[3];
+
+  const uint32_t messageLength =
+      (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
+
+  {
+    // Check for length consistency
+    uint32_t res;
+
+    if (!SafeMath<uint32_t>::sub(message.size(), HDR_LEN, res)) {
+      LOG_GENERAL(WARNING, "Unexpected subtraction operation!");
+      return;
+    }
+
+    if (messageLength != res) {
+      LOG_GENERAL(WARNING, "Incorrect message length.");
+      return;
+    }
+  }
+
+  if (startByte == START_BYTE_BROADCAST) {
+    LOG_PAYLOAD(INFO, "Incoming broadcast " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    if (messageLength <= HASH_LEN) {
+      LOG_GENERAL(WARNING,
+                  "Hash missing or empty broadcast message (messageLength = "
+                      << messageLength << ")");
+      return;
+    }
+
+    ProcessBroadCastMsg(message, from);
+  } else if (startByte == START_BYTE_NORMAL) {
+    LOG_PAYLOAD(INFO, "Incoming normal " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    // Move the shared_ptr message to raw pointer type
+    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
+        bytes(message.begin() + HDR_LEN, message.end()), from);
+
+    // Queue the message
+    m_dispatcher(raw_message);
+  } else if (startByte == START_BYTE_GOSSIP) {
+    // Check for the maximum gossiped-message size
+    if (message.size() >= MAX_GOSSIP_MSG_SIZE_IN_BYTES) {
+      LOG_GENERAL(WARNING,
+                  "Gossip message received [Size:"
+                      << message.size() << "] is unexpectedly large [ >"
+                      << MAX_GOSSIP_MSG_SIZE_IN_BYTES
+                      << " ]. Will be strictly blacklisting the sender");
+      Blacklist::GetInstance().Add(
+          from.m_ipAddress);  // so we dont spend cost sending any data to this
+                              // sender as well.
+      return;
+    }
+    if (messageLength <
+        GOSSIP_MSGTYPE_LEN + GOSSIP_ROUND_LEN + GOSSIP_SNDR_LISTNR_PORT_LEN) {
+      LOG_GENERAL(
+          WARNING,
+          "Gossip Msg Type and/or Gossip Round and/or SNDR LISTNR is missing "
+          "(messageLength = "
+              << messageLength << ")");
+      return;
+    }
+
+    ProcessGossipMsg(message, from);
+  } else {
+    // Unexpected start byte. Drop this message
+    LOG_GENERAL(WARNING, "Incorrect start byte.");
+  }
+}
+
 void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
   struct evbuffer* input = bufferevent_get_input(bev);
 
   size_t len = evbuffer_get_length(input);
   LOG_GENERAL(INFO, "P2PComm::ReadCallback() len:" << len);
+  if (len >= MAX_READ_WATERMARK_IN_BYTES) {
+    // Get the IP info
+    int fd = bufferevent_getfd(bev);
+    struct sockaddr_in cli_addr {};
+    socklen_t addr_size = sizeof(struct sockaddr_in);
+    getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+    Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
+    LOG_GENERAL(WARNING, "[blacklist] Encountered data of size: "
+                             << len << " being received."
+                             << " Adding sending node "
+                             << from.GetPrintableIPAddress()
+                             << " as strictly blacklisted");
+    Blacklist::GetInstance().Add(from.m_ipAddress);
+    bufferevent_free(bev);
+  }
+}
+
+void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
+                                  [[gnu::unused]] void* ctx) {
+  struct evbuffer* input = bufferevent_get_input(bev);
+
+  size_t len = evbuffer_get_length(input);
+  LOG_GENERAL(INFO, "P2PComm::ReadCallbackForSeed() len:" << len);
   if (len >= MAX_READ_WATERMARK_IN_BYTES) {
     // Get the IP info
     int fd = bufferevent_getfd(bev);
@@ -798,6 +1047,65 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
   bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
 
+void P2PComm::AcceptConnectionCallbackForSeed(
+    [[gnu::unused]] evconnlistener* listener, evutil_socket_t cli_sock,
+    struct sockaddr* cli_addr, [[gnu::unused]] int socklen,
+    [[gnu::unused]] void* arg) {
+  Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
+            ((struct sockaddr_in*)cli_addr)->sin_port);
+
+  LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallbackForSeed");
+  LOG_GENERAL(INFO, "Incoming message from " << from);
+  if (Blacklist::GetInstance().Exist(from.m_ipAddress,
+                                     false /* for incoming message */)) {
+    LOG_GENERAL(INFO, "The node "
+                          << from
+                          << " is in black list, block all message from it.");
+
+    // Close the socket
+    evutil_closesocket(cli_sock);
+
+    return;
+  }
+
+  {
+    std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
+    if (m_peerConnectionCount[from.GetIpAddress()] > MAX_PEER_CONNECTION) {
+      LOG_GENERAL(WARNING, "Connection ignored from " << from);
+      evutil_closesocket(cli_sock);
+      return;
+    }
+    m_peerConnectionCount[from.GetIpAddress()]++;
+  }
+
+  // Set up buffer event for this new connection
+  struct event_base* base = evconnlistener_get_base(listener);
+  if (base == NULL) {
+    LOG_GENERAL(WARNING, "evconnlistener_get_base failure.");
+
+    // Close the socket
+    evutil_closesocket(cli_sock);
+
+    return;
+  }
+
+  struct bufferevent* bev = bufferevent_socket_new(
+      base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+  if (bev == NULL) {
+    LOG_GENERAL(WARNING, "bufferevent_socket_new failure.");
+
+    // Close the socket
+    evutil_closesocket(cli_sock);
+
+    return;
+  }
+
+  bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
+                           MAX_READ_WATERMARK_IN_BYTES);
+  bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
+  bufferevent_enable(bev, EV_READ | EV_WRITE);
+}
+
 inline bool P2PComm::IsHostHavingNetworkIssue() {
   return (errno == EHOSTUNREACH || errno == ETIMEDOUT);
 }
@@ -806,23 +1114,22 @@ inline bool P2PComm::IsNodeNotRunning() {
   return (errno == EHOSTDOWN || errno == ECONNREFUSED);
 }
 
-void P2PComm::StartMessagePump(uint32_t listen_port_host,
-                               Dispatcher dispatcher) {
+// Create eventbase and dispatch for seed node
+void P2PComm::CreateLibEventBase() {
   LOG_MARKER();
 
-  // Launch the thread that reads messages from the send queue
-  auto funcCheckSendQueue = [this]() mutable -> void {
-    SendJob* job = NULL;
-    while (true) {
-      while (m_sendQueue.pop(job)) {
-        ProcessSendJob(job);
-      }
-      std::this_thread::sleep_for(std::chrono::microseconds(1));
-    }
-  };
-  DetachedFunction(1, funcCheckSendQueue);
+  base = event_base_new();
+  if (base == NULL) {
+    LOG_GENERAL(WARNING, "event_base_new failure.");
+    // fixme: should we exit here?
+    return;
+  }
+  event_base_dispatch(base);
+}
 
-  m_dispatcher = move(dispatcher);
+void P2PComm::EnableListener(uint32_t listen_port_host,
+                             bool enable_listen_for_seed_node) {
+  LOG_MARKER();
 
   struct sockaddr_in serv_addr {};
   memset(&serv_addr, 0, sizeof(struct sockaddr_in));
@@ -850,10 +1157,48 @@ void P2PComm::StartMessagePump(uint32_t listen_port_host,
     // fixme: should we exit here?
     return;
   }
+  if (enable_listen_for_seed_node) {
+    memset(&serv_addr, 0, sizeof(struct sockaddr_in));
+    serv_addr.sin_family = AF_INET;
+    // TODO: temporary,later make part of config
+    serv_addr.sin_port = htons(listen_port_host + 2);
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    LOG_GENERAL(INFO,
+                "Chetan listen_port_host for seed=" << listen_port_host + 2);
+    struct evconnlistener* listener = evconnlistener_new_bind(
+        base, AcceptConnectionCallbackForSeed, nullptr,
+        LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
+        (struct sockaddr*)&serv_addr, sizeof(struct sockaddr_in));
+
+    if (listener == NULL) {
+      LOG_GENERAL(WARNING, "evconnlistener_new_bind failure.");
+      event_base_free(base);
+      // fixme: should we exit here?
+      return;
+    }
+  }
 
   event_base_dispatch(base);
   evconnlistener_free(listener);
   event_base_free(base);
+}
+
+void P2PComm::StartMessagePump(Dispatcher dispatcher) {
+  LOG_MARKER();
+
+  // Launch the thread that reads messages from the send queue
+  auto funcCheckSendQueue = [this]() mutable -> void {
+    SendJob* job = NULL;
+    while (true) {
+      while (m_sendQueue.pop(job)) {
+        ProcessSendJob(job);
+      }
+      std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+  };
+  DetachedFunction(1, funcCheckSendQueue);
+
+  m_dispatcher = move(dispatcher);
 }
 
 void P2PComm::SendMessage(const vector<Peer>& peers, const bytes& message,
@@ -917,6 +1262,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
   job->m_message = message;
   job->m_hash.clear();
   job->m_allowSendToRelaxedBlacklist = false;
+  job->base = base;
 
   // Queue job
   if (!m_sendQueue.bounded_push(job)) {
