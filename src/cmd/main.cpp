@@ -233,10 +233,24 @@ int main(int argc, const char* argv[]) {
     auto dispatcher = [&zilliqa](pair<bytes, Peer>* message) mutable -> void {
       zilliqa.Dispatch(message);
     };
+    // Only start the incoming message queue
+    P2PComm::GetInstance().StartMessagePump(dispatcher);
 
-    P2PComm::GetInstance().StartMessagePump(my_network_info.m_listenPortHost,
-                                            dispatcher);
-
+    if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
+      if (vm.count("l2lsyncmode") > 0) {
+        LOG_GENERAL(INFO,
+                    "Chetan It's exchange seed node, not l2l lookup node");
+        LOG_GENERAL(INFO, "Chetan Do not start listener on 33133");
+      } else {
+        LOG_GENERAL(INFO, "Chetan It's l2l lookup node");
+        P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
+                                              true);
+      }
+    } else {
+      LOG_GENERAL(INFO, "Chetan could be normal,ds, lookup node");
+      P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
+                                            false);
+    }
   } catch (std::exception& e) {
     std::cerr << "Unhandled Exception reached the top of main: " << e.what()
               << ", application will now exit" << std::endl;

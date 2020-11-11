@@ -112,11 +112,19 @@ class P2PComm {
   static void ProcessGossipMsg(bytes& message, Peer& from);
 
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
+  static void EventCallbackForSeed(struct bufferevent* bev, short events,
+                                   void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);
+  static void ReadCallbackForSeed(struct bufferevent* bev, void* ctx);
+
   static void AcceptConnectionCallback(evconnlistener* listener,
                                        evutil_socket_t cli_sock,
                                        struct sockaddr* cli_addr, int socklen,
                                        void* arg);
+  static void AcceptConnectionCallbackForSeed(evconnlistener* listener,
+                                              evutil_socket_t cli_sock,
+                                              struct sockaddr* cli_addr,
+                                              int socklen, void* arg);
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
 
  public:
@@ -150,7 +158,10 @@ class P2PComm {
                                void* arg);
 
   /// Listens for incoming socket connections.
-  void StartMessagePump(uint32_t listen_port_host, Dispatcher dispatcher);
+  void StartMessagePump(Dispatcher dispatcher);
+
+  void EnableListener(uint32_t listen_port_host,
+                      bool enable_listen_for_seed_node = false);
 
   /// Multicasts message to specified list of peers.
   void SendMessage(const VectorOfPeer& peers, const bytes& message,
