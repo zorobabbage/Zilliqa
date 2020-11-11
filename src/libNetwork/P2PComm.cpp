@@ -195,7 +195,8 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
   LOG_MARKER();
   LOG_PAYLOAD(INFO, "Sending to " << peer, message,
               Logger::MAX_BYTES_TO_DISPLAY);
-  LOG_GENERAL(INFO, "Chetan start_byte=" << static_cast<unsigned int>(start_byte));
+  LOG_GENERAL(INFO,
+              "Chetan start_byte=" << static_cast<unsigned int>(start_byte));
 
   if (peer.m_ipAddress == 0 && peer.m_listenPortHost == 0) {
     LOG_GENERAL(INFO,
