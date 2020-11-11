@@ -37,7 +37,6 @@ struct evconnlistener;
 
 extern const unsigned char START_BYTE_NORMAL;
 extern const unsigned char START_BYTE_GOSSIP;
-extern const unsigned char START_BYTE_SEED_TO_SEED;
 
 class SendJob {
  protected:
@@ -45,8 +44,7 @@ class SendJob {
                            const uint32_t message_length);
   static bool SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
-                                    const bytes& msg_hash,
-                                    struct event_base* base = NULL);
+                                    const bytes& msg_hash);
 
  public:
   Peer m_selfPeer;
@@ -54,15 +52,9 @@ class SendJob {
   bytes m_message;
   bytes m_hash;
   bool m_allowSendToRelaxedBlacklist{};
-  bool m_persist_connection{};
-  struct event_base* base;
-  struct bufferevent* bev;
 
   static void SendMessageCore(const Peer& peer, const bytes& message,
                               unsigned char startbyte, const bytes& hash);
-  static void SendMessageCoreBufferEvent(const Peer& peer, const bytes& message,
-                                         unsigned char startbyte,
-                                         const bytes& hash, event_base* base);
 
   virtual ~SendJob() {}
   virtual void DoSend() = 0;
@@ -90,8 +82,6 @@ class P2PComm {
       m_broadcastToRemove;
   std::mutex m_broadcastToRemoveMutex;
   RumorManager m_rumorManager;
-  struct event_base* base;
-  struct bufferevent* bev;
 
   const static uint32_t MAXPUMPMESSAGE = 128;
 
@@ -122,18 +112,11 @@ class P2PComm {
   static void ProcessGossipMsg(bytes& message, Peer& from);
 
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
-  static void EventCallbackForSeed(struct bufferevent* bev, short events,
-                                   void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);
-  static void ReadCallbackForSeed(struct bufferevent* bev, void* ctx);
   static void AcceptConnectionCallback(evconnlistener* listener,
                                        evutil_socket_t cli_sock,
                                        struct sockaddr* cli_addr, int socklen,
                                        void* arg);
-  static void AcceptConnectionCallbackForSeed(evconnlistener* listener,
-                                              evutil_socket_t cli_sock,
-                                              struct sockaddr* cli_addr,
-                                              int socklen, void* arg);
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
 
  public:
@@ -167,10 +150,7 @@ class P2PComm {
                                void* arg);
 
   /// Listens for incoming socket connections.
-  void StartMessagePump(Dispatcher dispatcher);
-  void EnableListener(uint32_t listen_port_host,
-                      bool enable_listen_for_seed_node = false);
-  void CreateLibEventBase();
+  void StartMessagePump(uint32_t listen_port_host, Dispatcher dispatcher);
 
   /// Multicasts message to specified list of peers.
   void SendMessage(const VectorOfPeer& peers, const bytes& message,
