@@ -1199,7 +1199,7 @@ void Lookup::SendMessageToRandomL2lDataProvider(const bytes& message) const {
   Peer tmpPeer(resolved_ip,
                m_l2lDataProviders[index].second.GetListenPortHost());
   LOG_GENERAL(INFO, "Sending message to l2l: " << tmpPeer);
-  P2PComm::GetInstance().SendMessage(tmpPeer, message, START_BYTE_SEED_TO_SEED);
+  P2PComm::GetInstance().SendMessage(tmpPeer, message);
 }
 
 void Lookup::SendMessageToRandomSeedNode(const bytes& message) const {
