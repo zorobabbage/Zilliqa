@@ -185,8 +185,7 @@ int main() {
   INIT_STDOUT_LOGGER();
 
   auto func = []() mutable -> void {
-    P2PComm::GetInstance().StartMessagePump(process_message);
-    P2PComm::GetInstance().EnableListener(33133, false);
+    P2PComm::GetInstance().StartMessagePump(33133, process_message);
   };
 
   DetachedFunction(1, func);
