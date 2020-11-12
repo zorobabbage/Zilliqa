@@ -51,6 +51,7 @@ using namespace boost::multiprecision;
 const unsigned char START_BYTE_NORMAL = 0x11;
 const unsigned char START_BYTE_BROADCAST = 0x22;
 const unsigned char START_BYTE_GOSSIP = 0x33;
+const unsigned char START_BYTE_SEED_TO_SEED = 0x44;
 const unsigned int HDR_LEN = 8;
 const unsigned int HASH_LEN = 32;
 const unsigned int GOSSIP_MSGTYPE_LEN = 1;
@@ -189,6 +190,49 @@ uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
   return written_length;
 }
 
+void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
+  int fd = bufferevent_getfd(bufev);
+  struct sockaddr_in cli_addr {};
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+  uint128_t ipAddr = cli_addr.sin_addr.s_addr;
+  {
+    std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
+    if (m_peerConnectionCount[ipAddr] > 0) {
+      m_peerConnectionCount[ipAddr]--;
+    }
+  }
+  bufferevent_free(bufev);
+}
+
+void CloseAndFreeBufferEvent(struct bufferevent* bufev) {
+  int fd = bufferevent_getfd(bufev);
+  struct sockaddr_in cli_addr {};
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+  bufferevent_free(bufev);
+}
+
+void EventCb(struct bufferevent* bev, short events, [[gnu::unused]] void* ptr) {
+  LOG_GENERAL(INFO, "EventCb");
+  if (events & BEV_EVENT_CONNECTED) {
+    bufferevent_write(bev, "Hello from client", 17);
+    LOG_GENERAL(INFO, "Chetan connected.Can perform read write here");
+    /* We're connected to 127.0.0.1:8080.   Ordinarily we'd do
+       something here, like start reading or writing. */
+  } else if (events & BEV_EVENT_ERROR) {
+    LOG_GENERAL(INFO, "Chetan Error has occured");
+    /* An error occured while connecting. */
+  }
+}
+
+void ReadCb([[gnu::unused]] struct bufferevent* bev,
+            [[gnu::unused]] void* ctx) {
+  LOG_GENERAL(INFO, "ReadCb");
+  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+      socket_closer(bev, CloseAndFreeBufferEvent);
+}
+
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
                                     const bytes& msg_hash) {
@@ -209,6 +253,43 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
   }
 
   try {
+    if (start_byte == START_BYTE_SEED_TO_SEED) {
+      struct event_base* base = event_base_new();
+      struct bufferevent* bev =
+          bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
+      bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
+      bufferevent_enable(bev, EV_READ | EV_WRITE);
+      struct sockaddr_in serv_addr {};
+      serv_addr.sin_family = AF_INET;
+      serv_addr.sin_addr.s_addr = peer.m_ipAddress.convert_to<unsigned long>();
+      serv_addr.sin_port = htons(peer.m_listenPortHost);
+      if (bufferevent_socket_connect(bev, (struct sockaddr*)&serv_addr,
+                                     sizeof(serv_addr)) < 0) {
+        /* Error starting connection */
+        bufferevent_free(bev);
+        return -1;
+      }
+      uint32_t length = message.size();
+
+      if (start_byte == START_BYTE_BROADCAST) {
+        length += HASH_LEN;
+      }
+
+      unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
+                                    (unsigned char)((CHAIN_ID >> 8) & 0XFF),
+                                    (unsigned char)(CHAIN_ID & 0xFF),
+                                    start_byte,
+                                    (unsigned char)((length >> 24) & 0xFF),
+                                    (unsigned char)((length >> 16) & 0xFF),
+                                    (unsigned char)((length >> 8) & 0xFF),
+                                    (unsigned char)(length & 0xFF)};
+
+      bufferevent_write(bev, buf, HDR_LEN);
+      bufferevent_write(bev, &message.at(0), length);
+
+      event_base_dispatch(base);
+      return true;
+    }
     int cli_sock = socket(AF_INET, SOCK_STREAM, 0);
     unique_ptr<int, void (*)(int*)> cli_sock_closer(&cli_sock, close_socket);
 
@@ -527,21 +608,6 @@ void P2PComm::ProcessBroadCastMsg(bytes& message, const Peer& from) {
       m_dispatcher(raw_message);
     }
   }
-}
-
-void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
-  int fd = bufferevent_getfd(bufev);
-  struct sockaddr_in cli_addr {};
-  socklen_t addr_size = sizeof(struct sockaddr_in);
-  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
-  uint128_t ipAddr = cli_addr.sin_addr.s_addr;
-  {
-    std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
-    if (m_peerConnectionCount[ipAddr] > 0) {
-      m_peerConnectionCount[ipAddr]--;
-    }
-  }
-  bufferevent_free(bufev);
 }
 
 void P2PComm::ClearPeerConnectionCount() {
@@ -930,6 +996,30 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
     Blacklist::GetInstance().Add(from.m_ipAddress);
     bufferevent_free(bev);
   }
+  // Get the data stored in buffer
+  input = bufferevent_get_input(bev);
+  if (input == NULL) {
+    return;
+  }
+  len = evbuffer_get_length(input);
+  if (len == 0) {
+    return;
+  }
+
+  char* data;
+  data = new char[len];
+  data[len] = '\0';
+
+  if (evbuffer_copyout(input, (void*)data, len) !=
+      static_cast<ev_ssize_t>(len)) {
+    return;
+  }
+  if (evbuffer_drain(input, len) != 0) {
+    return;
+  }
+  LOG_GENERAL(INFO, "Chetan Received data:" << data);
+  bufferevent_write(bev, "Hello from server", 17);
+  bufferevent_free(bev);
 }
 
 void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
@@ -1079,6 +1169,7 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
 
 void P2PComm::EnableListener(uint32_t listen_port_host,
                              bool enable_listen_for_seed_node) {
+  LOG_MARKER();
   struct sockaddr_in serv_addr {};
   memset(&serv_addr, 0, sizeof(struct sockaddr_in));
   serv_addr.sin_family = AF_INET;
