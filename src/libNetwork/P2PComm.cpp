@@ -213,10 +213,9 @@ void CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   bufferevent_free(bufev);
 }
 
-void EventCb(struct bufferevent* bev, short events, [[gnu::unused]] void* ptr) {
+void EventCb([[gnu::unused]]struct bufferevent* bev, short events, [[gnu::unused]] void* ptr) {
   LOG_GENERAL(INFO, "EventCb");
   if (events & BEV_EVENT_CONNECTED) {
-    bufferevent_write(bev, "Hello from client", 17);
     LOG_GENERAL(INFO, "Chetan connected.Can perform read write here");
     /* We're connected to 127.0.0.1:8080.   Ordinarily we'd do
        something here, like start reading or writing. */
@@ -231,6 +230,10 @@ void ReadCb([[gnu::unused]] struct bufferevent* bev,
   LOG_GENERAL(INFO, "ReadCb");
   unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       socket_closer(bev, CloseAndFreeBufferEvent);
+}
+static void timeoutdummy([[gnu::unused]]evutil_socket_t fd, [[gnu::unused]]short what, [[gnu::unused]]void* args) {
+
+  LOG_GENERAL(INFO, "timeoutdummy");
 }
 
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
@@ -270,6 +273,7 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
         return -1;
       }
       uint32_t length = message.size();
+      LOG_GENERAL(INFO, "Length of msg="<<length);
 
       if (start_byte == START_BYTE_BROADCAST) {
         length += HASH_LEN;
@@ -286,6 +290,9 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
 
       bufferevent_write(bev, buf, HDR_LEN);
       bufferevent_write(bev, &message.at(0), length);
+      event* e = event_new(base, -1, EV_TIMEOUT | EV_PERSIST, timeoutdummy, NULL);
+  timeval twoSec = {2, 0};
+  event_add(e, &twoSec);
 
       event_base_dispatch(base);
       return true;
@@ -978,6 +985,7 @@ void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
 void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
                                   [[gnu::unused]] void* ctx) {
   LOG_GENERAL(INFO, "Chetan P2PComm::ReadCallbackForSeed()");
+  bufferevent_write(bev,"Hello from server",17);
 
   // Get the IP info
   int fd = bufferevent_getfd(bev);
