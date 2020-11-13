@@ -977,49 +977,158 @@ void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
 
 void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
                                   [[gnu::unused]] void* ctx) {
-  struct evbuffer* input = bufferevent_get_input(bev);
+  LOG_GENERAL(INFO, "Chetan P2PComm::ReadCallbackForSeed()");
 
-  size_t len = evbuffer_get_length(input);
-  LOG_GENERAL(INFO, "P2PComm::ReadCallbackForSeed() len:" << len);
-  if (len >= MAX_READ_WATERMARK_IN_BYTES) {
-    // Get the IP info
-    int fd = bufferevent_getfd(bev);
-    struct sockaddr_in cli_addr {};
-    socklen_t addr_size = sizeof(struct sockaddr_in);
-    getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
-    Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
-    LOG_GENERAL(WARNING, "[blacklist] Encountered data of size: "
-                             << len << " being received."
-                             << " Adding sending node "
-                             << from.GetPrintableIPAddress()
-                             << " as strictly blacklisted");
-    Blacklist::GetInstance().Add(from.m_ipAddress);
-    bufferevent_free(bev);
-  }
+  // Get the IP info
+  int fd = bufferevent_getfd(bev);
+  struct sockaddr_in cli_addr {};
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+  Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
+
   // Get the data stored in buffer
-  input = bufferevent_get_input(bev);
+  struct evbuffer* input = bufferevent_get_input(bev);
   if (input == NULL) {
+    LOG_GENERAL(WARNING, "bufferevent_get_input failure.");
     return;
   }
-  len = evbuffer_get_length(input);
+  size_t len = evbuffer_get_length(input);
+  LOG_GENERAL(INFO, "Chetan P2PComm::ReadCallbackForSeed() len:" << len);
   if (len == 0) {
+    LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
     return;
   }
-
-  char* data;
-  data = new char[len];
-  data[len] = '\0';
-
-  if (evbuffer_copyout(input, (void*)data, len) !=
+  bytes message(len);
+  if (evbuffer_copyout(input, message.data(), len) !=
       static_cast<ev_ssize_t>(len)) {
+    LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
     return;
   }
   if (evbuffer_drain(input, len) != 0) {
+    LOG_GENERAL(WARNING, "evbuffer_drain failure.");
     return;
   }
-  LOG_GENERAL(INFO, "Chetan Received data:" << data);
-  bufferevent_write(bev, "Hello from server", 17);
-  bufferevent_free(bev);
+
+  // Reception format:
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x11 - start byte
+  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of message
+  // <message>
+
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x22 - start byte (broadcast)
+  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of hash + message
+  // <32-byte hash> <message>
+
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x33 - start byte (gossip)
+  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of message
+  // 0x01 ~ 0x04 - Gossip_Message_Type
+  // <4-byte Age> <message>
+
+  // 0x01 ~ 0xFF - version, defined in constant file
+  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
+  // 0x33 - start byte (report)
+  // 0x00 0x00 0x00 0x01 - 4-byte length of message
+  // 0x00
+
+  // Check for minimum message size
+  if (message.size() <= HDR_LEN) {
+    LOG_GENERAL(WARNING, "Empty message received.");
+    return;
+  }
+
+  const unsigned char version = message[0];
+
+  // Check for version requirement
+  if (version != (unsigned char)(MSG_VERSION & 0xFF)) {
+    LOG_GENERAL(WARNING, "Header version wrong, received ["
+                             << version - 0x00 << "] while expected ["
+                             << MSG_VERSION << "].");
+    return;
+  }
+
+  const uint16_t chainId = (message[1] << 8) + message[2];
+  if (chainId != CHAIN_ID) {
+    LOG_GENERAL(WARNING, "Header chainid wrong, received ["
+                             << chainId << "] while expected [" << CHAIN_ID
+                             << "].");
+    return;
+  }
+
+  const unsigned char startByte = message[3];
+
+  const uint32_t messageLength =
+      (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
+
+  {
+    // Check for length consistency
+    uint32_t res;
+
+    if (!SafeMath<uint32_t>::sub(message.size(), HDR_LEN, res)) {
+      LOG_GENERAL(WARNING, "Unexpected subtraction operation!");
+      return;
+    }
+
+    if (messageLength != res) {
+      LOG_GENERAL(WARNING, "Incorrect message length.");
+      return;
+    }
+  }
+
+  if (startByte == START_BYTE_BROADCAST) {
+    LOG_PAYLOAD(INFO, "Incoming broadcast " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    if (messageLength <= HASH_LEN) {
+      LOG_GENERAL(WARNING,
+                  "Hash missing or empty broadcast message (messageLength = "
+                      << messageLength << ")");
+      return;
+    }
+
+    ProcessBroadCastMsg(message, from);
+  } else if (startByte == START_BYTE_NORMAL) {
+    LOG_PAYLOAD(INFO, "Incoming normal " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    // Move the shared_ptr message to raw pointer type
+    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
+        bytes(message.begin() + HDR_LEN, message.end()), from);
+
+    // Queue the message
+    m_dispatcher(raw_message);
+  } else if (startByte == START_BYTE_GOSSIP) {
+    // Check for the maximum gossiped-message size
+    if (message.size() >= MAX_GOSSIP_MSG_SIZE_IN_BYTES) {
+      LOG_GENERAL(WARNING,
+                  "Gossip message received [Size:"
+                      << message.size() << "] is unexpectedly large [ >"
+                      << MAX_GOSSIP_MSG_SIZE_IN_BYTES
+                      << " ]. Will be strictly blacklisting the sender");
+      Blacklist::GetInstance().Add(
+          from.m_ipAddress);  // so we dont spend cost sending any data to this
+                              // sender as well.
+      return;
+    }
+    if (messageLength <
+        GOSSIP_MSGTYPE_LEN + GOSSIP_ROUND_LEN + GOSSIP_SNDR_LISTNR_PORT_LEN) {
+      LOG_GENERAL(
+          WARNING,
+          "Gossip Msg Type and/or Gossip Round and/or SNDR LISTNR is missing "
+          "(messageLength = "
+              << messageLength << ")");
+      return;
+    }
+
+    ProcessGossipMsg(message, from);
+  } else {
+    // Unexpected start byte. Drop this message
+    LOG_GENERAL(WARNING, "Incorrect start byte.");
+  }
 }
 
 void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
@@ -1156,7 +1265,7 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
   auto funcCheckSendQueue = [this]() mutable -> void {
     SendJob* job = NULL;
     while (true) {
-      while (m_sendQueue.pop(job)) {
+      while (!m_sendQueue.empty() && m_sendQueue.pop(job)) {
         ProcessSendJob(job);
       }
       std::this_thread::sleep_for(std::chrono::microseconds(1));
