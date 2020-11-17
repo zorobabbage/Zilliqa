@@ -229,8 +229,8 @@ void EventCb([[gnu::unused]] struct bufferevent* bev, short events,
 void ReadCb([[gnu::unused]] struct bufferevent* bev,
             [[gnu::unused]] void* ctx) {
   LOG_GENERAL(INFO, "ReadCb");
-  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-      socket_closer(bev, CloseAndFreeBufferEvent);
+  // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+  //    socket_closer(bev, CloseAndFreeBufferEvent);
 }
 static void timeoutdummy([[gnu::unused]] evutil_socket_t fd,
                          [[gnu::unused]] short what,
@@ -258,6 +258,7 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
   }
 
   try {
+    /*
     if (start_byte == START_BYTE_SEED_TO_SEED) {
       struct event_base* base = event_base_new();
       struct bufferevent* bev =
@@ -270,7 +271,6 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
       serv_addr.sin_port = htons(peer.m_listenPortHost);
       if (bufferevent_socket_connect(bev, (struct sockaddr*)&serv_addr,
                                      sizeof(serv_addr)) < 0) {
-        /* Error starting connection */
         bufferevent_free(bev);
         return -1;
       }
@@ -300,6 +300,7 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
       event_base_dispatch(base);
       return true;
     }
+    */
     int cli_sock = socket(AF_INET, SOCK_STREAM, 0);
     unique_ptr<int, void (*)(int*)> cli_sock_closer(&cli_sock, close_socket);
 
@@ -788,6 +789,16 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
     }
 
     ProcessGossipMsg(message, from);
+  } else if (startByte == START_BYTE_SEED_TO_SEED) {
+    LOG_PAYLOAD(INFO, "Incoming seed to seed msg " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    // Move the shared_ptr message to raw pointer type
+    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
+        bytes(message.begin() + HDR_LEN, message.end()), from);
+
+    // Queue the message
+    m_dispatcher(raw_message);
   } else {
     // Unexpected start byte. Drop this message
     LOG_GENERAL(WARNING, "Incorrect start byte.");
@@ -797,8 +808,8 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
 void P2PComm::EventCallbackForSeed(struct bufferevent* bev, short events,
                                    [[gnu::unused]] void* ctx) {
   LOG_GENERAL(INFO, "Chetan P2PComm::EventCallbackForSeed()");
-  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-      socket_closer(bev, CloseAndFreeBufferEvent);
+  // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+  //    socket_closer(bev, CloseAndFreeBufferEvent);
 
   if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "Error from bufferevent.");
@@ -957,6 +968,16 @@ void P2PComm::EventCallbackForSeed(struct bufferevent* bev, short events,
     }
 
     ProcessGossipMsg(message, from);
+  } else if (startByte == START_BYTE_SEED_TO_SEED) {
+    LOG_PAYLOAD(INFO, "Incoming seed to seed msg " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    // Move the shared_ptr message to raw pointer type
+    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
+        bytes(message.begin() + HDR_LEN, message.end()), from);
+
+    // Queue the message
+    m_dispatcher(raw_message);
   } else {
     // Unexpected start byte. Drop this message
     LOG_GENERAL(WARNING, "Incorrect start byte.");
@@ -1136,6 +1157,16 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
     }
 
     ProcessGossipMsg(message, from);
+  } else if (startByte == START_BYTE_SEED_TO_SEED) {
+    LOG_PAYLOAD(INFO, "Incoming normal " << from, message,
+                Logger::MAX_BYTES_TO_DISPLAY);
+
+    // Move the shared_ptr message to raw pointer type
+    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
+        bytes(message.begin() + HDR_LEN, message.end()), from);
+
+    // Queue the message
+    m_dispatcher(raw_message);
   } else {
     // Unexpected start byte. Drop this message
     LOG_GENERAL(WARNING, "Incorrect start byte.");
@@ -1209,8 +1240,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
             ((struct sockaddr_in*)cli_addr)->sin_port);
 
-  LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallbackForSeed");
-  LOG_GENERAL(INFO, "Incoming message from " << from);
+  LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallbackForSeed from=" << from);
   if (Blacklist::GetInstance().Exist(from.m_ipAddress,
                                      false /* for incoming message */)) {
     LOG_GENERAL(INFO, "The node "
@@ -1338,6 +1368,15 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   event_base_free(base);
 }
 
+void P2PComm::EnableConnect() {
+  LOG_MARKER();
+  base = event_base_new();
+  event* e = event_new(base, -1, EV_TIMEOUT | EV_PERSIST, timeoutdummy, NULL);
+  timeval twoSec = {2, 0};
+  event_add(e, &twoSec);
+  event_base_dispatch(base);
+}
+
 void P2PComm::SendMessage(const vector<Peer>& peers, const bytes& message,
                           const unsigned char& startByteType) {
   // LOG_MARKER();
@@ -1389,7 +1428,42 @@ void P2PComm::SendMessage(const deque<Peer>& peers, const bytes& message,
 
 void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
-  // LOG_MARKER();
+  LOG_MARKER();
+  if (startByteType == START_BYTE_SEED_TO_SEED) {
+    struct bufferevent* bev =
+        bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
+    bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
+    bufferevent_enable(bev, EV_READ | EV_WRITE);
+    struct sockaddr_in serv_addr {};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = peer.m_ipAddress.convert_to<unsigned long>();
+    serv_addr.sin_port = htons(peer.m_listenPortHost);
+    if (bufferevent_socket_connect(bev, (struct sockaddr*)&serv_addr,
+                                   sizeof(serv_addr)) < 0) {
+      /* Error starting connection */
+      bufferevent_free(bev);
+      return;
+    }
+    uint32_t length = message.size();
+    LOG_GENERAL(INFO, "Length of msg=" << length);
+
+    if (startByteType == START_BYTE_BROADCAST) {
+      length += HASH_LEN;
+    }
+
+    unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
+                                  (unsigned char)((CHAIN_ID >> 8) & 0XFF),
+                                  (unsigned char)(CHAIN_ID & 0xFF),
+                                  startByteType,
+                                  (unsigned char)((length >> 24) & 0xFF),
+                                  (unsigned char)((length >> 16) & 0xFF),
+                                  (unsigned char)((length >> 8) & 0xFF),
+                                  (unsigned char)(length & 0xFF)};
+
+    bufferevent_write(bev, buf, HDR_LEN);
+    bufferevent_write(bev, &message.at(0), length);
+    return;
+  }
 
   // Make job
   SendJob* job = new SendJobPeer;
