@@ -86,6 +86,8 @@ class P2PComm {
 
   const static uint32_t MAXPUMPMESSAGE = 128;
 
+  struct event_base* base;
+
   void ClearBroadcastHashAsync(const bytes& message_hash);
 
   P2PComm();
@@ -163,6 +165,8 @@ class P2PComm {
 
   void EnableListener(uint32_t listen_port_host,
                       bool enable_listen_for_seed_node = false);
+  // start event loop
+  void EnableConnect();
 
   /// Multicasts message to specified list of peers.
   void SendMessage(const VectorOfPeer& peers, const bytes& message,
