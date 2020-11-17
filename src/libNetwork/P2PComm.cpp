@@ -33,6 +33,7 @@
 #include <cstring>
 #include <future>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "Blacklist.h"
@@ -61,6 +62,7 @@ const unsigned int GOSSIP_SNDR_LISTNR_PORT_LEN = 4;
 P2PComm::Dispatcher P2PComm::m_dispatcher;
 std::mutex P2PComm::m_mutexPeerConnectionCount;
 std::map<uint128_t, uint16_t> P2PComm::m_peerConnectionCount;
+std::map<std::string, struct bufferevent*> P2PComm::buffer_event_map;
 
 /// Comparison operator for ordering the list of message hashes.
 struct HashCompare {
@@ -213,8 +215,8 @@ void CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   bufferevent_free(bufev);
 }
 
-void EventCb([[gnu::unused]] struct bufferevent* bev, short events,
-             [[gnu::unused]] void* ptr) {
+void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
+                       [[gnu::unused]] void* ptr) {
   LOG_GENERAL(INFO, "EventCb");
   if (events & BEV_EVENT_CONNECTED) {
     LOG_GENERAL(INFO, "Chetan connected.Can perform read write here");
@@ -226,8 +228,8 @@ void EventCb([[gnu::unused]] struct bufferevent* bev, short events,
   }
 }
 
-void ReadCb([[gnu::unused]] struct bufferevent* bev,
-            [[gnu::unused]] void* ctx) {
+void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
+                      [[gnu::unused]] void* ctx) {
   LOG_GENERAL(INFO, "ReadCb");
   // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
   //    socket_closer(bev, CloseAndFreeBufferEvent);
@@ -1158,12 +1160,18 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
 
     ProcessGossipMsg(message, from);
   } else if (startByte == START_BYTE_SEED_TO_SEED) {
-    LOG_PAYLOAD(INFO, "Incoming normal " << from, message,
+    LOG_PAYLOAD(INFO, "Incoming normal from seed " << from, message,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
     pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
         bytes(message.begin() + HDR_LEN, message.end()), from);
+
+    string buf_key = from.GetPrintableIPAddress() + ":" +
+                     boost::lexical_cast<string>(from.GetListenPortHost());
+
+    // Add bufferevent to map
+    buffer_event_map[buf_key] = bev;
 
     // Queue the message
     m_dispatcher(raw_message);
