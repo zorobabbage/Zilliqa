@@ -117,8 +117,10 @@ class P2PComm {
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
   static void EventCallbackForSeed(struct bufferevent* bev, short events,
                                    void* ctx);
+  static void EventCb(struct bufferevent* bev, short events, void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);
   static void ReadCallbackForSeed(struct bufferevent* bev, void* ctx);
+  static void ReadCb(struct bufferevent* bev, void* ctx);
 
   static void AcceptConnectionCallback(evconnlistener* listener,
                                        evutil_socket_t cli_sock,
@@ -131,6 +133,7 @@ class P2PComm {
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
 
  public:
+  static std::map<std::string, struct bufferevent*> buffer_event_map;
   /// Returns the singleton P2PComm instance.
   static P2PComm& GetInstance();
 
