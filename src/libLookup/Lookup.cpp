@@ -1171,8 +1171,9 @@ bool Lookup::ProcessGetDSInfoFromSeed(const bytes& message, unsigned int offset,
   }
 
   uint128_t ipAddr = from.m_ipAddress;
-  Peer requestingNode(ipAddr, portNo);
-  P2PComm::GetInstance().SendMessage(requestingNode, dsInfoMessage);
+  Peer requestingNode(ipAddr, from.GetListenPortHost());
+  P2PComm::GetInstance().SendMessage(requestingNode, dsInfoMessage,
+                                     START_BYTE_SEED_TO_SEED_RESPONSE);
 
   return true;
 }
@@ -1199,7 +1200,8 @@ void Lookup::SendMessageToRandomL2lDataProvider(const bytes& message) const {
   Peer tmpPeer(resolved_ip,
                m_l2lDataProviders[index].second.GetListenPortHost());
   LOG_GENERAL(INFO, "Sending message to l2l: " << tmpPeer);
-  P2PComm::GetInstance().SendMessage(tmpPeer, message, START_BYTE_SEED_TO_SEED);
+  P2PComm::GetInstance().SendMessage(tmpPeer, message,
+                                     START_BYTE_SEED_TO_SEED_REQUEST);
 }
 
 void Lookup::SendMessageToRandomSeedNode(const bytes& message) const {
@@ -1899,8 +1901,9 @@ bool Lookup::ProcessGetTxBlockFromSeed(const bytes& message,
     return false;
   }
 
-  Peer requestingNode(from.m_ipAddress, portNo);
-  P2PComm::GetInstance().SendMessage(requestingNode, txBlockMessage);
+  Peer requestingNode(from.m_ipAddress, from.m_listenPortHost);
+  P2PComm::GetInstance().SendMessage(requestingNode, txBlockMessage,
+                                     START_BYTE_SEED_TO_SEED_RESPONSE);
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
             "Sent Txblks " << lowBlockNum << " - " << highBlockNum);
   return true;
@@ -2076,9 +2079,10 @@ bool Lookup::ProcessGetStateDeltasFromSeed(const bytes& message,
   }
 
   uint128_t ipAddr = from.m_ipAddress;
-  Peer requestingNode(ipAddr, portNo);
+  Peer requestingNode(ipAddr, from.m_listenPortHost);
   LOG_GENERAL(INFO, requestingNode);
-  P2PComm::GetInstance().SendMessage(requestingNode, stateDeltasMessage);
+  P2PComm::GetInstance().SendMessage(requestingNode, stateDeltasMessage,
+                                     START_BYTE_SEED_TO_SEED_RESPONSE);
   return true;
 }
 
@@ -2325,7 +2329,7 @@ bool Lookup::ProcessGetMicroBlockFromL2l(const bytes& message,
     return false;
   }
 
-  Peer requestingNode(from.m_ipAddress, portNo);
+  Peer requestingNode(from.m_ipAddress, from.m_listenPortHost);
   vector<MicroBlock> retMicroBlocks;
 
   for (const auto& mbhash : microBlockHashes) {
@@ -2363,7 +2367,8 @@ bool Lookup::ProcessGetMicroBlockFromL2l(const bytes& message,
     return false;
   }
 
-  P2PComm::GetInstance().SendMessage(requestingNode, retMsg);
+  P2PComm::GetInstance().SendMessage(requestingNode, retMsg,
+                                     START_BYTE_SEED_TO_SEED_RESPONSE);
   return true;
 }
 
@@ -4826,7 +4831,7 @@ bool Lookup::ProcessGetDirectoryBlocksFromSeed(const bytes& message,
   }
 
   uint128_t ipAddr = from.m_ipAddress;
-  Peer peer(ipAddr, portNo);
+  Peer peer(ipAddr, from.m_listenPortHost);
 
   if (!Messenger::SetLookupSetDirectoryBlocksFromSeed(
           msg, MessageOffset::BODY, SHARDINGSTRUCTURE_VERSION, dirBlocks,
@@ -4836,7 +4841,8 @@ bool Lookup::ProcessGetDirectoryBlocksFromSeed(const bytes& message,
     return false;
   }
 
-  P2PComm::GetInstance().SendMessage(peer, msg);
+  P2PComm::GetInstance().SendMessage(peer, msg,
+                                     START_BYTE_SEED_TO_SEED_RESPONSE);
 
   // Send minerInfo as a separate message since it is not critical information
   if (includeMinerInfo) {
