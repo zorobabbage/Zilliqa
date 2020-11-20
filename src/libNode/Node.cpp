@@ -1540,8 +1540,9 @@ bool Node::ProcessSubmitMissingTxn(const bytes& message, unsigned int offset,
   return true;
 }
 
-bool Node::ProcessSubmitTransaction(const bytes& message, unsigned int offset,
-                                    [[gnu::unused]] const Peer& from) {
+bool Node::ProcessSubmitTransaction(
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Node::ProcessSubmitTransaction not expected to be called "
@@ -1580,9 +1581,10 @@ bool Node::ProcessSubmitTransaction(const bytes& message, unsigned int offset,
   return true;
 }
 
-bool Node::ProcessTxnPacketFromLookup([[gnu::unused]] const bytes& message,
-                                      [[gnu::unused]] unsigned int offset,
-                                      [[gnu::unused]] const Peer& from) {
+bool Node::ProcessTxnPacketFromLookup(
+    [[gnu::unused]] const bytes& message, [[gnu::unused]] unsigned int offset,
+    [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (LOOKUP_NODE_MODE) {
@@ -1937,9 +1939,10 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
   return true;
 }
 
-bool Node::ProcessProposeGasPrice([[gnu::unused]] const bytes& message,
-                                  [[gnu::unused]] unsigned int offset,
-                                  [[gnu::unused]] const Peer& from) {
+bool Node::ProcessProposeGasPrice(
+    [[gnu::unused]] const bytes& message, [[gnu::unused]] unsigned int offset,
+    [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (LOOKUP_NODE_MODE) {
@@ -2309,9 +2312,9 @@ bool Node::WhitelistReqsValidator(const uint128_t& ipAddress) {
   return true;
 }
 
-bool Node::ProcessRemoveNodeFromBlacklist(const bytes& message,
-                                          unsigned int offset,
-                                          const Peer& from) {
+bool Node::ProcessRemoveNodeFromBlacklist(
+    const bytes& message, unsigned int offset, const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (!WhitelistReqsValidator(from.GetIpAddress())) {
@@ -2359,13 +2362,15 @@ bool Node::ProcessRemoveNodeFromBlacklist(const bytes& message,
 
 bool Node::NoOp([[gnu::unused]] const bytes& message,
                 [[gnu::unused]] unsigned int offset,
-                [[gnu::unused]] const Peer& from) {
+                [[gnu::unused]] const Peer& from,
+                [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
   return true;
 }
 
 bool Node::ProcessDoRejoin(const bytes& message, unsigned int offset,
-                           [[gnu::unused]] const Peer& from) {
+                           [[gnu::unused]] const Peer& from,
+                           [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Node::ProcessDoRejoin not expected to be called from "
@@ -2474,9 +2479,9 @@ bool Node::UpdateShardNodeIdentity() {
   return true;
 }
 
-bool Node::ProcessNewShardNodeNetworkInfo(const bytes& message,
-                                          unsigned int offset,
-                                          const Peer& from) {
+bool Node::ProcessNewShardNodeNetworkInfo(
+    const bytes& message, unsigned int offset, const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   uint64_t dsEpochNumber;
@@ -2646,9 +2651,9 @@ void Node::QueryLookupForDSGuardNetworkInfoUpdate() {
       queryLookupForDSGuardNetworkInfoUpdate);
 }
 
-bool Node::ProcessDSGuardNetworkInfoUpdate(const bytes& message,
-                                           unsigned int offset,
-                                           [[gnu::unused]] const Peer& from) {
+bool Node::ProcessDSGuardNetworkInfoUpdate(
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(
         WARNING,
@@ -2880,14 +2885,14 @@ bool Node::RecalculateMyShardId(bool& ipChanged) {
   return false;
 }
 
-bool Node::Execute(const bytes& message, unsigned int offset,
-                   const Peer& from) {
+bool Node::Execute(const bytes& message, unsigned int offset, const Peer& from,
+                   const unsigned char& startByte) {
   // LOG_MARKER();
 
   bool result = true;
 
-  typedef bool (Node::*InstructionHandler)(const bytes&, unsigned int,
-                                           const Peer&);
+  typedef bool (Node::*InstructionHandler)(
+      const bytes&, unsigned int, const Peer&, const unsigned char& startByte);
 
   InstructionHandler ins_handlers[] = {
       &Node::ProcessStartPoW,
@@ -2920,7 +2925,8 @@ bool Node::Execute(const bytes& message, unsigned int offset,
   }
 
   if (ins_byte < ins_handlers_count) {
-    result = (this->*ins_handlers[ins_byte])(message, offset + 1, from);
+    result =
+        (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
     if (!result) {
       // To-do: Error recovery
     }

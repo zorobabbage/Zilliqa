@@ -226,6 +226,7 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
   } else if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(INFO, "Chetan Error has occured");
     /* An error occured while connecting. */
+    bufferevent_free(bev);
   }
 }
 
@@ -351,8 +352,10 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_NORMAL));
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -386,8 +389,10 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     string buf_key = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
@@ -406,9 +411,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
 }
 static void timeoutdummy([[gnu::unused]] evutil_socket_t fd,
                          [[gnu::unused]] short what,
-                         [[gnu::unused]] void* args) {
-  LOG_GENERAL(INFO, "timeoutdummy");
-}
+                         [[gnu::unused]] void* args) {}
 
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
@@ -734,8 +737,10 @@ void P2PComm::ProcessBroadCastMsg(bytes& message, const Peer& from) {
                        << msgHashStr.substr(0, 6) << "] RECV");
 
   // Move the shared_ptr message to raw pointer type
-  pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-      bytes(message.begin() + HDR_LEN + HASH_LEN, message.end()), from);
+  pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+      new pair<bytes, std::pair<Peer, const unsigned char>>(
+          bytes(message.begin() + HDR_LEN + HASH_LEN, message.end()),
+          std::make_pair(from, START_BYTE_BROADCAST));
 
   // Queue the message
   m_dispatcher(raw_message);
@@ -771,7 +776,9 @@ void P2PComm::ProcessBroadCastMsg(bytes& message, const Peer& from) {
       bytes tmp(rumor_message.begin() + PUB_KEY_SIZE +
                     SIGNATURE_CHALLENGE_SIZE + SIGNATURE_RESPONSE_SIZE,
                 rumor_message.end());
-      std::pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(tmp, from);
+      std::pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+          new pair<bytes, std::pair<Peer, const unsigned char>>(
+              tmp, make_pair(from, START_BYTE_GOSSIP));
 
       LOG_GENERAL(INFO, "Rumor size: " << tmp.size());
 
@@ -782,8 +789,9 @@ void P2PComm::ProcessBroadCastMsg(bytes& message, const Peer& from) {
     auto resp = p2p.m_rumorManager.RumorReceived(
         (unsigned int)gossipMsgTyp, gossipMsgRound, rumor_message, from);
     if (resp.first) {
-      std::pair<bytes, Peer>* raw_message =
-          new pair<bytes, Peer>(resp.second, from);
+      std::pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+          new pair<bytes, std::pair<Peer, const unsigned char>>(
+              resp.second, make_pair(from, START_BYTE_GOSSIP));
 
       LOG_GENERAL(INFO, "Rumor size: " << rumor_message.size());
 
@@ -932,8 +940,10 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_NORMAL));
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -966,8 +976,10 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -1111,8 +1123,10 @@ void P2PComm::EventCallbackForSeed(struct bufferevent* bev, short events,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_NORMAL));
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -1145,8 +1159,10 @@ void P2PComm::EventCallbackForSeed(struct bufferevent* bev, short events,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -1299,8 +1315,10 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, std::pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_NORMAL));
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -1333,8 +1351,10 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
-    pair<bytes, Peer>* raw_message = new pair<bytes, Peer>(
-        bytes(message.begin() + HDR_LEN, message.end()), from);
+    pair<bytes, pair<Peer, const unsigned char>>* raw_message =
+        new pair<bytes, pair<Peer, const unsigned char>>(
+            bytes(message.begin() + HDR_LEN, message.end()),
+            std::make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     string buf_key = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
@@ -1658,8 +1678,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
 
       bufferevent_write(it->second, buf, HDR_LEN);
       bufferevent_write(it->second, &message.at(0), length);
-      return;
     }
+    return;
   }
 
   // Make job

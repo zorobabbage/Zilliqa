@@ -25,14 +25,16 @@
 using namespace std;
 chrono::high_resolution_clock::time_point startTime;
 
-void process_message(pair<bytes, Peer>* message) {
+void process_message(
+    pair<bytes, std::pair<Peer, const unsigned char>>* message) {
   LOG_MARKER();
 
   if (message->first.size() < 10) {
     LOG_GENERAL(INFO, "Received message '"
                           << (char*)&message->first.at(0) << "' at port "
-                          << message->second.m_listenPortHost
-                          << " from address " << message->second.m_ipAddress);
+                          << message->second.first.m_listenPortHost
+                          << " from address "
+                          << message->second.first.m_ipAddress);
   } else {
     chrono::duration<double, std::milli> time_span =
         chrono::high_resolution_clock::now() - startTime;
