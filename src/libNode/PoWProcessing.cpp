@@ -480,7 +480,8 @@ LOG_EPOCH(INFO,m_mediator.m_currentEpochNum,
 }
 
 bool Node::ProcessStartPoW(const bytes& message, unsigned int offset,
-                           [[gnu::unused]] const Peer& from) {
+                           [[gnu::unused]] const Peer& from,
+                           [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Node::ProcessStartPoW not expected to be called from "

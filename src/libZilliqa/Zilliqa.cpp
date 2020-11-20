@@ -79,7 +79,8 @@ void Zilliqa::LogSelfNodeInfo(const PairOfKey& key, const Peer& peer) {
          MessageTypeInstructionStrings[msgType][instruction];
 }
 
-void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
+void Zilliqa::ProcessMessage(
+    pair<bytes, pair<Peer, const unsigned char>>* message) {
   LOG_GENERAL(INFO, "Chetan Zilliqa::ProcessMessage()");
   if (message->first.size() >= MessageOffset::BODY) {
     const unsigned char msg_type = message->first.at(MessageOffset::TYPE);
@@ -108,7 +109,8 @@ void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
       LOG_GENERAL(INFO, "Chetan calling Execute on msg handler msg_type:"
                             << static_cast<unsigned>(msg_type));
       bool result = msg_handlers[msg_type]->Execute(
-          message->first, MessageOffset::INST, message->second);
+          message->first, MessageOffset::INST, message->second.first,
+          message->second.second);
 
       if (ENABLE_CHECK_PERFORMANCE_LOG) {
         auto tpNow = std::chrono::high_resolution_clock::now();
@@ -152,7 +154,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
   // Launch the thread that reads messages from the queue
   auto funcCheckMsgQueue = [this]() mutable -> void {
-    pair<bytes, Peer>* message = NULL;
+    pair<bytes, std::pair<Peer, const unsigned char>>* message = NULL;
     LOG_GENERAL(INFO,
                 "Chetan funcCheckMsgQueue threadid =" << Logger::GetPid());
     while (true) {
@@ -486,7 +488,8 @@ Zilliqa::~Zilliqa() {
   }
 }
 
-void Zilliqa::Dispatch(pair<bytes, Peer>* message) {
+void Zilliqa::Dispatch(
+    pair<bytes, std::pair<Peer, const unsigned char>>* message) {
   LOG_MARKER();
 
   // Queue message
