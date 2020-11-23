@@ -5215,6 +5215,8 @@ void Lookup::ComposeAndSendGetCosigsRewardsFromSeed(const uint64_t& block_num) {
 bool Lookup::Execute(const bytes& message, unsigned int offset,
                      const Peer& from, const unsigned char& startByte) {
   LOG_MARKER();
+  LOG_GENERAL(INFO, "Chetan Lookup::Execute msg_type:"
+                        << static_cast<unsigned>(startByte));
 
   bool result = true;
 
