@@ -106,8 +106,9 @@ void Zilliqa::ProcessMessage(
           INFO, MessageSizeKeyword << msgName << " " << message->first.size());
 
       tpStart = std::chrono::high_resolution_clock::now();
-      LOG_GENERAL(INFO, "Chetan calling Execute on msg handler msg_type:"
-                            << static_cast<unsigned>(msg_type));
+      LOG_GENERAL(INFO, "Chetan calling Execute on msg handler msg_type="
+                            << static_cast<unsigned>(msg_type) << " startByte="
+                            << static_cast<unsigned>(message->second.second));
       bool result = msg_handlers[msg_type]->Execute(
           message->first, MessageOffset::INST, message->second.first,
           message->second.second);

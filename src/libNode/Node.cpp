@@ -2887,7 +2887,9 @@ bool Node::RecalculateMyShardId(bool& ipChanged) {
 
 bool Node::Execute(const bytes& message, unsigned int offset, const Peer& from,
                    const unsigned char& startByte) {
-  // LOG_MARKER();
+  LOG_MARKER();
+  LOG_GENERAL(INFO, "Chetan Node::Execute msg_type:"
+                        << static_cast<unsigned>(startByte));
 
   bool result = true;
 
