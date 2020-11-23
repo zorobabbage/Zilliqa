@@ -548,7 +548,7 @@ class Node : public Executable {
 
   /// Implements the Execute function inherited from Executable.
   bool Execute(const bytes& message, unsigned int offset, const Peer& from,
-               const unsigned char& startType);
+               const unsigned char& startByte);
 
   Mediator& GetMediator() { return m_mediator; }
 

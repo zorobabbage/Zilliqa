@@ -469,7 +469,7 @@ class Lookup : public Executable {
   void FindMissingMBsForLastNTxBlks(const uint32_t& num);
 
   bool Execute(const bytes& message, unsigned int offset, const Peer& from,
-               const unsigned char& startType);
+               const unsigned char& startByte);
 
   inline SyncType GetSyncType() const { return m_syncType.load(); }
   void SetSyncType(SyncType syncType);

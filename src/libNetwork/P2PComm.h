@@ -118,7 +118,7 @@ class P2PComm {
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
   static void EventCallbackForSeed(struct bufferevent* bev, short events,
                                    void* ctx);
-  static void EventCb(struct bufferevent* bev, short events, void* ctx);
+  static void EventCb([[gnu::unused]]struct bufferevent* bev, short events, void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);
   static void ReadCallbackForSeed(struct bufferevent* bev, void* ctx);
   static void ReadCb(struct bufferevent* bev, void* ctx);
