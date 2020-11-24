@@ -222,15 +222,13 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
   } else if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
-    bufferevent_free(bev);
+    CloseAndFreeBufferEvent(bev);
   } else if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
   } else if (events & BEV_EVENT_WRITING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
   } else if (events & BEV_EVENT_EOF) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_EOF");
-  } else if (events & BEV_EVENT_ERROR) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_ERROR");
   } else if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
   }
@@ -1012,14 +1010,13 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
   } else if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
+    CloseAndFreeBufferEvent(bev);
   } else if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
   } else if (events & BEV_EVENT_WRITING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
   } else if (events & BEV_EVENT_EOF) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_EOF");
-  } else if (events & BEV_EVENT_ERROR) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_ERROR");
   } else if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
   }
@@ -1497,7 +1494,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       return;
     }
     uint32_t length = message.size();
-    LOG_GENERAL(INFO, "Length of msg=" << length);
+    LOG_GENERAL(INFO, "Chetan request length of msg=" << length);
 
     if (startByteType == START_BYTE_BROADCAST) {
       length += HASH_LEN;
@@ -1517,7 +1514,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     return;
   } else if (startByteType == START_BYTE_SEED_TO_SEED_RESPONSE) {
     uint32_t length = message.size();
-    LOG_GENERAL(INFO, "Chetan Response length of msg=" << length);
+    LOG_GENERAL(INFO, "Chetan response length of msg=" << length);
     if (startByteType == START_BYTE_BROADCAST) {
       length += HASH_LEN;
     }
@@ -1526,6 +1523,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     LOG_GENERAL(INFO, "Chetan key of outgoing msg=" << buf_key);
     auto it = buffer_event_map.find(buf_key);
     if (it != buffer_event_map.end()) {
+      unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+          socket_closer(it->second, CloseAndFreeBufferEvent);
       LOG_GENERAL(INFO, "Chetan sending on the same socket");
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
                                     (unsigned char)((CHAIN_ID >> 8) & 0XFF),
@@ -1538,7 +1537,6 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
 
       bufferevent_write(it->second, buf, HDR_LEN);
       bufferevent_write(it->second, &message.at(0), length);
-      // bufferevent_free(it ->second);
     }
     return;
   }
