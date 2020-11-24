@@ -215,7 +215,6 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
 
 void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
                        [[gnu::unused]] void* ptr) {
-  LOG_GENERAL(INFO, "EventCb events=" << events);
   // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
   //    socket_closer(bev, CloseAndFreeBufferEvent);
   if (events & BEV_EVENT_CONNECTED) {
@@ -1537,6 +1536,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
 
       bufferevent_write(it->second, buf, HDR_LEN);
       bufferevent_write(it->second, &message.at(0), length);
+      buffer_event_map.erase(buf_key);
     }
     return;
   }
