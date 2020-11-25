@@ -116,7 +116,8 @@ void Lookup::InitSync() {
     // Send whitelist request to seeds, in case it was blacklisted if was
     // restarted.
     if (m_mediator.m_node->ComposeAndSendRemoveNodeFromBlacklist(
-            Node::LOOKUP)) {
+            (!MULTIPLIER_SYNC_MODE && ARCHIVAL_LOOKUP) ? Node::SEEDPUB
+                                                       : Node::LOOKUP)) {
       this_thread::sleep_for(
           chrono::seconds(REMOVENODEFROMBLACKLIST_DELAY_IN_SECONDS));
     }

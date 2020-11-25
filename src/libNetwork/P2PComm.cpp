@@ -88,6 +88,7 @@ static bool comparePairSecond(
 }
 
 P2PComm::P2PComm() : m_sendQueue(SENDQUEUE_SIZE) {
+  base = NULL;
   auto func = [this]() -> void {
     bytes emptyHash;
 
@@ -208,6 +209,7 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
+    LOG_GENERAL(INFO, "Chetan reducing count ipaddr="<<ipAddr<< "m_peerConnectionCount="<< m_peerConnectionCount[ipAddr]);
     }
   }
   bufferevent_free(bufev);
@@ -816,6 +818,7 @@ void P2PComm::ProcessBroadCastMsg(bytes& message, const Peer& from) {
 void P2PComm::ClearPeerConnectionCount() {
   std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
   m_peerConnectionCount.clear();
+  LOG_GENERAL(INFO, "Chetan Clearing m_peerConnectionCount map");
 }
 
 void P2PComm::EventCallback(struct bufferevent* bev, short events,
@@ -1251,6 +1254,7 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
       return;
     }
     m_peerConnectionCount[from.GetIpAddress()]++;
+    LOG_GENERAL(INFO, "Chetan m_peerConnectionCount="<< m_peerConnectionCount[from.GetIpAddress()]);
   }
 
   // Set up buffer event for this new connection
@@ -1309,6 +1313,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
       return;
     }
     m_peerConnectionCount[from.GetIpAddress()]++;
+    LOG_GENERAL(INFO, "Chetan m_peerConnectionCount="<< m_peerConnectionCount[from.GetIpAddress()]);
   }
 
   // Set up buffer event for this new connection
