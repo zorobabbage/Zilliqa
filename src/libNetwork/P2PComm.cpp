@@ -216,7 +216,7 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
 }
 
 void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
-                       [[gnu::unused]] void* ptr) {
+                       [[gnu::unused]] void* ctx) {
   // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
   //    socket_closer(bev, CloseAndFreeBufferEvent);
   if (events & BEV_EVENT_CONNECTED) {
