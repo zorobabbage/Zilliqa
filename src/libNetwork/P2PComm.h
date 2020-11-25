@@ -87,7 +87,7 @@ class P2PComm {
 
   const static uint32_t MAXPUMPMESSAGE = 128;
 
-  struct event_base* base;
+  struct event_base* base{};
 
   void ClearBroadcastHashAsync(const bytes& message_hash);
 
@@ -117,7 +117,7 @@ class P2PComm {
 
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
   static void EventCallbackForSeed(struct bufferevent* bev, short events,
-                                   void* ctx);
+                                   [[gnu::unused]] void* ctx);
   static void EventCb([[gnu::unused]] struct bufferevent* bev, short events,
                       void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);

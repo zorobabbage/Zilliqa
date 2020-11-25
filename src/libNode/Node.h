@@ -411,7 +411,7 @@ class Node : public Executable {
     SYNC
   };
 
-  enum RECEIVERTYPE : unsigned char { LOOKUP = 0x00, PEER, BOTH };
+  enum RECEIVERTYPE : unsigned char { LOOKUP = 0x00, PEER, BOTH, SEEDPUB };
 
   // Proposed gas price
   uint128_t m_proposedGasPrice;
