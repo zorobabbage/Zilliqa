@@ -210,7 +210,7 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
       LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
-                            << ipAddr << "m_peerConnectionCount="
+                            << ipAddr << " m_peerConnectionCount="
                             << m_peerConnectionCount[ipAddr]);
     }
   }
@@ -1390,16 +1390,17 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
     // fixme: should we exit here?
     return;
   }
-  struct evconnlistener* listener = evconnlistener_new_bind(
+  struct evconnlistener* listener1 = evconnlistener_new_bind(
       base, AcceptConnectionCallback, nullptr,
       LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
       (struct sockaddr*)&serv_addr, sizeof(struct sockaddr_in));
-  if (listener == NULL) {
+  if (listener1 == NULL) {
     LOG_GENERAL(WARNING, "evconnlistener_new_bind failure.");
     event_base_free(base);
     // fixme: should we exit here?
     return;
   }
+  struct evconnlistener* listener2 = NULL;
   if (enable_listen_for_seed_node) {
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
@@ -1408,12 +1409,12 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     LOG_GENERAL(INFO,
                 "Chetan listen_port_host for seed=" << listen_port_host + 2);
-    struct evconnlistener* listener = evconnlistener_new_bind(
+    struct evconnlistener* listener2 = evconnlistener_new_bind(
         base, AcceptConnectionCallbackForSeed, nullptr,
         LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
         (struct sockaddr*)&serv_addr, sizeof(struct sockaddr_in));
 
-    if (listener == NULL) {
+    if (listener2 == NULL) {
       LOG_GENERAL(WARNING, "evconnlistener_new_bind failure.");
       event_base_free(base);
       // fixme: should we exit here?
@@ -1421,7 +1422,8 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
     }
   }
   event_base_dispatch(base);
-  evconnlistener_free(listener);
+  evconnlistener_free(listener1);
+  evconnlistener_free(listener2);
   event_base_free(base);
 }
 
@@ -1488,8 +1490,11 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
     struct bufferevent* bev = bufferevent_socket_new(
-        base, -1,
-        BEV_OPT_THREADSAFE | BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
+        base, -1, BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
+    if (bev == NULL) {
+      LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
+      return;
+    }
     bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
     struct sockaddr_in serv_addr {};

@@ -4845,6 +4845,8 @@ bool Lookup::ToBlockMessage(unsigned char ins_byte) {
                 "other than the LookUp node.");
     return true;
   }
+  LOG_GENERAL(INFO, "Chetan ToBlockMessage ins_byte="
+                        << ins_byte << " m_syncType=" << m_syncType);
 
   return m_syncType != SyncType::NO_SYNC &&
          (ins_byte != LookupInstructionType::SETDSBLOCKFROMSEED &&
