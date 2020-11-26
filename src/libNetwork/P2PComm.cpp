@@ -1332,7 +1332,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   }
 
   struct bufferevent* bev = bufferevent_socket_new(
-      base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+      base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
   if (bev == NULL) {
     LOG_GENERAL(WARNING, "bufferevent_socket_new failure.");
 
@@ -1343,6 +1343,8 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   }
 
   bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
+                           MAX_READ_WATERMARK_IN_BYTES);
+  bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
   bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
   bufferevent_enable(bev, EV_READ | EV_WRITE);
@@ -1384,7 +1386,7 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   serv_addr.sin_addr.s_addr = INADDR_ANY;
   LOG_GENERAL(INFO, "Chetan listen_port_host=" << listen_port_host);
   // Create the listener
-  struct event_base* base = event_base_new();
+  base = event_base_new();
   if (base == NULL) {
     LOG_GENERAL(WARNING, "event_base_new failure.");
     // fixme: should we exit here?
@@ -1490,11 +1492,15 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
     struct bufferevent* bev = bufferevent_socket_new(
-        base, -1, BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
+        base, -1, BEV_OPT_THREADSAFE | BEV_OPT_CLOSE_ON_FREE);
     if (bev == NULL) {
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
     }
+    bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
+                             MAX_READ_WATERMARK_IN_BYTES);
+    bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
+                             MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
     struct sockaddr_in serv_addr {};
@@ -1523,8 +1529,14 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                   (unsigned char)((length >> 8) & 0xFF),
                                   (unsigned char)(length & 0xFF)};
 
-    bufferevent_write(bev, buf, HDR_LEN);
-    bufferevent_write(bev, &message.at(0), length);
+    if (bufferevent_write(bev, buf, HDR_LEN) < 0) {
+      LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+      return;
+    }
+    if (bufferevent_write(bev, &message.at(0), length) < 0) {
+      LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+      return;
+    }
     return;
   } else if (startByteType == START_BYTE_SEED_TO_SEED_RESPONSE) {
     uint32_t length = message.size();
@@ -1549,9 +1561,15 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                     (unsigned char)((length >> 8) & 0xFF),
                                     (unsigned char)(length & 0xFF)};
 
-      bufferevent_write(it->second, buf, HDR_LEN);
-      bufferevent_write(it->second, &message.at(0), length);
-      buffer_event_map.erase(buf_key);
+      if (bufferevent_write(it->second, buf, HDR_LEN) < 0) {
+        LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+        return;
+      }
+      if (bufferevent_write(it->second, &message.at(0), length) < 0) {
+        LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+        return;
+      }
+      // buffer_event_map.erase(buf_key);
     }
     return;
   }
