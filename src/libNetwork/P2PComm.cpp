@@ -1549,8 +1549,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     LOG_GENERAL(INFO, "Chetan key of outgoing msg=" << buf_key);
     auto it = buffer_event_map.find(buf_key);
     if (it != buffer_event_map.end()) {
-      unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-          socket_closer(it->second, CloseAndFreeBufferEvent);
+      //unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+      //    socket_closer(it->second, CloseAndFreeBufferEvent);
       LOG_GENERAL(INFO, "Chetan sending on the same socket");
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
                                     (unsigned char)((CHAIN_ID >> 8) & 0XFF),
