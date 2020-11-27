@@ -1018,6 +1018,7 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
     CloseAndFreeBufferEvent(bev);
   } else if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
+    CloseAndFreeBufferEvent(bev);
   } else if (events & BEV_EVENT_WRITING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
   } else if (events & BEV_EVENT_EOF) {
