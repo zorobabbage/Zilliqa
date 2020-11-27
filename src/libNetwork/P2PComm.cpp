@@ -1487,6 +1487,17 @@ void P2PComm::SendMessage(const deque<Peer>& peers, const bytes& message,
   }
 }
 
+void P2PComm::CleanupBufferEvent(const Peer& peer) {
+  LOG_MARKER();
+  string buf_key = peer.GetPrintableIPAddress() + ":" +
+                   boost::lexical_cast<string>(peer.GetListenPortHost());
+  LOG_GENERAL(INFO, "Chetan Perform cleanup on empty msg" << buf_key);
+  auto it = buffer_event_map.find(buf_key);
+  if (it != buffer_event_map.end()) {
+    CloseAndFreeBufferEvent(it->second);
+  }
+}
+
 void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
   LOG_MARKER();
