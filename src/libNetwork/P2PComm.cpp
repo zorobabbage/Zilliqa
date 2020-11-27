@@ -219,6 +219,7 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
 
 void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
                        [[gnu::unused]] void* ctx) {
+  LOG_MARKER();
   // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
   //    socket_closer(bev, CloseAndFreeBufferEvent);
   if (events & BEV_EVENT_CONNECTED) {
@@ -234,13 +235,13 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_EOF");
   } else if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
+  } else {
+    LOG_GENERAL(INFO, "Chetan investiage the event, events=" << events);
   }
 }
 
 void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
                       [[gnu::unused]] void* ctx) {
-  LOG_GENERAL(INFO, "ReadCb");
-  LOG_GENERAL(INFO, "Chetan P2PComm::ReadCb()");
   unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       socket_closer(bev, CloseAndFreeBufferEvent);
 
@@ -250,7 +251,6 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
-  LOG_GENERAL(INFO, "Chetan ReadCb from=" << from);
 
   // Get the data stored in buffer
   struct evbuffer* input = bufferevent_get_input(bev);
@@ -425,6 +425,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(WARNING, "Incorrect start byte.");
   }
 }
+
 static void timeoutdummy([[gnu::unused]] evutil_socket_t fd,
                          [[gnu::unused]] short what,
                          [[gnu::unused]] void* args) {}
@@ -1050,8 +1051,6 @@ void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
 
 void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
                                   [[gnu::unused]] void* ctx) {
-  LOG_GENERAL(INFO, "Chetan P2PComm::ReadCallbackForSeed()");
-
   // Get the IP info
   int fd = bufferevent_getfd(bev);
   struct sockaddr_in cli_addr {};
@@ -1067,7 +1066,6 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
     return;
   }
   size_t len = evbuffer_get_length(input);
-  LOG_GENERAL(INFO, "Chetan P2PComm::ReadCallbackForSeed() len:" << len);
   if (len == 0) {
     LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
     return;
@@ -1202,7 +1200,7 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
 
     ProcessGossipMsg(message, from);
   } else if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
-    LOG_PAYLOAD(INFO, "Incoming normal from seed " << from, message,
+    LOG_PAYLOAD(INFO, "Incoming request from ext seed " << from, message,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
@@ -1213,7 +1211,8 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
 
     string buf_key = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
-    LOG_GENERAL(INFO, "Chetan key of incoming msg=" << buf_key);
+    LOG_GENERAL(INFO,
+                "Chetan key of incoming msg=" << buf_key << " msg len=" << len);
 
     // Add bufferevent to map
     buffer_event_map[buf_key] = bev;
@@ -1295,7 +1294,6 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
             ((struct sockaddr_in*)cli_addr)->sin_port);
 
-  LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallbackForSeed from=" << from);
   if (Blacklist::GetInstance().Exist(from.m_ipAddress,
                                      false /* for incoming message */)) {
     LOG_GENERAL(INFO, "The node "
@@ -1309,6 +1307,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   }
 
   {
+    LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallbackForSeed from=" << from);
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[from.GetIpAddress()] > MAX_PEER_CONNECTION) {
       LOG_GENERAL(WARNING, "Connection ignored from " << from);
@@ -1549,7 +1548,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     LOG_GENERAL(INFO, "Chetan key of outgoing msg=" << buf_key);
     auto it = buffer_event_map.find(buf_key);
     if (it != buffer_event_map.end()) {
-      //unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+      // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       //    socket_closer(it->second, CloseAndFreeBufferEvent);
       LOG_GENERAL(INFO, "Chetan sending on the same socket");
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
