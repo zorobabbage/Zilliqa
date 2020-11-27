@@ -1331,8 +1331,8 @@ void P2PComm::AcceptConnectionCallbackForSeed(
     return;
   }
 
-  struct bufferevent* bev = bufferevent_socket_new(
-      base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
+  struct bufferevent* bev =
+      bufferevent_socket_new(base, cli_sock, BEV_OPT_CLOSE_ON_FREE);
   if (bev == NULL) {
     LOG_GENERAL(WARNING, "bufferevent_socket_new failure.");
 
@@ -1491,8 +1491,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
-    struct bufferevent* bev = bufferevent_socket_new(
-        base, -1, BEV_OPT_THREADSAFE | BEV_OPT_CLOSE_ON_FREE);
+    struct bufferevent* bev =
+        bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
     if (bev == NULL) {
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
