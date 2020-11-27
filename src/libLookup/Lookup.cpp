@@ -1394,7 +1394,7 @@ bool Lookup::ProcessGetVCFinalBlockFromL2l(
         ComposeAndStoreVCFinalBlockMessage(blockNum);
       } else {
         // Have not received FB yet.
-        return true;
+        return false;
       }
     }
 
