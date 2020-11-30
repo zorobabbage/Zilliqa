@@ -125,10 +125,12 @@ void Zilliqa::ProcessMessage(
       if (!result) {
         // To-do: Error recovery
         if (message->second.second == START_BYTE_SEED_TO_SEED_REQUEST) {
-          LOG_GENERAL(INFO, "Chetan, clearing buffer event for non response case")
+          LOG_GENERAL(INFO,
+                      "Chetan, clearing buffer event for non response case")
           Peer requestorPeer(message->second.first.GetIpAddress(),
                              message->second.first.GetListenPortHost());
-          P2PComm::GetInstance().RemoveBufferEventAndConnectionCount(requestorPeer);
+          P2PComm::GetInstance().RemoveBufferEventAndConnectionCount(
+              requestorPeer);
         }
       }
     } else {
