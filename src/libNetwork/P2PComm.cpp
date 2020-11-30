@@ -947,19 +947,18 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
   } else if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
+    if (bev != NULL) {
     LOG_GENERAL(INFO,
                 "Chetan bufferevent_free() ip=" << strAdd << " port=" << port);
-    if (bev != NULL) {
       bufferevent_free(bev);
     }
   } else if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
+    if (bev != NULL) {
     LOG_GENERAL(INFO,
                 "Chetan bufferevent_free() ip=" << strAdd << " port=" << port);
-    if (bev != NULL) {
       bufferevent_free(bev);
     }
-  } else if (events & BEV_EVENT_READING) {
   } else if (events & BEV_EVENT_WRITING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
   } else if (events & BEV_EVENT_EOF) {
@@ -1438,7 +1437,7 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   if (it != buffer_event_map.end()) {
     LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
     if (it->second != NULL) {
-      bufferevent_free(it->second);
+      //bufferevent_free(it->second);
     }
     uint128_t ipAddr = peer.GetIpAddress();
     {
