@@ -1010,15 +1010,24 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
 void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
                                    short events, [[gnu::unused]] void* ctx) {
   LOG_GENERAL(INFO, "Chetan P2PComm::EventCallbackForSeed() events=" << events);
-
+  int fd = bufferevent_getfd(bev);
+  struct sockaddr_in cli_addr {};
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+  char* strAdd = inet_ntoa(cli_addr.sin_addr);
+  int port = cli_addr.sin_port;
   if (events & BEV_EVENT_CONNECTED) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
   } else if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
-    CloseAndFreeBufferEvent(bev);
+    LOG_GENERAL(INFO,
+                "Chetan bufferevent_free() ip=" << strAdd << " port=" << port);
+    bufferevent_free(bev);
   } else if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
-    CloseAndFreeBufferEvent(bev);
+    LOG_GENERAL(INFO,
+                "Chetan bufferevent_free() ip=" << strAdd << " port=" << port);
+    bufferevent_free(bev);
   } else if (events & BEV_EVENT_WRITING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
   } else if (events & BEV_EVENT_EOF) {
@@ -1487,14 +1496,17 @@ void P2PComm::SendMessage(const deque<Peer>& peers, const bytes& message,
   }
 }
 
-void P2PComm::CleanupBufferEvent(const Peer& peer) {
-  LOG_MARKER();
-  string buf_key = peer.GetPrintableIPAddress() + ":" +
-                   boost::lexical_cast<string>(peer.GetListenPortHost());
-  LOG_GENERAL(INFO, "Chetan Perform cleanup on empty msg" << buf_key);
-  auto it = buffer_event_map.find(buf_key);
-  if (it != buffer_event_map.end()) {
-    CloseAndFreeBufferEvent(it->second);
+void P2PComm::ReducePeerConnectionCount(const Peer& peer) {
+  LOG_GENERAL(INFO, "Chetan ReducePeerConnectionCount()=" << peer);
+  uint128_t ipAddr = peer.GetIpAddress();
+  {
+    std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
+    if (m_peerConnectionCount[ipAddr] > 0) {
+      m_peerConnectionCount[ipAddr]--;
+      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
+                            << ipAddr << " m_peerConnectionCount="
+                            << m_peerConnectionCount[ipAddr]);
+    }
   }
 }
 
