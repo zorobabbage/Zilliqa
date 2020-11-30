@@ -1311,7 +1311,7 @@ bool Lookup::ProcessGetDSBlockFromL2l(
         ComposeAndStoreVCDSBlockMessage(blockNum);
       } else {
         // Have not received DS Block yet.
-        return true;
+        return false;
       }
     }
 
@@ -1325,10 +1325,11 @@ bool Lookup::ProcessGetDSBlockFromL2l(
       LOG_GENERAL(INFO, "Sending VCDSBlock msg to " << requestorPeer);
       P2PComm::GetInstance().SendMessage(requestorPeer, it->second,
                                          startByteResponse);
+      return true;
     }
   }
 
-  return true;
+  return false;
 }
 
 bool Lookup::ProcessGetVCFinalBlockFromL2l(
@@ -1339,7 +1340,7 @@ bool Lookup::ProcessGetVCFinalBlockFromL2l(
         WARNING,
         "Lookup::ProcessGetVCFinalBlockFromL2l not expected to be called "
         "from other than the LookUp node.");
-    return true;
+    return false;
   }
 
   LOG_MARKER();
@@ -1394,7 +1395,7 @@ bool Lookup::ProcessGetVCFinalBlockFromL2l(
         ComposeAndStoreVCFinalBlockMessage(blockNum);
       } else {
         // Have not received FB yet.
-        return true;
+        return false;
       }
     }
 
@@ -1408,10 +1409,11 @@ bool Lookup::ProcessGetVCFinalBlockFromL2l(
       LOG_GENERAL(INFO, "Sending VCFinalBlock msg to " << requestorPeer);
       P2PComm::GetInstance().SendMessage(requestorPeer, it->second,
                                          startByteResponse);
+      return true;
     }
   }
 
-  return true;
+  return false;
 }
 
 bool Lookup::ProcessGetMBnForwardTxnFromL2l(
@@ -1489,7 +1491,7 @@ bool Lookup::ProcessGetMBnForwardTxnFromL2l(
     this_thread::sleep_for(chrono::seconds(2));
   }
 
-  return true;
+  return false;
 }
 
 bool Lookup::ComposeAndStoreMBnForwardTxnMessage(const uint64_t& blockNum) {
@@ -1663,7 +1665,7 @@ bool Lookup::ProcessGetPendingTxnFromL2l(
     LOG_GENERAL(WARNING,
                 "Lookup::ProcessGetPendingTxnFromL2l not expected to be called "
                 "from other than the LookUp node.");
-    return true;
+    return false;
   }
 
   LOG_MARKER();
@@ -1724,7 +1726,7 @@ bool Lookup::ProcessGetPendingTxnFromL2l(
   }
   LOG_GENERAL(INFO, "No pendingtxns!");
 
-  return true;
+  return false;
 }
 
 // TODO: Refactor the code to remove the following assumption
@@ -2390,7 +2392,7 @@ bool Lookup::ProcessGetMicroBlockFromL2l(
 
   if (microBlockHashes.size() == 0) {
     LOG_GENERAL(INFO, "No MicroBlock requested");
-    return true;
+    return false;
   }
 
   LOG_GENERAL(INFO, "Request for " << microBlockHashes.size() << " blocks");
@@ -3699,7 +3701,7 @@ bool Lookup::ProcessGetTxnsFromL2l(
   auto requestedNum = txnhashes.size();
   if (requestedNum == 0) {
     LOG_GENERAL(INFO, "No txn requested");
-    return true;
+    return false;
   }
 
   if (requestedNum > max(DS_MICROBLOCK_GAS_LIMIT, SHARD_MICROBLOCK_GAS_LIMIT)) {
@@ -5016,7 +5018,7 @@ bool Lookup::ProcessGetDirectoryBlocksFromSeed(
         return false;
       }
 
-      P2PComm::GetInstance().SendMessage(peer, msg);
+      P2PComm::GetInstance().SendMessage(peer, msg, startByteResponse);
       LOG_GENERAL(INFO, "Sent miner info. Count=" << minerInfoPerDS.size());
     } else {
       LOG_GENERAL(INFO, "No miner info sent");

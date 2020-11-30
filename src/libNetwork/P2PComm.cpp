@@ -1496,16 +1496,25 @@ void P2PComm::SendMessage(const deque<Peer>& peers, const bytes& message,
   }
 }
 
-void P2PComm::ReducePeerConnectionCount(const Peer& peer) {
-  LOG_GENERAL(INFO, "Chetan ReducePeerConnectionCount()=" << peer);
-  uint128_t ipAddr = peer.GetIpAddress();
-  {
-    std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
-    if (m_peerConnectionCount[ipAddr] > 0) {
-      m_peerConnectionCount[ipAddr]--;
-      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
-                            << ipAddr << " m_peerConnectionCount="
-                            << m_peerConnectionCount[ipAddr]);
+void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
+  LOG_GENERAL(INFO, "Chetan RemoveBufferEventAndConnectionCount()=" << peer);
+
+  string buf_key = peer.GetPrintableIPAddress() + ":" +
+                   boost::lexical_cast<string>(peer.GetListenPortHost());
+  LOG_GENERAL(INFO, "Chetan key of outgoing msg=" << buf_key);
+  auto it = buffer_event_map.find(buf_key);
+  if (it != buffer_event_map.end()) {
+    LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
+    bufferevent_free(it->second);
+    uint128_t ipAddr = peer.GetIpAddress();
+    {
+      std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
+      if (m_peerConnectionCount[ipAddr] > 0) {
+        m_peerConnectionCount[ipAddr]--;
+        LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
+                              << ipAddr << " m_peerConnectionCount="
+                              << m_peerConnectionCount[ipAddr]);
+      }
     }
   }
 }
