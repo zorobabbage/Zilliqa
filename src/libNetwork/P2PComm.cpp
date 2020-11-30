@@ -214,7 +214,9 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
                             << m_peerConnectionCount[ipAddr]);
     }
   }
-  bufferevent_free(bufev);
+  if (bufev != NULL) {
+    bufferevent_free(bufev);
+  }
 }
 
 void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
@@ -275,33 +277,6 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     return;
   }
 
-  // Reception format:
-  // 0x01 ~ 0xFF - version, defined in constant file
-  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
-  // 0x11 - start byte
-  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of message
-  // <message>
-
-  // 0x01 ~ 0xFF - version, defined in constant file
-  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
-  // 0x22 - start byte (broadcast)
-  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of hash + message
-  // <32-byte hash> <message>
-
-  // 0x01 ~ 0xFF - version, defined in constant file
-  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
-  // 0x33 - start byte (gossip)
-  // 0xLL 0xLL 0xLL 0xLL - 4-byte length of message
-  // 0x01 ~ 0x04 - Gossip_Message_Type
-  // <4-byte Age> <message>
-
-  // 0x01 ~ 0xFF - version, defined in constant file
-  // 0xLL 0xLL - 2-byte CHAIN_ID, defined in constant file
-  // 0x33 - start byte (report)
-  // 0x00 0x00 0x00 0x01 - 4-byte length of message
-  // 0x00
-
-  // Check for minimum message size
   if (message.size() <= HDR_LEN) {
     LOG_GENERAL(WARNING, "Empty message received.");
     return;
@@ -345,55 +320,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     }
   }
 
-  if (startByte == START_BYTE_BROADCAST) {
-    LOG_PAYLOAD(INFO, "Incoming broadcast " << from, message,
-                Logger::MAX_BYTES_TO_DISPLAY);
-
-    if (messageLength <= HASH_LEN) {
-      LOG_GENERAL(WARNING,
-                  "Hash missing or empty broadcast message (messageLength = "
-                      << messageLength << ")");
-      return;
-    }
-
-    ProcessBroadCastMsg(message, from);
-  } else if (startByte == START_BYTE_NORMAL) {
-    LOG_PAYLOAD(INFO, "Incoming normal " << from, message,
-                Logger::MAX_BYTES_TO_DISPLAY);
-
-    // Move the shared_ptr message to raw pointer type
-    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
-        new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message.begin() + HDR_LEN, message.end()),
-            std::make_pair(from, START_BYTE_NORMAL));
-
-    // Queue the message
-    m_dispatcher(raw_message);
-  } else if (startByte == START_BYTE_GOSSIP) {
-    // Check for the maximum gossiped-message size
-    if (message.size() >= MAX_GOSSIP_MSG_SIZE_IN_BYTES) {
-      LOG_GENERAL(WARNING,
-                  "Gossip message received [Size:"
-                      << message.size() << "] is unexpectedly large [ >"
-                      << MAX_GOSSIP_MSG_SIZE_IN_BYTES
-                      << " ]. Will be strictly blacklisting the sender");
-      Blacklist::GetInstance().Add(
-          from.m_ipAddress);  // so we dont spend cost sending any data to this
-                              // sender as well.
-      return;
-    }
-    if (messageLength <
-        GOSSIP_MSGTYPE_LEN + GOSSIP_ROUND_LEN + GOSSIP_SNDR_LISTNR_PORT_LEN) {
-      LOG_GENERAL(
-          WARNING,
-          "Gossip Msg Type and/or Gossip Round and/or SNDR LISTNR is missing "
-          "(messageLength = "
-              << messageLength << ")");
-      return;
-    }
-
-    ProcessGossipMsg(message, from);
-  } else if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
+  if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
     LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
@@ -1022,12 +949,17 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
     LOG_GENERAL(INFO,
                 "Chetan bufferevent_free() ip=" << strAdd << " port=" << port);
-    bufferevent_free(bev);
+    if (bev != NULL) {
+      bufferevent_free(bev);
+    }
   } else if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
     LOG_GENERAL(INFO,
                 "Chetan bufferevent_free() ip=" << strAdd << " port=" << port);
-    bufferevent_free(bev);
+    if (bev != NULL) {
+      bufferevent_free(bev);
+    }
+  } else if (events & BEV_EVENT_READING) {
   } else if (events & BEV_EVENT_WRITING) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
   } else if (events & BEV_EVENT_EOF) {
@@ -1505,7 +1437,9 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   auto it = buffer_event_map.find(buf_key);
   if (it != buffer_event_map.end()) {
     LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
-    bufferevent_free(it->second);
+    if (it->second != NULL) {
+      bufferevent_free(it->second);
+    }
     uint128_t ipAddr = peer.GetIpAddress();
     {
       std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
