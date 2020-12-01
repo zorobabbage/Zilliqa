@@ -1214,14 +1214,36 @@ void P2PComm::AcceptConnectionCallbackForSeed(
     return;
   }
 
+  ev_ssize_t read_size = bufferevent_get_max_to_read(bev);
+  ev_ssize_t write_size = bufferevent_get_max_to_write(bev);
+  LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
+  LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
   bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
   bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
-  bufferevent_set_max_single_read(bev, 10000000);
-  bufferevent_set_max_single_write(bev, 10000000);
+  if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
+    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
+  }
+  if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
+    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
+  }
+  read_size = bufferevent_get_max_to_read(bev);
+  write_size = bufferevent_get_max_to_write(bev);
+  LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
+  LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
   bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
   bufferevent_enable(bev, EV_READ | EV_WRITE);
+  if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
+    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
+  }
+  if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
+    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
+  }
+  read_size = bufferevent_get_max_to_read(bev);
+  write_size = bufferevent_get_max_to_write(bev);
+  LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
+  LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
 }
 
 inline bool P2PComm::IsHostHavingNetworkIssue() {
@@ -1395,14 +1417,36 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
     }
-    bufferevent_set_max_single_read(bev, 10000000);
-    bufferevent_set_max_single_write(bev, 10000000);
+    ev_ssize_t read_size = bufferevent_get_max_to_read(bev);
+    ev_ssize_t write_size = bufferevent_get_max_to_write(bev);
+    LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
+    LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
+    if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
+      LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
+    }
+    if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
+      LOG_GENERAL(INFO, "Chetan Error could not set max write limit");
+    }
+    read_size = bufferevent_get_max_to_read(bev);
+    write_size = bufferevent_get_max_to_write(bev);
+    LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
+    LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
     bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
+    if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
+      LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
+    }
+    if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
+      LOG_GENERAL(INFO, "Chetan Error could not set max write limit");
+    }
+    read_size = bufferevent_get_max_to_read(bev);
+    write_size = bufferevent_get_max_to_write(bev);
+    LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
+    LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
     struct sockaddr_in serv_addr {};
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = peer.m_ipAddress.convert_to<unsigned long>();
