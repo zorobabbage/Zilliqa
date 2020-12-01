@@ -244,6 +244,9 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
   if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
   }
+  if (events && (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+    // CloseAndFreeBufferEvent(bev);
+  }
 }
 
 void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
@@ -965,7 +968,9 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
   if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
   }
-  // RemoveBufferEventAndConnectionCount(from);
+  if (events && (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
+    // RemoveBufferEventAndConnectionCount(from);
+  }
 }
 
 void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
@@ -998,7 +1003,7 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
-  LOG_GENERAL(INFO, "Chetan ReadCb from=" << from);
+  LOG_GENERAL(INFO, "Chetan ReadCallbackForSeed from=" << from);
 
   // Get the data stored in buffer
   struct evbuffer* input = bufferevent_get_input(bev);
@@ -1213,6 +1218,8 @@ void P2PComm::AcceptConnectionCallbackForSeed(
                            MAX_READ_WATERMARK_IN_BYTES);
   bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
+  bufferevent_set_max_single_read(bev, 10000000);
+  bufferevent_set_max_single_write(bev, 10000000);
   bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
   bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
@@ -1388,6 +1395,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
     }
+    bufferevent_set_max_single_read(bev, 10000000);
+    bufferevent_set_max_single_write(bev, 10000000);
     bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
