@@ -64,6 +64,7 @@ const unsigned int GOSSIP_SNDR_LISTNR_PORT_LEN = 4;
 P2PComm::Dispatcher P2PComm::m_dispatcher;
 std::mutex P2PComm::m_mutexPeerConnectionCount;
 std::map<uint128_t, uint16_t> P2PComm::m_peerConnectionCount;
+std::mutex P2PComm::m_mutexBufferEventMap;
 std::map<std::string, struct bufferevent*> P2PComm::buffer_event_map;
 
 /// Comparison operator for ordering the list of message hashes.
@@ -1156,7 +1157,10 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
                 "Chetan key of incoming msg=" << buf_key << " msg len=" << len);
 
     // Add bufferevent to map
-    buffer_event_map[buf_key] = bev;
+    {
+      lock_guard<mutex> g(m_mutexBufferEventMap);
+      buffer_event_map[buf_key] = bev;
+    }
 
     // Queue the message
     m_dispatcher(raw_message);
@@ -1428,6 +1432,9 @@ void P2PComm::SendMessage(const deque<Peer>& peers, const bytes& message,
 }
 
 void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
+  lock(m_mutexPeerConnectionCount, m_mutexBufferEventMap);
+  unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
+  lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
   LOG_GENERAL(INFO, "Chetan RemoveBufferEventAndConnectionCount()=" << peer);
 
   string buf_key = peer.GetPrintableIPAddress() + ":" +
@@ -1437,17 +1444,14 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   if (it != buffer_event_map.end()) {
     LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
     if (it->second != NULL) {
-      // bufferevent_free(it->second);
+      bufferevent_free(it->second);
     }
     const uint128_t& ipAddr = peer.GetIpAddress();
-    {
-      std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
-      if (m_peerConnectionCount[ipAddr] > 0) {
-        m_peerConnectionCount[ipAddr]--;
-        LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
-                              << ipAddr << " m_peerConnectionCount="
-                              << m_peerConnectionCount[ipAddr]);
-      }
+    if (m_peerConnectionCount[ipAddr] > 0) {
+      m_peerConnectionCount[ipAddr]--;
+      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
+                            << ipAddr << " m_peerConnectionCount="
+                            << m_peerConnectionCount[ipAddr]);
     }
   }
 }
@@ -1504,6 +1508,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     }
     return;
   } else if (startByteType == START_BYTE_SEED_TO_SEED_RESPONSE) {
+    lock_guard<mutex> g(m_mutexBufferEventMap);
     uint32_t length = message.size();
     LOG_GENERAL(INFO, "Chetan response length of msg=" << length);
     if (startByteType == START_BYTE_BROADCAST) {
@@ -1534,7 +1539,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
         LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
         return;
       }
-      // buffer_event_map.erase(buf_key);
+      buffer_event_map.erase(buf_key);
     }
     return;
   }
