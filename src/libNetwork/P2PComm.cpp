@@ -1539,7 +1539,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
         LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
         return;
       }
-      buffer_event_map.erase(buf_key);
+      buffer_event_map.erase(it);
     }
     return;
   }
