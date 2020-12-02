@@ -314,7 +314,8 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
   const uint32_t messageLength =
       (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
 
-  bytes message1(messageLength);
+  const uint32_t total_msg_len = messageLength + HDR_LEN;
+  bytes message1(total_msg_len);
   {
     // Check for length consistency
     uint32_t res;
@@ -329,44 +330,48 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
                                << messageLength << " res length=" << res);
       int read_len;
       while (1) {
-        read_len = recv(fd, message1.data(), messageLength, 0);
-        cout << "Chetan read_len=" << read_len << endl;
+        read_len = recv(fd, message1.data(), total_msg_len, 0);
+        LOG_GENERAL(INFO,
+                    "Chetan read_len=" << read_len
+                                       << " message1.size()=" << message1.size()
+                                       << " total_msg_len=" << total_msg_len);
         if (read_len <= 0) {
           break;
         }
       }
+      std::copy(message1.begin(), message1.end(), back_inserter(message));
     }
   }
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
-    LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message1,
+    LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
-    // Move the shared_ptr message1 to raw pointer type
+    // Move the shared_ptr message to raw pointer type
     pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
         new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message1.begin() + HDR_LEN, message1.end()),
+            bytes(message.begin() + HDR_LEN, message.end()),
             make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     string buf_key = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
 
-    // Queue the message1
+    // Queue the message
     m_dispatcher(raw_message);
   } else if (startByte == START_BYTE_SEED_TO_SEED_RESPONSE) {
-    LOG_PAYLOAD(INFO, "Incoming normal response from seed " << from, message1,
+    LOG_PAYLOAD(INFO, "Incoming normal response from seed " << from, message,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
-    // Move the shared_ptr message1 to raw pointer type
+    // Move the shared_ptr message to raw pointer type
     pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
         new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message1.begin() + HDR_LEN, message1.end()),
+            bytes(message.begin() + HDR_LEN, message.end()),
             make_pair(from, START_BYTE_SEED_TO_SEED_RESPONSE));
 
-    // Queue the message1
+    // Queue the message
     m_dispatcher(raw_message);
   } else {
-    // Unexpected start byte. Drop this message1
+    // Unexpected start byte. Drop this message
     LOG_GENERAL(WARNING, "Incorrect start byte.");
   }
 }
@@ -395,49 +400,6 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
   }
 
   try {
-    /*
-    if (start_byte == START_BYTE_SEED_TO_SEED_REQUEST) {
-      struct event_base* base = event_base_new();
-      struct bufferevent* bev =
-          bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
-      bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
-      bufferevent_enable(bev, EV_READ | EV_WRITE);
-      struct sockaddr_in serv_addr {};
-      serv_addr.sin_family = AF_INET;
-      serv_addr.sin_addr.s_addr = peer.m_ipAddress.convert_to<unsigned long>();
-      serv_addr.sin_port = htons(peer.m_listenPortHost);
-      if (bufferevent_socket_connect(bev, (struct sockaddr*)&serv_addr,
-                                     sizeof(serv_addr)) < 0) {
-        bufferevent_free(bev);
-        return -1;
-      }
-      uint32_t length = message.size();
-      LOG_GENERAL(INFO, "Length of msg=" << length);
-
-      if (start_byte == START_BYTE_BROADCAST) {
-        length += HASH_LEN;
-      }
-
-      unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
-                                    (unsigned char)((CHAIN_ID >> 8) & 0XFF),
-                                    (unsigned char)(CHAIN_ID & 0xFF),
-                                    start_byte,
-                                    (unsigned char)((length >> 24) & 0xFF),
-                                    (unsigned char)((length >> 16) & 0xFF),
-                                    (unsigned char)((length >> 8) & 0xFF),
-                                    (unsigned char)(length & 0xFF)};
-
-      bufferevent_write(bev, buf, HDR_LEN);
-      bufferevent_write(bev, &message.at(0), length);
-      event* e =
-          event_new(base, -1, EV_TIMEOUT | EV_PERSIST, timeoutdummy, NULL);
-      timeval twoSec = {2, 0};
-      event_add(e, &twoSec);
-
-      event_base_dispatch(base);
-      return true;
-    }
-    */
     int cli_sock = socket(AF_INET, SOCK_STREAM, 0);
     unique_ptr<int, void (*)(int*)> cli_sock_closer(&cli_sock, close_socket);
 
@@ -1225,36 +1187,18 @@ void P2PComm::AcceptConnectionCallbackForSeed(
     return;
   }
 
-  ev_ssize_t read_size = bufferevent_get_max_to_read(bev);
-  ev_ssize_t write_size = bufferevent_get_max_to_write(bev);
-  LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
-  LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
   bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
   bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
-  if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
+  if (bufferevent_set_max_single_read(bev, MAX_READ_WATERMARK_IN_BYTES) < 0) {
     LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
   }
-  if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
+  if (bufferevent_set_max_single_write(bev, MAX_READ_WATERMARK_IN_BYTES) < 0) {
     LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
   }
-  read_size = bufferevent_get_max_to_read(bev);
-  write_size = bufferevent_get_max_to_write(bev);
-  LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
-  LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
   bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
   bufferevent_enable(bev, EV_READ | EV_WRITE);
-  if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
-    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
-  }
-  if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
-    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
-  }
-  read_size = bufferevent_get_max_to_read(bev);
-  write_size = bufferevent_get_max_to_write(bev);
-  LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
-  LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
 }
 
 inline bool P2PComm::IsHostHavingNetworkIssue() {
@@ -1428,36 +1372,20 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
     }
-    ev_ssize_t read_size = bufferevent_get_max_to_read(bev);
-    ev_ssize_t write_size = bufferevent_get_max_to_write(bev);
-    LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
-    LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
-    if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
+    if (bufferevent_set_max_single_read(bev, MAX_READ_WATERMARK_IN_BYTES) < 0) {
       LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
     }
-    if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
+    if (bufferevent_set_max_single_write(bev, MAX_READ_WATERMARK_IN_BYTES) <
+        0) {
       LOG_GENERAL(INFO, "Chetan Error could not set max write limit");
     }
-    read_size = bufferevent_get_max_to_read(bev);
-    write_size = bufferevent_get_max_to_write(bev);
-    LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
-    LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
     bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
-    if (bufferevent_set_max_single_read(bev, 10000000) < 0) {
-      LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
-    }
-    if (bufferevent_set_max_single_write(bev, 10000000) < 0) {
-      LOG_GENERAL(INFO, "Chetan Error could not set max write limit");
-    }
-    read_size = bufferevent_get_max_to_read(bev);
-    write_size = bufferevent_get_max_to_write(bev);
-    LOG_GENERAL(INFO, "Chetan read buffer size" << read_size);
-    LOG_GENERAL(INFO, "Chetan write  buffer size" << write_size);
+
     struct sockaddr_in serv_addr {};
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = peer.m_ipAddress.convert_to<unsigned long>();
