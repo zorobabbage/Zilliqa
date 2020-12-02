@@ -314,6 +314,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
   const uint32_t messageLength =
       (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
 
+  bytes message1(messageLength);
   {
     // Check for length consistency
     uint32_t res;
@@ -324,49 +325,48 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     }
 
     if (messageLength != res) {
-      LOG_GENERAL(WARNING, "Incorrect message length.");
+      LOG_GENERAL(WARNING, "Chetan Incorrect message length. messageLength="
+                               << messageLength << " res length=" << res);
       int read_len;
-      bytes message(messageLength);
       while (1) {
-        read_len = recv(fd, message.data(), messageLength, 0);
-        cout << "read_len=" << read_len << endl;
+        read_len = recv(fd, message1.data(), messageLength, 0);
+        cout << "Chetan read_len=" << read_len << endl;
         if (read_len <= 0) {
           break;
         }
       }
-      return;
     }
   }
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
-    LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message,
+    LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message1,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
-    // Move the shared_ptr message to raw pointer type
+    // Move the shared_ptr message1 to raw pointer type
     pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
         new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message.begin() + HDR_LEN, message.end()),
+            bytes(message1.begin() + HDR_LEN, message1.end()),
             make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     string buf_key = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
 
-    // Queue the message
+    // Queue the message1
     m_dispatcher(raw_message);
   } else if (startByte == START_BYTE_SEED_TO_SEED_RESPONSE) {
-    LOG_PAYLOAD(INFO, "Incoming normal response from seed " << from, message,
+    LOG_PAYLOAD(INFO, "Incoming normal response from seed " << from, message1,
                 Logger::MAX_BYTES_TO_DISPLAY);
 
-    // Move the shared_ptr message to raw pointer type
+    // Move the shared_ptr message1 to raw pointer type
     pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
         new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message.begin() + HDR_LEN, message.end()),
+            bytes(message1.begin() + HDR_LEN, message1.end()),
             make_pair(from, START_BYTE_SEED_TO_SEED_RESPONSE));
 
-    // Queue the message
+    // Queue the message1
     m_dispatcher(raw_message);
   } else {
-    // Unexpected start byte. Drop this message
+    // Unexpected start byte. Drop this message1
     LOG_GENERAL(WARNING, "Incorrect start byte.");
   }
 }
