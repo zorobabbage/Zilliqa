@@ -279,12 +279,10 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
     return;
   }
-  /*
   if (evbuffer_drain(input, len) != 0) {
     LOG_GENERAL(WARNING, "evbuffer_drain failure.");
     return;
   }
-  */
 
   if (message.size() <= HDR_LEN) {
     LOG_GENERAL(WARNING, "Empty message received.");
@@ -1191,12 +1189,6 @@ void P2PComm::AcceptConnectionCallbackForSeed(
                            MAX_READ_WATERMARK_IN_BYTES);
   bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
-  if (bufferevent_set_max_single_read(bev, MAX_READ_WATERMARK_IN_BYTES) < 0) {
-    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
-  }
-  if (bufferevent_set_max_single_write(bev, MAX_READ_WATERMARK_IN_BYTES) < 0) {
-    LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
-  }
   bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
   bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
@@ -1372,13 +1364,6 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
     }
-    if (bufferevent_set_max_single_read(bev, MAX_READ_WATERMARK_IN_BYTES) < 0) {
-      LOG_GENERAL(INFO, "Chetan Error could not set max read limit");
-    }
-    if (bufferevent_set_max_single_write(bev, MAX_READ_WATERMARK_IN_BYTES) <
-        0) {
-      LOG_GENERAL(INFO, "Chetan Error could not set max write limit");
-    }
     bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
@@ -1407,12 +1392,10 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                   (unsigned char)((length >> 16) & 0xFF),
                                   (unsigned char)((length >> 8) & 0xFF),
                                   (unsigned char)(length & 0xFF)};
-
-    if (bufferevent_write(bev, buf, HDR_LEN) < 0) {
-      LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
-      return;
-    }
-    if (bufferevent_write(bev, &message.at(0), length) < 0) {
+    bytes destMsg(std::begin(buf), std::end(buf));
+    destMsg.insert(destMsg.end(), message.begin(), message.end());
+    LOG_GENERAL(INFO, "Chetan size of destMsg=" << destMsg.size());
+    if (bufferevent_write(bev, &destMsg.at(0), HDR_LEN + length) < 0) {
       LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
       return;
     }
@@ -1437,15 +1420,14 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                     (unsigned char)((length >> 16) & 0xFF),
                                     (unsigned char)((length >> 8) & 0xFF),
                                     (unsigned char)(length & 0xFF)};
+      bytes destMsg(std::begin(buf), std::end(buf));
+      LOG_GENERAL(INFO, "Chetan size of destMsg=" << destMsg.size());
+      destMsg.insert(destMsg.end(), message.begin(), message.end());
+      if (bufferevent_write(it->second, &destMsg.at(0), HDR_LEN + length) < 0) {
+        LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+        return;
+      }
 
-      if (bufferevent_write(it->second, buf, HDR_LEN) < 0) {
-        LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
-        return;
-      }
-      if (bufferevent_write(it->second, &message.at(0), length) < 0) {
-        LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
-        return;
-      }
       buffer_event_map.erase(it);
     }
     return;
