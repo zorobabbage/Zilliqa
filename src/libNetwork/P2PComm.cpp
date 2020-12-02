@@ -279,10 +279,12 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
     return;
   }
+  /*
   if (evbuffer_drain(input, len) != 0) {
     LOG_GENERAL(WARNING, "evbuffer_drain failure.");
     return;
   }
+  */
 
   if (message.size() <= HDR_LEN) {
     LOG_GENERAL(WARNING, "Empty message received.");
@@ -323,6 +325,15 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
 
     if (messageLength != res) {
       LOG_GENERAL(WARNING, "Incorrect message length.");
+      int read_len;
+      bytes message(messageLength);
+      while (1) {
+        read_len = recv(fd, message.data(), messageLength, 0);
+        cout << "read_len=" << read_len << endl;
+        if (read_len <= 0) {
+          break;
+        }
+      }
       return;
     }
   }
@@ -1507,7 +1518,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
         LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
         return;
       }
-      // buffer_event_map.erase(it);
+      buffer_event_map.erase(it);
     }
     return;
   }
