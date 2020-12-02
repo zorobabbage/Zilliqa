@@ -940,7 +940,7 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
   }
   if (events && (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
-    // RemoveBufferEventAndConnectionCount(from);
+    CloseAndFreeBufferEvent(bev);
   }
 }
 
