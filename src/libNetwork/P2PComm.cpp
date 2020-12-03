@@ -1434,8 +1434,6 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
             INFO, "buffer_event_map key=" << it.first << " bev=" << it.second);
       }
       buffer_event_map.erase(it);
-
-      buffer_event_map.erase(it);
     }
     return;
   }
