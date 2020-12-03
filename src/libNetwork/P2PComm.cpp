@@ -1011,6 +1011,7 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
   if (evbuffer_copyout(input, message.data(), len) !=
       static_cast<ev_ssize_t>(len)) {
     LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
 
@@ -1058,12 +1059,12 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
       return;
     }
   }
+
   if (evbuffer_drain(input, len) != 0) {
     LOG_GENERAL(WARNING, "evbuffer_drain failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
-  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-      socket_closer(bev, CloseAndFreeBufferEvent);
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
     LOG_PAYLOAD(INFO, "Incoming request from ext seed " << from, message,
@@ -1090,6 +1091,7 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
   } else {
     // Unexpected start byte. Drop this message
     LOG_GENERAL(WARNING, "Chetan Error Incorrect start byte.");
+    CloseAndFreeBufferEvent(bev);
   }
 }
 
@@ -1199,7 +1201,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   }
 
   struct bufferevent* bev =
-      bufferevent_socket_new(base, cli_sock, BEV_OPT_CLOSE_ON_FREE);
+      bufferevent_socket_new(base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   if (bev == NULL) {
     LOG_GENERAL(WARNING, "bufferevent_socket_new failure.");
 
