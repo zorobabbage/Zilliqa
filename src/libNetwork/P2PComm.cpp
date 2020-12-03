@@ -341,7 +341,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
       (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
 
   const uint32_t total_msg_len = messageLength + HDR_LEN;
-  bytes message1(total_msg_len);
+  int cal_total_len = 4096;
   {
     // Check for length consistency
     uint32_t res;
@@ -355,19 +355,23 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
       LOG_GENERAL(WARNING, "Chetan Incorrect message length. messageLength="
                                << messageLength << " res length=" << res);
       int read_len;
-      while (1) {
-        read_len = recv(fd, message1.data(), total_msg_len, 0);
-        LOG_GENERAL(INFO,
-                    "Chetan read_len=" << read_len
-                                       << " message1.size()=" << message1.size()
-                                       << " total_msg_len=" << total_msg_len);
-        if (read_len <= 0) {
+      bytes tmpMsg(4096);
+      while (true) {
+        read_len = recv(fd, tmpMsg.data(), tmpMsg.size(), 0);
+        if (read_len < 0) {
           break;
+        } else {
+          cal_total_len += read_len;
+          LOG_GENERAL(INFO, "Chetan read_len=" << read_len << " total_msg_len="
+                                               << total_msg_len);
+          tmpMsg.resize(read_len);
+          std::copy(tmpMsg.begin(), tmpMsg.end(), back_inserter(message));
         }
       }
-      std::copy(message1.begin(), message1.end(), back_inserter(message));
     }
   }
+  LOG_GENERAL(INFO, "Chetan cal_total_len="
+                        << cal_total_len << " total_msg_len=" << total_msg_len);
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
     LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message,
