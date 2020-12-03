@@ -220,6 +220,34 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   }
 }
 
+void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
+  lock(m_mutexPeerConnectionCount, m_mutexBufferEventMap);
+  unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
+  lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
+  LOG_GENERAL(INFO, "Chetan RemoveBufferEventAndConnectionCount()=" << peer);
+
+  string buf_key = peer.GetPrintableIPAddress() + ":" +
+                   boost::lexical_cast<string>(peer.GetListenPortHost());
+  LOG_GENERAL(INFO, "Chetan bufffer_event_map key=" << buf_key);
+  auto it = buffer_event_map.find(buf_key);
+  if (it != buffer_event_map.end()) {
+    LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
+    bufferevent_free(it->second);
+    const uint128_t& ipAddr = peer.GetIpAddress();
+    if (m_peerConnectionCount[ipAddr] > 0) {
+      m_peerConnectionCount[ipAddr]--;
+      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
+                            << ipAddr << " m_peerConnectionCount="
+                            << m_peerConnectionCount[ipAddr]);
+    }
+    for (const auto& it : buffer_event_map) {
+      LOG_GENERAL(INFO,
+                  "buffer_event_map key=" << it.first << " bev=" << it.second);
+    }
+    buffer_event_map.erase(it);
+  }
+}
+
 void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
                        [[gnu::unused]] void* ctx) {
   LOG_MARKER();
@@ -1330,30 +1358,6 @@ void P2PComm::SendMessage(const deque<Peer>& peers, const bytes& message,
   }
 }
 
-void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
-  lock(m_mutexPeerConnectionCount, m_mutexBufferEventMap);
-  unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
-  lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
-  LOG_GENERAL(INFO, "Chetan RemoveBufferEventAndConnectionCount()=" << peer);
-
-  string buf_key = peer.GetPrintableIPAddress() + ":" +
-                   boost::lexical_cast<string>(peer.GetListenPortHost());
-  LOG_GENERAL(INFO, "Chetan bufffer_event_map key=" << buf_key);
-  auto it = buffer_event_map.find(buf_key);
-  if (it != buffer_event_map.end()) {
-    LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
-    bufferevent_free(it->second);
-    const uint128_t& ipAddr = peer.GetIpAddress();
-    if (m_peerConnectionCount[ipAddr] > 0) {
-      m_peerConnectionCount[ipAddr]--;
-      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
-                            << ipAddr << " m_peerConnectionCount="
-                            << m_peerConnectionCount[ipAddr]);
-    }
-    buffer_event_map.erase(it);
-  }
-}
-
 void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
   LOG_MARKER();
@@ -1382,7 +1386,6 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       return;
     }
     uint32_t length = message.size();
-    LOG_GENERAL(INFO, "Chetan request length of msg=" << length);
 
     unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
                                   (unsigned char)((CHAIN_ID >> 8) & 0XFF),
@@ -1394,7 +1397,9 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                   (unsigned char)(length & 0xFF)};
     bytes destMsg(std::begin(buf), std::end(buf));
     destMsg.insert(destMsg.end(), message.begin(), message.end());
-    LOG_GENERAL(INFO, "Chetan size of destMsg=" << destMsg.size());
+    LOG_GENERAL(INFO,
+                "Chetan request length=" << length + HDR_LEN
+                                         << " msg size=" << destMsg.size());
     if (bufferevent_write(bev, &destMsg.at(0), HDR_LEN + length) < 0) {
       LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
       return;
@@ -1403,15 +1408,10 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
   } else if (startByteType == START_BYTE_SEED_TO_SEED_RESPONSE) {
     lock_guard<mutex> g(m_mutexBufferEventMap);
     uint32_t length = message.size();
-    LOG_GENERAL(INFO, "Chetan response length of msg=" << length);
     string buf_key = peer.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(peer.GetListenPortHost());
-    LOG_GENERAL(INFO, "Chetan key of outgoing msg=" << buf_key);
     auto it = buffer_event_map.find(buf_key);
     if (it != buffer_event_map.end()) {
-      // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-      //    socket_closer(it->second, CloseAndFreeBufferEvent);
-      LOG_GENERAL(INFO, "Chetan sending on the same socket");
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
                                     (unsigned char)((CHAIN_ID >> 8) & 0XFF),
                                     (unsigned char)(CHAIN_ID & 0xFF),
@@ -1421,12 +1421,19 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                     (unsigned char)((length >> 8) & 0xFF),
                                     (unsigned char)(length & 0xFF)};
       bytes destMsg(std::begin(buf), std::end(buf));
-      LOG_GENERAL(INFO, "Chetan size of destMsg=" << destMsg.size());
       destMsg.insert(destMsg.end(), message.begin(), message.end());
+      LOG_GENERAL(INFO, "Chetan response length="
+                            << length + HDR_LEN << " key=" << buf_key
+                            << " msg size=" << destMsg.size());
       if (bufferevent_write(it->second, &destMsg.at(0), HDR_LEN + length) < 0) {
         LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
         return;
       }
+      for (const auto& it : buffer_event_map) {
+        LOG_GENERAL(
+            INFO, "buffer_event_map key=" << it.first << " bev=" << it.second);
+      }
+      buffer_event_map.erase(it);
 
       buffer_event_map.erase(it);
     }
