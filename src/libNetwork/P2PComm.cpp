@@ -279,9 +279,6 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
 
 void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
                       [[gnu::unused]] void* ctx) {
-  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-      socket_closer(bev, CloseAndFreeBufferEvent);
-
   // Get the IP info
   int fd = bufferevent_getfd(bev);
   struct sockaddr_in cli_addr {};
@@ -293,27 +290,26 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
   struct evbuffer* input = bufferevent_get_input(bev);
   if (input == NULL) {
     LOG_GENERAL(WARNING, "bufferevent_get_input failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
   size_t len = evbuffer_get_length(input);
-  LOG_GENERAL(INFO, "Chetan P2PComm::ReadCb() len:" << len);
   if (len == 0) {
     LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
   bytes message(len);
   if (evbuffer_copyout(input, message.data(), len) !=
       static_cast<ev_ssize_t>(len)) {
     LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
-    return;
-  }
-  if (evbuffer_drain(input, len) != 0) {
-    LOG_GENERAL(WARNING, "evbuffer_drain failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
 
   if (message.size() <= HDR_LEN) {
     LOG_GENERAL(WARNING, "Empty message received.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
 
@@ -324,6 +320,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(WARNING, "Header version wrong, received ["
                              << version - 0x00 << "] while expected ["
                              << MSG_VERSION << "].");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
 
@@ -332,6 +329,7 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(WARNING, "Header chainid wrong, received ["
                              << chainId << "] while expected [" << CHAIN_ID
                              << "].");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
 
@@ -340,38 +338,27 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
   const uint32_t messageLength =
       (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
 
-  const uint32_t total_msg_len = messageLength + HDR_LEN;
-  int cal_total_len = 4096;
   {
     // Check for length consistency
     uint32_t res;
 
     if (!SafeMath<uint32_t>::sub(message.size(), HDR_LEN, res)) {
       LOG_GENERAL(WARNING, "Unexpected subtraction operation!");
+      CloseAndFreeBufferEvent(bev);
       return;
     }
 
     if (messageLength != res) {
-      LOG_GENERAL(WARNING, "Chetan Incorrect message length. messageLength="
-                               << messageLength << " res length=" << res);
-      int read_len;
-      bytes tmpMsg(4096);
-      while (true) {
-        read_len = recv(fd, tmpMsg.data(), tmpMsg.size(), 0);
-        if (read_len < 0) {
-          break;
-        } else {
-          cal_total_len += read_len;
-          LOG_GENERAL(INFO, "Chetan read_len=" << read_len << " total_msg_len="
-                                               << total_msg_len);
-          tmpMsg.resize(read_len);
-          std::copy(tmpMsg.begin(), tmpMsg.end(), back_inserter(message));
-        }
-      }
+      return;
     }
   }
-  LOG_GENERAL(INFO, "Chetan cal_total_len="
-                        << cal_total_len << " total_msg_len=" << total_msg_len);
+  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+      socket_closer(bev, CloseAndFreeBufferEvent);
+
+  if (evbuffer_drain(input, len) != 0) {
+    LOG_GENERAL(WARNING, "evbuffer_drain failure.");
+    return;
+  }
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
     LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message,
@@ -1006,17 +993,18 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
-  LOG_GENERAL(INFO, "Chetan ReadCallbackForSeed from=" << from);
 
   // Get the data stored in buffer
   struct evbuffer* input = bufferevent_get_input(bev);
   if (input == NULL) {
     LOG_GENERAL(WARNING, "bufferevent_get_input failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
   size_t len = evbuffer_get_length(input);
   if (len == 0) {
     LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
   bytes message(len);
@@ -1025,13 +1013,10 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
     LOG_GENERAL(WARNING, "evbuffer_copyout failure.");
     return;
   }
-  if (evbuffer_drain(input, len) != 0) {
-    LOG_GENERAL(WARNING, "evbuffer_drain failure.");
-    return;
-  }
 
   if (message.size() <= HDR_LEN) {
     LOG_GENERAL(WARNING, "Empty message received.");
+    CloseAndFreeBufferEvent(bev);
     return;
   }
 
@@ -1064,6 +1049,7 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
 
     if (!SafeMath<uint32_t>::sub(message.size(), HDR_LEN, res)) {
       LOG_GENERAL(WARNING, "Unexpected subtraction operation!");
+      CloseAndFreeBufferEvent(bev);
       return;
     }
 
@@ -1072,6 +1058,12 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
       return;
     }
   }
+  if (evbuffer_drain(input, len) != 0) {
+    LOG_GENERAL(WARNING, "evbuffer_drain failure.");
+    return;
+  }
+  unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
+      socket_closer(bev, CloseAndFreeBufferEvent);
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
     LOG_PAYLOAD(INFO, "Incoming request from ext seed " << from, message,
@@ -1366,8 +1358,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
-    struct bufferevent* bev =
-        bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
+    struct bufferevent* bev = bufferevent_socket_new(
+        base, -1, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
     if (bev == NULL) {
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
