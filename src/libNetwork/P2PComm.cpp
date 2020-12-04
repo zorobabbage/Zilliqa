@@ -232,7 +232,6 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   auto it = buffer_event_map.find(buf_key);
   if (it != buffer_event_map.end()) {
     LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
-    bufferevent_free(it->second);
     const uint128_t& ipAddr = peer.GetIpAddress();
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
@@ -941,7 +940,6 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
   Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
   if (events & BEV_EVENT_CONNECTED) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
-    return;
   }
   if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
@@ -1200,8 +1198,8 @@ void P2PComm::AcceptConnectionCallbackForSeed(
     return;
   }
 
-  struct bufferevent* bev =
-      bufferevent_socket_new(base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+  struct bufferevent* bev = bufferevent_socket_new(
+      base, cli_sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   if (bev == NULL) {
     LOG_GENERAL(WARNING, "bufferevent_socket_new failure.");
 
@@ -1372,6 +1370,9 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                              MAX_READ_WATERMARK_IN_BYTES);
     bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+    struct timeval tv = {SEED_SYNC_LARGE_PULL_INTERVAL, 0};
+    bufferevent_set_timeouts(bev, NULL, &tv);
 
     struct sockaddr_in serv_addr {};
     serv_addr.sin_family = AF_INET;
