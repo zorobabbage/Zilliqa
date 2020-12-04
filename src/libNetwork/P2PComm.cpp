@@ -270,6 +270,7 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
   }
   if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
+    CloseAndFreeBufferEvent(bev);
   }
   if (events && (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
     // CloseAndFreeBufferEvent(bev);
@@ -1372,7 +1373,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
     struct timeval tv = {SEED_SYNC_LARGE_PULL_INTERVAL, 0};
-    bufferevent_set_timeouts(bev, NULL, &tv);
+    bufferevent_set_timeouts(bev, &tv, NULL);
 
     struct sockaddr_in serv_addr {};
     serv_addr.sin_family = AF_INET;
