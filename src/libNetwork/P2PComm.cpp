@@ -25,6 +25,7 @@
 #include <event2/event-config.h>
 #include <event2/event.h>
 #include <event2/listener.h>
+#include <event2/thread.h>
 #include <event2/util.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -1253,6 +1254,7 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   serv_addr.sin_port = htons(listen_port_host);
   serv_addr.sin_addr.s_addr = INADDR_ANY;
   LOG_GENERAL(INFO, "Chetan listen_port_host=" << listen_port_host);
+  evthread_use_pthreads();
   // Create the listener
   base = event_base_new();
   if (base == NULL) {
@@ -1299,6 +1301,7 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
 
 void P2PComm::EnableConnect() {
   LOG_MARKER();
+  evthread_use_pthreads();
   base = event_base_new();
   event* e = event_new(base, -1, EV_TIMEOUT | EV_PERSIST, timeoutdummy, NULL);
   timeval twoSec = {2, 0};
