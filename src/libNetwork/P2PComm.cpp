@@ -68,6 +68,14 @@ std::map<uint128_t, uint16_t> P2PComm::m_peerConnectionCount;
 std::mutex P2PComm::m_mutexBufferEventMap;
 std::map<std::string, struct bufferevent*> P2PComm::buffer_event_map;
 
+static void LibEventFatalLogCb(int err) {
+  LOG_GENERAL(FATAL, "Something went wrong. Fatal-ing with error: " << err);
+}
+
+static void LibEventLogCb(int sev, const char* msg) {
+  LOG_GENERAL(INFO, "Chetan libevent sev" << sev << " msg=" << msg);
+}
+
 /// Comparison operator for ordering the list of message hashes.
 struct HashCompare {
   bool operator()(const bytes& l, const bytes& r) {
@@ -218,6 +226,7 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   }
   if (bufev != NULL) {
     bufferevent_free(bufev);
+    bufev = NULL;
   }
 }
 
@@ -273,7 +282,7 @@ void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
     CloseAndFreeBufferEvent(bev);
   }
-  if (events && (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+  if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
     // CloseAndFreeBufferEvent(bev);
   }
 }
@@ -958,7 +967,8 @@ void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
   if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
   }
-  if (events && (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
+  if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
+    LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR or BEV_EVENT_EOF");
     CloseAndFreeBufferEvent(bev);
   }
 }
@@ -1245,6 +1255,8 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
   m_dispatcher = move(dispatcher);
 }
 
+typedef void (*event_log_cb)(int severity, const char* msg);
+
 void P2PComm::EnableListener(uint32_t listen_port_host,
                              bool enable_listen_for_seed_node) {
   LOG_MARKER();
@@ -1254,6 +1266,9 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   serv_addr.sin_port = htons(listen_port_host);
   serv_addr.sin_addr.s_addr = INADDR_ANY;
   LOG_GENERAL(INFO, "Chetan listen_port_host=" << listen_port_host);
+  event_set_log_callback(LibEventLogCb);
+  event_enable_debug_logging(EVENT_DBG_ALL);
+  event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   // Create the listener
   base = event_base_new();
@@ -1301,6 +1316,9 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
 
 void P2PComm::EnableConnect() {
   LOG_MARKER();
+  event_set_log_callback(LibEventLogCb);
+  event_enable_debug_logging(EVENT_DBG_ALL);
+  event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   base = event_base_new();
   event* e = event_new(base, -1, EV_TIMEOUT | EV_PERSIST, timeoutdummy, NULL);
@@ -1363,7 +1381,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
     struct bufferevent* bev = bufferevent_socket_new(
-        base, -1, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+        base, -1,
+        BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS | BEV_OPT_THREADSAFE);
     if (bev == NULL) {
       LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
       return;
