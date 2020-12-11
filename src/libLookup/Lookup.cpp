@@ -95,7 +95,6 @@ Lookup::~Lookup() {}
 void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
-    LOG_GENERAL(INFO, "Chetan initsync thread id=" << Logger::GetPid());
     uint64_t dsBlockNum = 0;
     uint64_t txBlockNum = 0;
 
@@ -272,7 +271,6 @@ void Lookup::SetLookupNodes() {
 }
 
 void Lookup::SetAboveLayer(VectorOfNode& aboveLayer, const string& xml_node) {
-  LOG_GENERAL(INFO, "Chetan Lookup::SetAboveLaye()" << xml_node);
   using boost::property_tree::ptree;
   ptree pt;
   read_xml("constants.xml", pt);
@@ -295,10 +293,6 @@ void Lookup::SetAboveLayer(VectorOfNode& aboveLayer, const string& xml_node) {
       }
       aboveLayer.emplace_back(pubKey, node);
     }
-  }
-  for (const auto& nn : aboveLayer) {
-    LOG_GENERAL(INFO,
-                "Chetan aboveLayer:" << nn.second.GetPrintableIPAddress());
   }
 }
 
@@ -490,10 +484,6 @@ bool Lookup::GenTxnToSend(size_t num_txn,
 VectorOfNode Lookup::GetLookupNodes() const {
   LOG_MARKER();
   lock_guard<mutex> lock(m_mutexLookupNodes);
-  for (const auto& nn : m_lookupNodes) {
-    LOG_GENERAL(INFO,
-                "Chetan  m_lookupNodes:" << nn.second.GetPrintableIPAddress());
-  }
   return m_lookupNodes;
 }
 
@@ -3286,7 +3276,6 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
 
   if (m_syncType == SyncType::NEW_SYNC || m_syncType == SyncType::NORMAL_SYNC) {
     if (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0) {
-      LOG_GENERAL(INFO, "Chetan set sync type to 0")
       SetSyncType(SyncType::NO_SYNC);
       m_isFirstLoop = true;
       m_currDSExpired = false;
@@ -3320,7 +3309,6 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
                         .GetEpochNum() < m_mediator.m_currentEpochNum) {
               GetDSInfo();
               m_isFirstLoop = true;
-              LOG_GENERAL(INFO, "Chetan set sync type to 0")
               SetSyncType(SyncType::NO_SYNC);
 
               if (ipChanged) {
@@ -3350,7 +3338,6 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
         m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetEpochNum() <
             m_mediator.m_currentEpochNum) {
       m_isFirstLoop = true;
-      LOG_GENERAL(INFO, "Chetan set sync type to 0")
       SetSyncType(SyncType::NO_SYNC);
 
       m_mediator.m_ds->FinishRejoinAsDS(lowBlockNum % NUM_FINAL_BLOCK_PER_POW ==
@@ -3366,7 +3353,6 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       if (!m_currDSExpired) {
         if (ARCHIVAL_LOOKUP || (!ARCHIVAL_LOOKUP && FinishRejoinAsLookup())) {
           SetSyncType(SyncType::NO_SYNC);
-          LOG_GENERAL(INFO, "Chetan set sync type to 0")
 
           if (m_lookupServer) {
             if (m_lookupServer->StartListening()) {
@@ -3998,7 +3984,6 @@ bool Lookup::InitMining(uint32_t lookupIndex) {
   m_startedPoW = true;
   // set the node as synced
   SetSyncType(NO_SYNC);
-  LOG_GENERAL(INFO, "Chetan set sync type to 0")
   dsBlockRand = m_mediator.m_dsBlockRand;
   txBlockRand = m_mediator.m_txBlockRand;
 
@@ -4896,9 +4881,6 @@ bool Lookup::ToBlockMessage(unsigned char ins_byte) {
                 "other than the LookUp node.");
     return true;
   }
-  LOG_GENERAL(INFO, "Chetan ToBlockMessage ins_byte="
-                        << static_cast<unsigned int>(ins_byte)
-                        << " m_syncType=" << m_syncType);
 
   return m_syncType != SyncType::NO_SYNC &&
          (ins_byte != LookupInstructionType::SETDSBLOCKFROMSEED &&
@@ -5269,8 +5251,6 @@ void Lookup::ComposeAndSendGetCosigsRewardsFromSeed(const uint64_t& block_num) {
 bool Lookup::Execute(const bytes& message, unsigned int offset,
                      const Peer& from, const unsigned char& startByte) {
   LOG_MARKER();
-  LOG_GENERAL(INFO, "Chetan Lookup::Execute msg_type:"
-                        << static_cast<unsigned>(startByte));
 
   bool result = true;
 

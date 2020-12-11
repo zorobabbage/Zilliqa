@@ -234,27 +234,28 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
 }
 
 void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
+  LOG_MARKER();
   lock(m_mutexPeerConnectionCount, m_mutexBufferEventMap);
   unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
   lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
-  LOG_GENERAL(INFO, "P2PSeed RemoveBufferEventAndConnectionCount()=" << peer);
 
-  string buf_key = peer.GetPrintableIPAddress() + ":" +
+  string bufKey = peer.GetPrintableIPAddress() + ":" +
                    boost::lexical_cast<string>(peer.GetListenPortHost());
-  LOG_GENERAL(INFO, "P2PSeed bufffer_event_map key=" << buf_key);
-  auto it = m_bufferEventMap.find(buf_key);
+  LOG_GENERAL(INFO, "P2PSeed RemoveBufferEventAndConnectionCount()=" << peer << " bufKey ="<<bufKey);
+  auto it = m_bufferEventMap.find(bufKey);
   if (it != m_bufferEventMap.end()) {
-    LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for buf_key=" << buf_key);
+    //TODO Remove this log
+    LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for bufKey=" << bufKey);
     const uint128_t& ipAddr = peer.GetIpAddress();
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
-      LOG_GENERAL(INFO, "P2PSeed reducing count ipaddr="
-                            << ipAddr << " m_peerConnectionCount="
+      LOG_GENERAL(INFO, "P2PSeed reducing count ipaddr = "
+                            << ipAddr << " m_peerConnectionCount = "
                             << m_peerConnectionCount[ipAddr]);
     }
     for (const auto& it : m_bufferEventMap) {
       LOG_GENERAL(INFO,
-                  "m_bufferEventMap key=" << it.first << " bev=" << it.second);
+                  " P2PSeed m_bufferEventMap key = " << it.first << " bev = " << it.second);
     }
     m_bufferEventMap.erase(it);
   }
@@ -1051,14 +1052,14 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
             bytes(message.begin() + HDR_LEN, message.end()),
             std::make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
-    string buf_key = from.GetPrintableIPAddress() + ":" +
+    string bufKey = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
-    LOG_GENERAL(INFO, "bufferEventMap key=" << buf_key << " msg len=" << len);
+    LOG_GENERAL(INFO, "bufferEventMap key=" << bufKey << " msg len=" << len);
 
     // Add bufferevent to map
     {
       lock_guard<mutex> g(m_mutexBufferEventMap);
-      m_bufferEventMap[buf_key] = bev;
+      m_bufferEventMap[bufKey] = bev;
     }
     // Queue the message
     m_dispatcher(raw_message);
@@ -1399,9 +1400,9 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
   } else if (startByteType == START_BYTE_SEED_TO_SEED_RESPONSE) {
     lock_guard<mutex> g(m_mutexBufferEventMap);
     uint32_t length = message.size();
-    string buf_key = peer.GetPrintableIPAddress() + ":" +
+    string bufKey = peer.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(peer.GetListenPortHost());
-    auto it = m_bufferEventMap.find(buf_key);
+    auto it = m_bufferEventMap.find(bufKey);
     if (it != m_bufferEventMap.end()) {
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
                                     (unsigned char)((CHAIN_ID >> 8) & 0XFF),
@@ -1415,7 +1416,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       destMsg.insert(destMsg.end(), message.begin(), message.end());
       LOG_GENERAL(INFO, "P2PSeed response msg len="
                             << length + HDR_LEN << " bufferevent key="
-                            << buf_key << " destMsg size=" << destMsg.size());
+                            << bufKey << " destMsg size=" << destMsg.size());
       if (bufferevent_write(it->second, &destMsg.at(0), HDR_LEN + length) < 0) {
         LOG_GENERAL(WARNING, "Error bufferevent_write failed !!!");
         return;
