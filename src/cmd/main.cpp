@@ -240,22 +240,16 @@ int main(int argc, const char* argv[]) {
     if (LOOKUP_NODE_MODE) {
       if (ARCHIVAL_LOOKUP) {
         if (vm.count("l2lsyncmode") > 0) {
-          LOG_GENERAL(INFO,
-                      "Chetan It's exchange seed node, not l2l lookup node");
-          LOG_GENERAL(INFO, "Chetan Do not start listener on 33133");
           P2PComm::GetInstance().EnableConnect();
         } else {
-          LOG_GENERAL(INFO, "Chetan It's l2l lookup node");
           P2PComm::GetInstance().EnableListener(
               my_network_info.m_listenPortHost, true);
         }
       } else {
-        LOG_GENERAL(INFO, "Chetan It's lookup node");
         P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
                                               true);
       }
     } else {
-      LOG_GENERAL(INFO, "Chetan could be normal or ds node");
       P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
                                             false);
     }
