@@ -116,27 +116,29 @@ class P2PComm {
   static void ProcessGossipMsg(bytes& message, Peer& from);
 
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
-  static void EventCallbackForSeed(struct bufferevent* bev, short events,
-                                   [[gnu::unused]] void* ctx);
-  static void EventCb([[gnu::unused]] struct bufferevent* bev, short events,
-                      [[gnu::unused]] void* ctx);
+  static void EventCbServerSeed(struct bufferevent* bev, short events,
+                                [[gnu::unused]] void* ctx);
+  static void EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
+                                short events, [[gnu::unused]] void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);
-  static void ReadCallbackForSeed(struct bufferevent* bev, void* ctx);
-  static void ReadCb(struct bufferevent* bev, void* ctx);
+  static void ReadCbServerSeed(struct bufferevent* bev,
+                               [[gnu::unused]] void* ctx);
+  static void ReadCbClientSeed(struct bufferevent* bev,
+                               [[gnu::unused]] void* ctx);
 
   static void AcceptConnectionCallback(evconnlistener* listener,
                                        evutil_socket_t cli_sock,
                                        struct sockaddr* cli_addr, int socklen,
                                        void* arg);
-  static void AcceptConnectionCallbackForSeed(evconnlistener* listener,
-                                              evutil_socket_t cli_sock,
-                                              struct sockaddr* cli_addr,
-                                              int socklen, void* arg);
+  static void AcceptCbServerSeed(evconnlistener* listener,
+                                 evutil_socket_t cli_sock,
+                                 struct sockaddr* cli_addr, int socklen,
+                                 void* arg);
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
 
  public:
   static std::mutex m_mutexBufferEventMap;
-  static std::map<std::string, struct bufferevent*> buffer_event_map;
+  static std::map<std::string, struct bufferevent*> m_bufferEventMap;
   /// Returns the singleton P2PComm instance.
   static P2PComm& GetInstance();
 

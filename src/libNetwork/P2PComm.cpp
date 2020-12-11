@@ -66,14 +66,16 @@ P2PComm::Dispatcher P2PComm::m_dispatcher;
 std::mutex P2PComm::m_mutexPeerConnectionCount;
 std::map<uint128_t, uint16_t> P2PComm::m_peerConnectionCount;
 std::mutex P2PComm::m_mutexBufferEventMap;
-std::map<std::string, struct bufferevent*> P2PComm::buffer_event_map;
+std::map<std::string, struct bufferevent*> P2PComm::m_bufferEventMap;
 
+// Enable libevent logs for debugging
 static void LibEventFatalLogCb(int err) {
-  LOG_GENERAL(FATAL, "Something went wrong. Fatal-ing with error: " << err);
+  LOG_GENERAL(FATAL,
+              " P2PSeed Something went wrong. Fatal-ing with error = " << err);
 }
 
 static void LibEventLogCb(int sev, const char* msg) {
-  LOG_GENERAL(INFO, "Chetan libevent sev" << sev << " msg=" << msg);
+  LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
 }
 
 /// Comparison operator for ordering the list of message hashes.
@@ -98,6 +100,7 @@ static bool comparePairSecond(
 }
 
 P2PComm::P2PComm() : m_sendQueue(SENDQUEUE_SIZE) {
+  // set libevent base to NULL
   base = NULL;
   auto func = [this]() -> void {
     bytes emptyHash;
@@ -145,11 +148,9 @@ P2PComm& P2PComm::GetInstance() {
 
 uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
                            const uint32_t message_length) {
-  LOG_GENERAL(INFO, "SendJob::writeMsg()");
   uint32_t written_length = 0;
 
   while (written_length < message_length) {
-    LOG_GENERAL(INFO, "Chetan writing peer:" << from.GetPrintableIPAddress())
     ssize_t n = write(cli_sock, (unsigned char*)buf + written_length,
                       message_length - written_length);
 
@@ -212,21 +213,24 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   char* strAdd = inet_ntoa(cli_addr.sin_addr);
   int port = cli_addr.sin_port;
-  LOG_GENERAL(
-      INFO, "Chetan CloseAndFreeBufferEvent ip=" << strAdd << " port=" << port);
+  // TODO Remove log
+  LOG_GENERAL(INFO, "P2PSeed CloseAndFreeBufferEvent ip=" << strAdd
+                                                          << " port=" << port);
   uint128_t ipAddr = cli_addr.sin_addr.s_addr;
   {
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
-      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
+      // TODO Remove log
+      LOG_GENERAL(INFO, "P2PSeed reducing count ipaddr="
                             << ipAddr << " m_peerConnectionCount="
                             << m_peerConnectionCount[ipAddr]);
     }
   }
   if (bufev != NULL) {
     bufferevent_free(bufev);
-    bufev = NULL;
+    // TODO Remove below line
+    // bufev = NULL;
   }
 }
 
@@ -234,62 +238,62 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   lock(m_mutexPeerConnectionCount, m_mutexBufferEventMap);
   unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
   lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
-  LOG_GENERAL(INFO, "Chetan RemoveBufferEventAndConnectionCount()=" << peer);
+  LOG_GENERAL(INFO, "P2PSeed RemoveBufferEventAndConnectionCount()=" << peer);
 
   string buf_key = peer.GetPrintableIPAddress() + ":" +
                    boost::lexical_cast<string>(peer.GetListenPortHost());
-  LOG_GENERAL(INFO, "Chetan bufffer_event_map key=" << buf_key);
-  auto it = buffer_event_map.find(buf_key);
-  if (it != buffer_event_map.end()) {
-    LOG_GENERAL(INFO, "Chetan clearing bufferevent for buf_key=" << buf_key);
+  LOG_GENERAL(INFO, "P2PSeed bufffer_event_map key=" << buf_key);
+  auto it = m_bufferEventMap.find(buf_key);
+  if (it != m_bufferEventMap.end()) {
+    LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for buf_key=" << buf_key);
     const uint128_t& ipAddr = peer.GetIpAddress();
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
-      LOG_GENERAL(INFO, "Chetan reducing count ipaddr="
+      LOG_GENERAL(INFO, "P2PSeed reducing count ipaddr="
                             << ipAddr << " m_peerConnectionCount="
                             << m_peerConnectionCount[ipAddr]);
     }
-    for (const auto& it : buffer_event_map) {
+    for (const auto& it : m_bufferEventMap) {
       LOG_GENERAL(INFO,
-                  "buffer_event_map key=" << it.first << " bev=" << it.second);
+                  "m_bufferEventMap key=" << it.first << " bev=" << it.second);
     }
-    buffer_event_map.erase(it);
+    m_bufferEventMap.erase(it);
   }
 }
 
-void P2PComm ::EventCb([[gnu::unused]] struct bufferevent* bev, short events,
-                       [[gnu::unused]] void* ctx) {
+void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
+                                 short events, [[gnu::unused]] void* ctx) {
   LOG_MARKER();
   // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
   //    socket_closer(bev, CloseAndFreeBufferEvent);
   if (events & BEV_EVENT_CONNECTED) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
+    // TODO Remove this log
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
   }
   if (events & BEV_EVENT_ERROR) {
-    LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
+    LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR");
     CloseAndFreeBufferEvent(bev);
   }
   if (events & BEV_EVENT_READING) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_READING");
   }
   if (events & BEV_EVENT_WRITING) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_WRITING ");
   }
   if (events & BEV_EVENT_EOF) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_EOF");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_EOF");
   }
   if (events & BEV_EVENT_TIMEOUT) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_TIMEOUT");
+    // No need to do cleanup in other events  as timeout event will take care
     CloseAndFreeBufferEvent(bev);
-  }
-  if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
-    // CloseAndFreeBufferEvent(bev);
   }
 }
 
-void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
-                      [[gnu::unused]] void* ctx) {
-  // Get the IP info
+void P2PComm ::ReadCbClientSeed(struct bufferevent* bev,
+                                [[gnu::unused]] void* ctx) {
+  // TODO Remove or comment logmarker later on
+  LOG_MARKER();
   int fd = bufferevent_getfd(bev);
   struct sockaddr_in cli_addr {};
   socklen_t addr_size = sizeof(struct sockaddr_in);
@@ -358,10 +362,15 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
       return;
     }
 
-    if (messageLength != res) {
+    if (res > messageLength) {
+      LOG_GENERAL(WARNING, "Received msg len is greater than header msg len")
+      CloseAndFreeBufferEvent(bev);
+      return;
+    } else if (res < messageLength) {
       return;
     }
   }
+
   unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       socket_closer(bev, CloseAndFreeBufferEvent);
 
@@ -370,24 +379,9 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
     return;
   }
 
-  if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
-    LOG_PAYLOAD(INFO, "Incoming normal request from seed " << from, message,
-                Logger::MAX_BYTES_TO_DISPLAY);
-
-    // Move the shared_ptr message to raw pointer type
-    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
-        new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message.begin() + HDR_LEN, message.end()),
-            make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
-
-    string buf_key = from.GetPrintableIPAddress() + ":" +
-                     boost::lexical_cast<string>(from.GetListenPortHost());
-
-    // Queue the message
-    m_dispatcher(raw_message);
-  } else if (startByte == START_BYTE_SEED_TO_SEED_RESPONSE) {
-    LOG_PAYLOAD(INFO, "Incoming normal response from seed " << from, message,
-                Logger::MAX_BYTES_TO_DISPLAY);
+  if (startByte == START_BYTE_SEED_TO_SEED_RESPONSE) {
+    LOG_PAYLOAD(INFO, "Incoming normal response from server seed " << from,
+                message, Logger::MAX_BYTES_TO_DISPLAY);
 
     // Move the shared_ptr message to raw pointer type
     pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
@@ -403,9 +397,10 @@ void P2PComm ::ReadCb([[gnu::unused]] struct bufferevent* bev,
   }
 }
 
-static void timeoutdummy([[gnu::unused]] evutil_socket_t fd,
-                         [[gnu::unused]] short what,
-                         [[gnu::unused]] void* args) {}
+// timeout event every 2 secs
+static void DummyTimeoutEvent([[gnu::unused]] evutil_socket_t fd,
+                              [[gnu::unused]] short what,
+                              [[gnu::unused]] void* args) {}
 
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
@@ -413,8 +408,6 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
   LOG_MARKER();
   LOG_PAYLOAD(INFO, "Sending to " << peer, message,
               Logger::MAX_BYTES_TO_DISPLAY);
-  LOG_GENERAL(INFO,
-              "Chetan start_byte=" << static_cast<unsigned int>(start_byte));
 
   if (peer.m_ipAddress == 0 && peer.m_listenPortHost == 0) {
     LOG_GENERAL(INFO,
@@ -755,12 +748,10 @@ void P2PComm::ProcessBroadCastMsg(bytes& message, const Peer& from) {
 void P2PComm::ClearPeerConnectionCount() {
   std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
   m_peerConnectionCount.clear();
-  LOG_GENERAL(INFO, "Chetan Clearing m_peerConnectionCount map");
 }
 
 void P2PComm::EventCallback(struct bufferevent* bev, short events,
                             [[gnu::unused]] void* ctx) {
-  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallback()");
   unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
       socket_closer(bev, CloseAndFreeBufferEvent);
 
@@ -789,7 +780,6 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
     return;
   }
   size_t len = evbuffer_get_length(input);
-  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallback() len:" << len);
   if (len == 0) {
     LOG_GENERAL(WARNING, "evbuffer_get_length failure.");
     return;
@@ -923,52 +913,40 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
     }
 
     ProcessGossipMsg(message, from);
-  } else if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
-    LOG_PAYLOAD(INFO, "Incoming seed to seed msg " << from, message,
-                Logger::MAX_BYTES_TO_DISPLAY);
-
-    // Move the shared_ptr message to raw pointer type
-    pair<bytes, std::pair<Peer, const unsigned char>>* raw_message =
-        new pair<bytes, std::pair<Peer, const unsigned char>>(
-            bytes(message.begin() + HDR_LEN, message.end()),
-            std::make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
-
-    // Queue the message
-    m_dispatcher(raw_message);
   } else {
     // Unexpected start byte. Drop this message
     LOG_GENERAL(WARNING, "Incorrect start byte.");
   }
 }
 
-void P2PComm::EventCallbackForSeed([[gnu::unused]] struct bufferevent* bev,
-                                   short events, [[gnu::unused]] void* ctx) {
-  LOG_GENERAL(INFO, "Chetan P2PComm::EventCallbackForSeed() events=" << events);
+void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
+                                [[gnu::unused]] void* ctx) {
+  LOG_MARKER();
   int fd = bufferevent_getfd(bev);
   struct sockaddr_in cli_addr {};
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
   if (events & BEV_EVENT_CONNECTED) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_CONNECTED");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
   }
   if (events & BEV_EVENT_ERROR) {
-    LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR");
+    LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR");
   }
   if (events & BEV_EVENT_READING) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_READING");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_READING");
   }
   if (events & BEV_EVENT_WRITING) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_WRITING ");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_WRITING ");
   }
   if (events & BEV_EVENT_EOF) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_EOF");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_EOF");
   }
   if (events & BEV_EVENT_TIMEOUT) {
-    LOG_GENERAL(INFO, "Chetan BEV_EVENT_TIMEOUT");
+    LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_TIMEOUT");
   }
   if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
-    LOG_GENERAL(WARNING, "Chetan BEV_EVENT_ERROR or BEV_EVENT_EOF");
+    LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR or BEV_EVENT_EOF");
     CloseAndFreeBufferEvent(bev);
   }
 }
@@ -995,8 +973,8 @@ void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
   }
 }
 
-void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
-                                  [[gnu::unused]] void* ctx) {
+void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
+                               [[gnu::unused]] void* ctx) {
   // Get the IP info
   int fd = bufferevent_getfd(bev);
   struct sockaddr_in cli_addr {};
@@ -1064,8 +1042,11 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
       return;
     }
 
-    if (messageLength != res) {
-      LOG_GENERAL(WARNING, "Incorrect message length.");
+    if (res > messageLength) {
+      LOG_GENERAL(WARNING, "Received msg len is greater than header msg len")
+      CloseAndFreeBufferEvent(bev);
+      return;
+    } else if (res < messageLength) {
       return;
     }
   }
@@ -1088,19 +1069,18 @@ void P2PComm::ReadCallbackForSeed(struct bufferevent* bev,
 
     string buf_key = from.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(from.GetListenPortHost());
-    LOG_GENERAL(INFO,
-                "Chetan key of incoming msg=" << buf_key << " msg len=" << len);
+    LOG_GENERAL(INFO, "bufferEventMap key=" << buf_key << " msg len=" << len);
 
     // Add bufferevent to map
     {
       lock_guard<mutex> g(m_mutexBufferEventMap);
-      buffer_event_map[buf_key] = bev;
+      m_bufferEventMap[buf_key] = bev;
     }
     // Queue the message
     m_dispatcher(raw_message);
   } else {
     // Unexpected start byte. Drop this message
-    LOG_GENERAL(WARNING, "Chetan Error Incorrect start byte.");
+    LOG_GENERAL(WARNING, "Error Incorrect start byte.");
     CloseAndFreeBufferEvent(bev);
   }
 }
@@ -1135,7 +1115,8 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
       return;
     }
     m_peerConnectionCount[from.GetIpAddress()]++;
-    LOG_GENERAL(INFO, "Chetan m_peerConnectionCount="
+    // TODO Remove the log
+    LOG_GENERAL(INFO, "P2PSeed m_peerConnectionCount="
                           << m_peerConnectionCount[from.GetIpAddress()]);
   }
 
@@ -1167,10 +1148,11 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
   bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
 
-void P2PComm::AcceptConnectionCallbackForSeed(
-    [[gnu::unused]] evconnlistener* listener, evutil_socket_t cli_sock,
-    struct sockaddr* cli_addr, [[gnu::unused]] int socklen,
-    [[gnu::unused]] void* arg) {
+void P2PComm::AcceptCbServerSeed([[gnu::unused]] evconnlistener* listener,
+                                 evutil_socket_t cli_sock,
+                                 struct sockaddr* cli_addr,
+                                 [[gnu::unused]] int socklen,
+                                 [[gnu::unused]] void* arg) {
   Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
             ((struct sockaddr_in*)cli_addr)->sin_port);
 
@@ -1187,7 +1169,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
   }
 
   {
-    LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallbackForSeed from=" << from);
+    LOG_GENERAL(INFO, "P2PComm::AcceptCbServerSeed from=" << from);
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[from.GetIpAddress()] > MAX_PEER_CONNECTION) {
       LOG_GENERAL(WARNING, "Connection ignored from " << from);
@@ -1195,7 +1177,8 @@ void P2PComm::AcceptConnectionCallbackForSeed(
       return;
     }
     m_peerConnectionCount[from.GetIpAddress()]++;
-    LOG_GENERAL(INFO, "Chetan m_peerConnectionCount="
+    // TODO Remove the log
+    LOG_GENERAL(INFO, "P2PSeed m_peerConnectionCount="
                           << m_peerConnectionCount[from.GetIpAddress()]);
   }
 
@@ -1223,9 +1206,7 @@ void P2PComm::AcceptConnectionCallbackForSeed(
 
   bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
-  bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
-                           MAX_READ_WATERMARK_IN_BYTES);
-  bufferevent_setcb(bev, ReadCallbackForSeed, NULL, EventCallbackForSeed, NULL);
+  bufferevent_setcb(bev, ReadCbServerSeed, NULL, EventCbServerSeed, NULL);
   bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
 
@@ -1265,7 +1246,9 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(listen_port_host);
   serv_addr.sin_addr.s_addr = INADDR_ANY;
-  LOG_GENERAL(INFO, "Chetan listen_port_host=" << listen_port_host);
+
+  // TODO Remove later on
+  // TODO Remove event library logging later on
   event_set_log_callback(LibEventLogCb);
   event_enable_debug_logging(EVENT_DBG_ALL);
   event_set_fatal_callback(LibEventFatalLogCb);
@@ -1277,6 +1260,7 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
     // fixme: should we exit here?
     return;
   }
+
   struct evconnlistener* listener1 = evconnlistener_new_bind(
       base, AcceptConnectionCallback, nullptr,
       LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
@@ -1291,13 +1275,11 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   if (enable_listen_for_seed_node) {
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
-    // TODO: temporary,later make part of config
+    // TODO Check if it's still ok rather than keeping config
     serv_addr.sin_port = htons(listen_port_host + 2);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    LOG_GENERAL(INFO,
-                "Chetan listen_port_host for seed=" << listen_port_host + 2);
     struct evconnlistener* listener2 = evconnlistener_new_bind(
-        base, AcceptConnectionCallbackForSeed, nullptr,
+        base, AcceptCbServerSeed, nullptr,
         LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
         (struct sockaddr*)&serv_addr, sizeof(struct sockaddr_in));
 
@@ -1314,14 +1296,19 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
   event_base_free(base);
 }
 
+// Start event loop
+// Timer event is added to keep event loop active always since we don not have
+// listener
 void P2PComm::EnableConnect() {
   LOG_MARKER();
+  // TODO Remove event library logging later on
   event_set_log_callback(LibEventLogCb);
   event_enable_debug_logging(EVENT_DBG_ALL);
   event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   base = event_base_new();
-  event* e = event_new(base, -1, EV_TIMEOUT | EV_PERSIST, timeoutdummy, NULL);
+  event* e =
+      event_new(base, -1, EV_TIMEOUT | EV_PERSIST, DummyTimeoutEvent, NULL);
   timeval twoSec = {2, 0};
   event_add(e, &twoSec);
   event_base_dispatch(base);
@@ -1384,14 +1371,12 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
         base, -1,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS | BEV_OPT_THREADSAFE);
     if (bev == NULL) {
-      LOG_GENERAL(WARNING, "Chetan Error bufferevent_socket_new failure.");
+      LOG_GENERAL(WARNING, "Error bufferevent_socket_new failure.");
       return;
     }
     bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                              MAX_READ_WATERMARK_IN_BYTES);
-    bufferevent_setwatermark(bev, EV_WRITE, MIN_READ_WATERMARK_IN_BYTES,
-                             MAX_READ_WATERMARK_IN_BYTES);
-    bufferevent_setcb(bev, ReadCb, NULL, EventCb, NULL);
+    bufferevent_setcb(bev, ReadCbClientSeed, NULL, EventCbClientSeed, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
     struct timeval tv = {SEED_SYNC_LARGE_PULL_INTERVAL, 0};
@@ -1419,11 +1404,11 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                   (unsigned char)(length & 0xFF)};
     bytes destMsg(std::begin(buf), std::end(buf));
     destMsg.insert(destMsg.end(), message.begin(), message.end());
-    LOG_GENERAL(INFO,
-                "Chetan request length=" << length + HDR_LEN
-                                         << " msg size=" << destMsg.size());
+    LOG_GENERAL(
+        INFO, "P2PSeed request msg len=" << length + HDR_LEN
+                                         << " destMsg size=" << destMsg.size());
     if (bufferevent_write(bev, &destMsg.at(0), HDR_LEN + length) < 0) {
-      LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+      LOG_GENERAL(WARNING, "Error bufferevent_write failed !!!");
       return;
     }
     return;
@@ -1432,8 +1417,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     uint32_t length = message.size();
     string buf_key = peer.GetPrintableIPAddress() + ":" +
                      boost::lexical_cast<string>(peer.GetListenPortHost());
-    auto it = buffer_event_map.find(buf_key);
-    if (it != buffer_event_map.end()) {
+    auto it = m_bufferEventMap.find(buf_key);
+    if (it != m_bufferEventMap.end()) {
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
                                     (unsigned char)((CHAIN_ID >> 8) & 0XFF),
                                     (unsigned char)(CHAIN_ID & 0xFF),
@@ -1444,18 +1429,19 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                                     (unsigned char)(length & 0xFF)};
       bytes destMsg(std::begin(buf), std::end(buf));
       destMsg.insert(destMsg.end(), message.begin(), message.end());
-      LOG_GENERAL(INFO, "Chetan response length="
-                            << length + HDR_LEN << " key=" << buf_key
-                            << " msg size=" << destMsg.size());
+      LOG_GENERAL(INFO, "P2PSeed response msg len="
+                            << length + HDR_LEN << " bufferevent key="
+                            << buf_key << " destMsg size=" << destMsg.size());
       if (bufferevent_write(it->second, &destMsg.at(0), HDR_LEN + length) < 0) {
-        LOG_GENERAL(FATAL, "Chetan Error bufferevent_write failed !!!");
+        LOG_GENERAL(WARNING, "Error bufferevent_write failed !!!");
         return;
       }
-      for (const auto& it : buffer_event_map) {
-        LOG_GENERAL(
-            INFO, "buffer_event_map key=" << it.first << " bev=" << it.second);
+      // TODO Remove log
+      for (const auto& it : m_bufferEventMap) {
+        LOG_GENERAL(INFO, " P2PSeed m_bufferEventMap key="
+                              << it.first << " bev=" << it.second);
       }
-      buffer_event_map.erase(it);
+      m_bufferEventMap.erase(it);
     }
     return;
   }
