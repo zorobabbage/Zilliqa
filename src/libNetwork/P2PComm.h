@@ -37,6 +37,8 @@ struct evconnlistener;
 
 extern const unsigned char START_BYTE_NORMAL;
 extern const unsigned char START_BYTE_GOSSIP;
+extern const unsigned char START_BYTE_SEED_TO_SEED_REQUEST;
+extern const unsigned char START_BYTE_SEED_TO_SEED_RESPONSE;
 
 class SendJob {
  protected:
@@ -85,6 +87,8 @@ class P2PComm {
 
   const static uint32_t MAXPUMPMESSAGE = 128;
 
+  struct event_base* base{};
+
   void ClearBroadcastHashAsync(const bytes& message_hash);
 
   P2PComm();
@@ -112,18 +116,32 @@ class P2PComm {
   static void ProcessGossipMsg(bytes& message, Peer& from);
 
   static void EventCallback(struct bufferevent* bev, short events, void* ctx);
+  static void EventCallbackForSeed(struct bufferevent* bev, short events,
+                                   [[gnu::unused]] void* ctx);
+  static void EventCb([[gnu::unused]] struct bufferevent* bev, short events,
+                      [[gnu::unused]] void* ctx);
   static void ReadCallback(struct bufferevent* bev, void* ctx);
+  static void ReadCallbackForSeed(struct bufferevent* bev, void* ctx);
+  static void ReadCb(struct bufferevent* bev, void* ctx);
+
   static void AcceptConnectionCallback(evconnlistener* listener,
                                        evutil_socket_t cli_sock,
                                        struct sockaddr* cli_addr, int socklen,
                                        void* arg);
+  static void AcceptConnectionCallbackForSeed(evconnlistener* listener,
+                                              evutil_socket_t cli_sock,
+                                              struct sockaddr* cli_addr,
+                                              int socklen, void* arg);
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
 
  public:
+  static std::mutex m_mutexBufferEventMap;
+  static std::map<std::string, struct bufferevent*> buffer_event_map;
   /// Returns the singleton P2PComm instance.
   static P2PComm& GetInstance();
 
-  using Dispatcher = std::function<void(std::pair<bytes, Peer>*)>;
+  using Dispatcher = std::function<void(
+      std::pair<bytes, std::pair<Peer, const unsigned char>>*)>;
 
   using BroadcastListFunc = std::function<VectorOfPeer(
       unsigned char msg_type, unsigned char ins_type, const Peer&)>;
@@ -136,6 +154,7 @@ class P2PComm {
   inline static bool IsHostHavingNetworkIssue();
   inline static bool IsNodeNotRunning();
   static void ClearPeerConnectionCount();
+  static void RemoveBufferEventAndConnectionCount(const Peer& peer);
 
  private:
   using SocketCloser = std::unique_ptr<int, void (*)(int*)>;
@@ -150,7 +169,12 @@ class P2PComm {
                                void* arg);
 
   /// Listens for incoming socket connections.
-  void StartMessagePump(uint32_t listen_port_host, Dispatcher dispatcher);
+  void StartMessagePump(Dispatcher dispatcher);
+
+  void EnableListener(uint32_t listen_port_host,
+                      bool enable_listen_for_seed_node = false);
+  // start event loop
+  void EnableConnect();
 
   /// Multicasts message to specified list of peers.
   void SendMessage(const VectorOfPeer& peers, const bytes& message,

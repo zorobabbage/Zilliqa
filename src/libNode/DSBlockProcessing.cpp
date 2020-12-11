@@ -362,9 +362,10 @@ void Node::ResetConsensusId() {
   m_mediator.m_consensusID = m_mediator.m_currentEpochNum == 1 ? 1 : 0;
 }
 
-bool Node::ProcessVCDSBlocksMessage(const bytes& message,
-                                    unsigned int cur_offset,
-                                    [[gnu::unused]] const Peer& from) {
+bool Node::ProcessVCDSBlocksMessage(
+    const bytes& message, unsigned int cur_offset,
+    [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   unsigned int oldNumShards = m_mediator.m_ds->GetNumShards();
@@ -519,6 +520,7 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     }
 
     m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+    LOG_GENERAL(INFO, "Chetan set sync type to 0")
     m_mediator.m_lookup->cv_waitJoined.notify_all();
     if (m_fromNewProcess) {
       m_fromNewProcess = false;

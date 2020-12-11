@@ -79,7 +79,9 @@ void Zilliqa::LogSelfNodeInfo(const PairOfKey& key, const Peer& peer) {
          MessageTypeInstructionStrings[msgType][instruction];
 }
 
-void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
+void Zilliqa::ProcessMessage(
+    pair<bytes, pair<Peer, const unsigned char>>* message) {
+  LOG_GENERAL(INFO, "Chetan Zilliqa::ProcessMessage()");
   if (message->first.size() >= MessageOffset::BODY) {
     const unsigned char msg_type = message->first.at(MessageOffset::TYPE);
 
@@ -98,17 +100,18 @@ void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
 
       std::chrono::time_point<std::chrono::high_resolution_clock> tpStart;
       std::string msgName;
-      if (ENABLE_CHECK_PERFORMANCE_LOG) {
-        const auto ins_byte = message->first.at(MessageOffset::INST);
-        msgName = FormatMessageName(msg_type, ins_byte);
-        LOG_GENERAL(INFO, MessageSizeKeyword << msgName << " "
-                                             << message->first.size());
+      const auto ins_byte = message->first.at(MessageOffset::INST);
+      msgName = FormatMessageName(msg_type, ins_byte);
+      LOG_GENERAL(
+          INFO, MessageSizeKeyword << msgName << " " << message->first.size());
 
-        tpStart = std::chrono::high_resolution_clock::now();
-      }
-
+      tpStart = std::chrono::high_resolution_clock::now();
+      LOG_GENERAL(INFO, "Chetan calling Execute on msg handler msg_type="
+                            << static_cast<unsigned>(msg_type) << " startByte="
+                            << static_cast<unsigned>(message->second.second));
       bool result = msg_handlers[msg_type]->Execute(
-          message->first, MessageOffset::INST, message->second);
+          message->first, MessageOffset::INST, message->second.first,
+          message->second.second);
 
       if (ENABLE_CHECK_PERFORMANCE_LOG) {
         auto tpNow = std::chrono::high_resolution_clock::now();
@@ -121,6 +124,14 @@ void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
 
       if (!result) {
         // To-do: Error recovery
+        if (message->second.second == START_BYTE_SEED_TO_SEED_REQUEST) {
+          LOG_GENERAL(INFO,
+                      "Chetan, clearing buffer event for non response case")
+          Peer requestorPeer(message->second.first.GetIpAddress(),
+                             message->second.first.GetListenPortHost());
+          P2PComm::GetInstance().RemoveBufferEventAndConnectionCount(
+              requestorPeer);
+        }
       }
     } else {
       LOG_GENERAL(WARNING, "Unknown message type " << std::hex
@@ -142,6 +153,9 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
 {
   LOG_MARKER();
+  LOG_GENERAL(INFO, "Chetan toRetrieveHistory="
+                        << toRetrieveHistory << " multiplierSyncMode="
+                        << multiplierSyncMode << " syncType=" << syncType);
 
   if (LOG_PARAMETERS) {
     LOG_STATE("[IDENT] " << string(key.second).substr(0, 8));
@@ -149,11 +163,14 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
   // Launch the thread that reads messages from the queue
   auto funcCheckMsgQueue = [this]() mutable -> void {
-    pair<bytes, Peer>* message = NULL;
+    pair<bytes, std::pair<Peer, const unsigned char>>* message = NULL;
+    LOG_GENERAL(INFO,
+                "Chetan funcCheckMsgQueue threadid =" << Logger::GetPid());
     while (true) {
       while (m_msgQueue.pop(message)) {
         // For now, we use a thread pool to handle this message
         // Eventually processing will be single-threaded
+        LOG_GENERAL(INFO, "Chetan m_msgQueue pop message");
         m_queuePool.AddJob(
             [this, message]() mutable -> void { ProcessMessage(message); });
       }
@@ -173,6 +190,9 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
       LOG_GENERAL(WARNING, "Unable to load initial DS comm");
     }
   }
+  LOG_GENERAL(INFO, "Chetan LOOKUP_NODE_MODE:" << LOOKUP_NODE_MODE
+                                               << " ARCHIVAL_LOOKUP:"
+                                               << ARCHIVAL_LOOKUP);
 
   if (ARCHIVAL_LOOKUP && !LOOKUP_NODE_MODE) {
     LOG_GENERAL(FATAL, "Archvial lookup is true but not lookup ");
@@ -215,6 +235,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   BlockStorage::GetBlockStorage().ResetDB(BlockStorage::DIAGNOSTIC_COINBASE);
 
   if (SyncType::NEW_LOOKUP_SYNC == syncType || SyncType::NEW_SYNC == syncType) {
+    LOG_GENERAL(INFO, "Chetan Downloading persistence")
     while (!m_n.DownloadPersistenceFromS3()) {
       LOG_GENERAL(
           WARNING,
@@ -231,7 +252,11 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
   auto func = [this, toRetrieveHistory, syncType, key, peer]() mutable -> void {
     LogSelfNodeInfo(key, peer);
+    LOG_GENERAL(INFO,
+                "Chetan now call install func threadid=" << Logger::GetPid());
     while (!m_n.Install((SyncType)syncType, toRetrieveHistory)) {
+      LOG_GENERAL(INFO,
+                  "Chetan Inside while loop threadid=" << Logger::GetPid());
       if (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP) {
         syncType = SyncType::LOOKUP_SYNC;
         m_mediator.m_lookup->SetSyncType(SyncType::LOOKUP_SYNC);
@@ -256,6 +281,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
           LOG_GENERAL(WARNING, "AccountStore::RefreshDB failed");
         }
       } else {
+        LOG_GENERAL(INFO, "Chetan setting sync type to 0")
         m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
         bool isDsNode = false;
         for (const auto& ds : *m_mediator.m_DSCommittee) {
@@ -387,6 +413,8 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
     }
 
     if (LOOKUP_NODE_MODE) {
+      LOG_GENERAL(INFO,
+                  "Chetan starting rpc on LOOKUP_RPC_PORT=" << LOOKUP_RPC_PORT);
       m_lookupServerConnector = make_unique<SafeHttpServer>(LOOKUP_RPC_PORT);
       m_lookupServer =
           make_shared<LookupServer>(m_mediator, *m_lookupServerConnector);
@@ -469,8 +497,9 @@ Zilliqa::~Zilliqa() {
   }
 }
 
-void Zilliqa::Dispatch(pair<bytes, Peer>* message) {
-  // LOG_MARKER();
+void Zilliqa::Dispatch(
+    pair<bytes, std::pair<Peer, const unsigned char>>* message) {
+  LOG_MARKER();
 
   // Queue message
   if (!m_msgQueue.bounded_push(message)) {
