@@ -213,8 +213,8 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   char* strAdd = inet_ntoa(cli_addr.sin_addr);
   int port = cli_addr.sin_port;
   // TODO Remove log
-  LOG_GENERAL(INFO, "P2PSeed CloseAndFreeBufferEvent ip=" << strAdd
-                                                          << " port=" << port);
+  LOG_GENERAL(INFO, "P2PSeed CloseAndFreeBufferEvent ip="
+                        << strAdd << " port=" << port << " bev=" << bufev);
   uint128_t ipAddr = cli_addr.sin_addr.s_addr;
   {
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
