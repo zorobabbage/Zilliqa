@@ -249,7 +249,7 @@ class DirectoryService : public Executable {
       [[gnu::unused]] const unsigned char& startByte);
   bool ProcessFinalBlockConsensusCore(
       const bytes& message, unsigned int offset, const Peer& from,
-      [[gnu::unused]] const unsigned char& startByte);
+      [[gnu::unused]] const unsigned char& startByte = START_BYTE_NORMAL);
   bool ProcessViewChangeConsensus(
       const bytes& message, unsigned int offset, const Peer& from,
       [[gnu::unused]] const unsigned char& startByte);
@@ -630,7 +630,7 @@ class DirectoryService : public Executable {
 
   /// Implements the Execute function inherited from Executable.
   bool Execute(const bytes& message, unsigned int offset, const Peer& from,
-               const unsigned char& startByte);
+               const unsigned char& startByte = START_BYTE_NORMAL);
 
   /// Used by PoW winner to configure sharding variables as the next DS leader
   bool ProcessShardingStructure(

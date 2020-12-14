@@ -86,7 +86,6 @@ struct HashCompare {
 
 static void close_socket(int* cli_sock) {
   if (cli_sock != NULL) {
-    LOG_GENERAL(INFO, "Closing the socket")
     shutdown(*cli_sock, SHUT_RDWR);
     close(*cli_sock);
   }
@@ -138,6 +137,7 @@ P2PComm::~P2PComm() {
   while (m_sendQueue.pop(job)) {
     delete job;
   }
+  base = NULL;
 }
 
 P2PComm& P2PComm::GetInstance() {
@@ -240,11 +240,12 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
 
   string bufKey = peer.GetPrintableIPAddress() + ":" +
-                   boost::lexical_cast<string>(peer.GetListenPortHost());
-  LOG_GENERAL(INFO, "P2PSeed RemoveBufferEventAndConnectionCount()=" << peer << " bufKey ="<<bufKey);
+                  boost::lexical_cast<string>(peer.GetListenPortHost());
+  LOG_GENERAL(INFO, "P2PSeed RemoveBufferEventAndConnectionCount()="
+                        << peer << " bufKey =" << bufKey);
   auto it = m_bufferEventMap.find(bufKey);
   if (it != m_bufferEventMap.end()) {
-    //TODO Remove this log
+    // TODO Remove this log
     LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for bufKey=" << bufKey);
     const uint128_t& ipAddr = peer.GetIpAddress();
     if (m_peerConnectionCount[ipAddr] > 0) {
@@ -254,8 +255,8 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
                             << m_peerConnectionCount[ipAddr]);
     }
     for (const auto& it : m_bufferEventMap) {
-      LOG_GENERAL(INFO,
-                  " P2PSeed m_bufferEventMap key = " << it.first << " bev = " << it.second);
+      LOG_GENERAL(INFO, " P2PSeed m_bufferEventMap key = "
+                            << it.first << " bev = " << it.second);
     }
     m_bufferEventMap.erase(it);
   }
@@ -406,7 +407,7 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
                                     const bytes& msg_hash) {
   LOG_MARKER();
-  LOG_PAYLOAD(INFO, "Sending to " << peer, message,
+  LOG_PAYLOAD(DEBUG, "Sending to " << peer, message,
               Logger::MAX_BYTES_TO_DISPLAY);
 
   if (peer.m_ipAddress == 0 && peer.m_listenPortHost == 0) {
@@ -533,7 +534,6 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
 
 void SendJob::SendMessageCore(const Peer& peer, const bytes& message,
                               unsigned char startbyte, const bytes& hash) {
-  LOG_GENERAL(INFO, "SendJob::SendMessageCore()");
   uint32_t retry_counter = 0;
   while (!SendMessageSocketCore(peer, message, startbyte, hash)) {
     if (Blacklist::GetInstance().Exist(peer.m_ipAddress)) {
@@ -555,7 +555,6 @@ void SendJob::SendMessageCore(const Peer& peer, const bytes& message,
 }
 
 void SendJobPeer::DoSend() {
-  LOG_GENERAL(INFO, "DoSend()");
   if (Blacklist::GetInstance().Exist(m_peer.m_ipAddress)) {
     LOG_GENERAL(INFO, m_peer << " is blacklisted - blocking all messages");
     return;
@@ -605,10 +604,8 @@ void SendJobPeers<T>::DoSend() {
 }
 
 void P2PComm::ProcessSendJob(SendJob* job) {
-  LOG_GENERAL(INFO, "P2PComm::ProcessSendJob");
   auto funcSendMsg = [job]() mutable -> void {
     job->DoSend();
-    LOG_GENERAL(INFO, "Deleting job P2PComm::ProcessSendJob");
     delete job;
   };
   m_SendPool.AddJob(funcSendMsg);
@@ -940,7 +937,6 @@ void P2PComm::ReadCallback(struct bufferevent* bev, [[gnu::unused]] void* ctx) {
   struct evbuffer* input = bufferevent_get_input(bev);
 
   size_t len = evbuffer_get_length(input);
-  LOG_GENERAL(INFO, "P2PComm::ReadCallback() len:" << len);
   if (len >= MAX_READ_WATERMARK_IN_BYTES) {
     // Get the IP info
     int fd = bufferevent_getfd(bev);
@@ -1053,7 +1049,7 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
             std::make_pair(from, START_BYTE_SEED_TO_SEED_REQUEST));
 
     string bufKey = from.GetPrintableIPAddress() + ":" +
-                     boost::lexical_cast<string>(from.GetListenPortHost());
+                    boost::lexical_cast<string>(from.GetListenPortHost());
     LOG_GENERAL(INFO, "bufferEventMap key=" << bufKey << " msg len=" << len);
 
     // Add bufferevent to map
@@ -1078,8 +1074,6 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
   Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
             ((struct sockaddr_in*)cli_addr)->sin_port);
 
-  LOG_GENERAL(INFO, "P2PComm::AcceptConnectionCallback");
-  LOG_GENERAL(INFO, "Incoming message from " << from);
   if (Blacklist::GetInstance().Exist(from.m_ipAddress,
                                      false /* for incoming message */)) {
     LOG_GENERAL(INFO, "The node "
@@ -1138,6 +1132,7 @@ void P2PComm::AcceptCbServerSeed([[gnu::unused]] evconnlistener* listener,
                                  struct sockaddr* cli_addr,
                                  [[gnu::unused]] int socklen,
                                  [[gnu::unused]] void* arg) {
+  LOG_MARKER();
   Peer from(uint128_t(((struct sockaddr_in*)cli_addr)->sin_addr.s_addr),
             ((struct sockaddr_in*)cli_addr)->sin_port);
 
@@ -1154,7 +1149,6 @@ void P2PComm::AcceptCbServerSeed([[gnu::unused]] evconnlistener* listener,
   }
 
   {
-    LOG_GENERAL(INFO, "P2PComm::AcceptCbServerSeed from=" << from);
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[from.GetIpAddress()] > MAX_PEER_CONNECTION) {
       LOG_GENERAL(WARNING, "Connection ignored from " << from);
@@ -1401,7 +1395,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     lock_guard<mutex> g(m_mutexBufferEventMap);
     uint32_t length = message.size();
     string bufKey = peer.GetPrintableIPAddress() + ":" +
-                     boost::lexical_cast<string>(peer.GetListenPortHost());
+                    boost::lexical_cast<string>(peer.GetListenPortHost());
     auto it = m_bufferEventMap.find(bufKey);
     if (it != m_bufferEventMap.end()) {
       unsigned char buf[HDR_LEN] = {(unsigned char)(MSG_VERSION & 0xFF),
@@ -1415,8 +1409,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       bytes destMsg(std::begin(buf), std::end(buf));
       destMsg.insert(destMsg.end(), message.begin(), message.end());
       LOG_GENERAL(INFO, "P2PSeed response msg len="
-                            << length + HDR_LEN << " bufferevent key="
-                            << bufKey << " destMsg size=" << destMsg.size());
+                            << length + HDR_LEN << " bufferevent key=" << bufKey
+                            << " destMsg size=" << destMsg.size());
       if (bufferevent_write(it->second, &destMsg.at(0), HDR_LEN + length) < 0) {
         LOG_GENERAL(WARNING, "Error bufferevent_write failed !!!");
         return;
