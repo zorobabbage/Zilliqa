@@ -1063,8 +1063,6 @@ bool DirectoryService::Execute(const bytes& message, unsigned int offset,
                                const Peer& from,
                                const unsigned char& startByte) {
   LOG_MARKER();
-  LOG_GENERAL(INFO, "Chetan DirectoryService::Execute msg_type:"
-                        << static_cast<unsigned>(startByte));
 
   bool result = false;
 
