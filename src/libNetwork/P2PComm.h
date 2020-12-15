@@ -174,7 +174,7 @@ class P2PComm {
   void StartMessagePump(Dispatcher dispatcher);
 
   void EnableListener(uint32_t listen_port_host,
-                      bool enable_listen_for_seed_node = false);
+                      bool startSeedNodeListener = false);
   // start event loop
   void EnableConnect();
 

@@ -1217,13 +1217,12 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
 
 typedef void (*event_log_cb)(int severity, const char* msg);
 
-void P2PComm::EnableListener(uint32_t listen_port_host,
-                             bool enable_listen_for_seed_node) {
+void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
   LOG_MARKER();
   struct sockaddr_in serv_addr {};
   memset(&serv_addr, 0, sizeof(struct sockaddr_in));
   serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(listen_port_host);
+  serv_addr.sin_port = htons(listenPort);
   serv_addr.sin_addr.s_addr = INADDR_ANY;
 
   // TODO Remove later on
@@ -1251,11 +1250,12 @@ void P2PComm::EnableListener(uint32_t listen_port_host,
     return;
   }
   struct evconnlistener* listener2 = NULL;
-  if (enable_listen_for_seed_node) {
+  if (startSeedNodeListener) {
+    LOG_GENERAL(INFO, "Start listener on " << listenPort + 2);
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
     // TODO Check if it's still ok rather than keeping config
-    serv_addr.sin_port = htons(listen_port_host + 2);
+    serv_addr.sin_port = htons(listenPort + 2);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     struct evconnlistener* listener2 = evconnlistener_new_bind(
         base, AcceptCbServerSeed, nullptr,

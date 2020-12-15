@@ -237,14 +237,9 @@ int main(int argc, const char* argv[]) {
     // Only start the incoming message queue
     P2PComm::GetInstance().StartMessagePump(dispatcher);
 
-    if (LOOKUP_NODE_MODE) {
-      if (ARCHIVAL_LOOKUP) {
-        if (vm.count("l2lsyncmode") > 0) {
-          P2PComm::GetInstance().EnableConnect();
-        } else {
-          P2PComm::GetInstance().EnableListener(
-              my_network_info.m_listenPortHost, true);
-        }
+    if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
+      if (vm.count("l2lsyncmode") > 0) {
+        P2PComm::GetInstance().EnableConnect();
       } else {
         P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
                                               true);
