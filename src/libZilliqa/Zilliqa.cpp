@@ -99,12 +99,14 @@ void Zilliqa::ProcessMessage(
 
       std::chrono::time_point<std::chrono::high_resolution_clock> tpStart;
       std::string msgName;
-      const auto ins_byte = message->first.at(MessageOffset::INST);
-      msgName = FormatMessageName(msg_type, ins_byte);
-      LOG_GENERAL(
-          INFO, MessageSizeKeyword << msgName << " " << message->first.size());
+      if (ENABLE_CHECK_PERFORMANCE_LOG) {
+        const auto ins_byte = message->first.at(MessageOffset::INST);
+        msgName = FormatMessageName(msg_type, ins_byte);
+        LOG_GENERAL(INFO, MessageSizeKeyword << msgName << " "
+                                             << message->first.size());
 
-      tpStart = std::chrono::high_resolution_clock::now();
+        tpStart = std::chrono::high_resolution_clock::now();
+      }
       bool result = msg_handlers[msg_type]->Execute(
           message->first, MessageOffset::INST, message->second.first,
           message->second.second);
@@ -476,7 +478,7 @@ Zilliqa::~Zilliqa() {
 
 void Zilliqa::Dispatch(
     pair<bytes, std::pair<Peer, const unsigned char>>* message) {
-  LOG_MARKER();
+  // LOG_MARKER();
 
   // Queue message
   if (!m_msgQueue.bounded_push(message)) {
