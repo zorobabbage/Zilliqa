@@ -29,9 +29,13 @@ ulimit -Sc unlimited;
 ulimit -Hc unlimited;
 ulimit -s unlimited; 
 
+num_ds=5
+num_shards=6
+total_nodes=$((num_ds * num_shards))
+
 python tests/Zilliqa/test_zilliqa_local.py stop
-python tests/Zilliqa/test_zilliqa_local.py setup 20
-python tests/Zilliqa/test_zilliqa_local.py prestart 10
+python tests/Zilliqa/test_zilliqa_local.py setup $total_nodes
+python tests/Zilliqa/test_zilliqa_local.py prestart $num_ds
 
 # clean up persistence storage
 rm -rf lookup_local_run/node*
