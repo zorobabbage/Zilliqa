@@ -549,8 +549,8 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
                             << ipAddr << " m_peerConnectionCount="
                             << m_peerConnectionCount[ipAddr]);
     }
-    bufferevent_free(bufev);
   }
+  bufferevent_free(bufev);
 }
 
 void P2PComm::ClearPeerConnectionCount() {
