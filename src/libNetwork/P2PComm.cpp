@@ -55,6 +55,7 @@ const unsigned char START_BYTE_BROADCAST = 0x22;
 const unsigned char START_BYTE_GOSSIP = 0x33;
 const unsigned char START_BYTE_SEED_TO_SEED_REQUEST = 0x44;
 const unsigned char START_BYTE_SEED_TO_SEED_RESPONSE = 0x55;
+
 const unsigned int HDR_LEN = 8;
 const unsigned int HASH_LEN = 32;
 const unsigned int GOSSIP_MSGTYPE_LEN = 1;
@@ -208,7 +209,7 @@ uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
 bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                     unsigned char start_byte,
                                     const bytes& msg_hash) {
-  LOG_MARKER();
+  // LOG_MARKER();
   LOG_PAYLOAD(DEBUG, "Sending to " << peer, message,
               Logger::MAX_BYTES_TO_DISPLAY);
 
@@ -816,26 +817,6 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
     return;
   }
 
-  const unsigned char version = message[0];
-
-  // Check for version requirement
-  if (version != (unsigned char)(MSG_VERSION & 0xFF)) {
-    LOG_GENERAL(WARNING, "Header version wrong, received ["
-                             << version - 0x00 << "] while expected ["
-                             << MSG_VERSION << "].");
-    return;
-  }
-
-  const uint16_t chainId = (message[1] << 8) + message[2];
-  if (chainId != CHAIN_ID) {
-    LOG_GENERAL(WARNING, "Header chainid wrong, received ["
-                             << chainId << "] while expected [" << CHAIN_ID
-                             << "].");
-    return;
-  }
-
-  const unsigned char startByte = message[3];
-
   const uint32_t messageLength =
       (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
 
@@ -863,6 +844,26 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
     CloseAndFreeBufferEvent(bev);
     return;
   }
+
+  const unsigned char version = message[0];
+
+  // Check for version requirement
+  if (version != (unsigned char)(MSG_VERSION & 0xFF)) {
+    LOG_GENERAL(WARNING, "Header version wrong, received ["
+                             << version - 0x00 << "] while expected ["
+                             << MSG_VERSION << "].");
+    return;
+  }
+
+  const uint16_t chainId = (message[1] << 8) + message[2];
+  if (chainId != CHAIN_ID) {
+    LOG_GENERAL(WARNING, "Header chainid wrong, received ["
+                             << chainId << "] while expected [" << CHAIN_ID
+                             << "].");
+    return;
+  }
+
+  const unsigned char startByte = message[3];
 
   if (startByte == START_BYTE_SEED_TO_SEED_REQUEST) {
     LOG_PAYLOAD(INFO, "Incoming request from ext seed " << from, message,
@@ -1048,28 +1049,6 @@ void P2PComm ::ReadCbClientSeed(struct bufferevent* bev,
     return;
   }
 
-  const unsigned char version = message[0];
-
-  // Check for version requirement
-  if (version != (unsigned char)(MSG_VERSION & 0xFF)) {
-    LOG_GENERAL(WARNING, "Header version wrong, received ["
-                             << version - 0x00 << "] while expected ["
-                             << MSG_VERSION << "].");
-    CloseAndFreeBufferEvent(bev);
-    return;
-  }
-
-  const uint16_t chainId = (message[1] << 8) + message[2];
-  if (chainId != CHAIN_ID) {
-    LOG_GENERAL(WARNING, "Header chainid wrong, received ["
-                             << chainId << "] while expected [" << CHAIN_ID
-                             << "].");
-    CloseAndFreeBufferEvent(bev);
-    return;
-  }
-
-  const unsigned char startByte = message[3];
-
   const uint32_t messageLength =
       (message[4] << 24) + (message[5] << 16) + (message[6] << 8) + message[7];
 
@@ -1099,6 +1078,28 @@ void P2PComm ::ReadCbClientSeed(struct bufferevent* bev,
     LOG_GENERAL(WARNING, "evbuffer_drain failure.");
     return;
   }
+
+  const unsigned char version = message[0];
+
+  // Check for version requirement
+  if (version != (unsigned char)(MSG_VERSION & 0xFF)) {
+    LOG_GENERAL(WARNING, "Header version wrong, received ["
+                             << version - 0x00 << "] while expected ["
+                             << MSG_VERSION << "].");
+    CloseAndFreeBufferEvent(bev);
+    return;
+  }
+
+  const uint16_t chainId = (message[1] << 8) + message[2];
+  if (chainId != CHAIN_ID) {
+    LOG_GENERAL(WARNING, "Header chainid wrong, received ["
+                             << chainId << "] while expected [" << CHAIN_ID
+                             << "].");
+    CloseAndFreeBufferEvent(bev);
+    return;
+  }
+
+  const unsigned char startByte = message[3];
 
   if (startByte == START_BYTE_SEED_TO_SEED_RESPONSE) {
     LOG_PAYLOAD(INFO, "Incoming normal response from server seed " << from,
