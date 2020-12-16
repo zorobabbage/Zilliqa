@@ -29,8 +29,8 @@ ulimit -Sc unlimited;
 ulimit -Hc unlimited;
 ulimit -s unlimited; 
 
-num_ds=5
-num_shards=6
+num_ds=4
+num_shards=4
 total_nodes=$((num_ds * num_shards))
 
 python tests/Zilliqa/test_zilliqa_local.py stop
