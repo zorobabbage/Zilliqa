@@ -69,14 +69,15 @@ std::mutex P2PComm::m_mutexBufferEventMap;
 std::map<std::string, struct bufferevent*> P2PComm::m_bufferEventMap;
 
 // Enable libevent logs for debugging
-static void LibEventFatalLogCb(int err) {
-  LOG_GENERAL(FATAL,
-              " P2PSeed Something went wrong. Fatal-ing with error = " << err);
-}
+// static void LibEventFatalLogCb(int err) {
+//   LOG_GENERAL(FATAL,
+//               " P2PSeed Something went wrong. Fatal-ing with error = " <<
+//               err);
+// }
 
-static void LibEventLogCb(int sev, const char* msg) {
-  LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
-}
+// static void LibEventLogCb(int sev, const char* msg) {
+//   LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
+// }
 
 /// Comparison operator for ordering the list of message hashes.
 struct HashCompare {
@@ -728,6 +729,36 @@ void P2PComm::EventCallback(struct bufferevent* bev, short events,
   }
 }
 
+void P2PComm::HandleNetworkErrorEvents(const Peer& peer) {
+  LOG_GENERAL(WARNING, "Socket connect failed. Code = "
+                           << errno << " Desc: " << std::strerror(errno)
+                           << ". IP address: " << peer);
+  if (P2PComm::IsHostHavingNetworkIssue()) {
+    if (Blacklist::GetInstance().IsWhitelistedSeed(peer.m_ipAddress)) {
+      LOG_GENERAL(WARNING, "[blacklist] Encountered "
+                               << errno << " (" << std::strerror(errno)
+                               << "). Adding seed "
+                               << peer.GetPrintableIPAddress()
+                               << " as relaxed blacklisted");
+      // Add this seed node to relaxed blacklist even if it is whitelisted
+      // in general.
+      Blacklist::GetInstance().Add(peer.m_ipAddress, false, true);
+    } else {
+      LOG_GENERAL(WARNING, "[blacklist] Encountered "
+                               << errno << " (" << std::strerror(errno)
+                               << "). Adding " << peer.GetPrintableIPAddress()
+                               << " as strictly blacklisted");
+      Blacklist::GetInstance().Add(peer.m_ipAddress);  // strict
+    }
+  } else if (P2PComm::IsNodeNotRunning()) {
+    LOG_GENERAL(WARNING, "[blacklist] Encountered "
+                             << errno << " (" << std::strerror(errno)
+                             << "). Adding " << peer.GetPrintableIPAddress()
+                             << " as relaxed blacklisted");
+    Blacklist::GetInstance().Add(peer.m_ipAddress, false);
+  }
+}
+
 void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
                                 [[gnu::unused]] void* ctx) {
   LOG_MARKER();
@@ -735,12 +766,13 @@ void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
   struct sockaddr_in cli_addr {};
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
-  Peer from(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
+  Peer peer(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
   if (events & BEV_EVENT_CONNECTED) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
   }
   if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR");
+    HandleNetworkErrorEvents(peer);
   }
   if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_READING");
@@ -986,14 +1018,18 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
 void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
                                  short events, [[gnu::unused]] void* ctx) {
   LOG_MARKER();
-  // unique_ptr<struct bufferevent, decltype(&CloseAndFreeBufferEvent)>
-  //    socket_closer(bev, CloseAndFreeBufferEvent);
+  int fd = bufferevent_getfd(bev);
+  struct sockaddr_in cli_addr {};
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+  getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
+  Peer peer(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
   if (events & BEV_EVENT_CONNECTED) {
     // TODO Remove this log
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
   }
   if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR");
+    HandleNetworkErrorEvents(peer);
     CloseAndFreeBufferEvent(bev);
   }
   if (events & BEV_EVENT_READING) {
@@ -1225,9 +1261,9 @@ void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
 
   // TODO Remove later on
   // TODO Remove event library logging later on
-  event_set_log_callback(LibEventLogCb);
-  event_enable_debug_logging(EVENT_DBG_ALL);
-  event_set_fatal_callback(LibEventFatalLogCb);
+  // event_set_log_callback(LibEventLogCb);
+  // event_enable_debug_logging(EVENT_DBG_ALL);
+  // event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   // Create the listener
   base = event_base_new();
@@ -1279,9 +1315,9 @@ void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
 void P2PComm::EnableConnect() {
   LOG_MARKER();
   // TODO Remove event library logging later on
-  event_set_log_callback(LibEventLogCb);
-  event_enable_debug_logging(EVENT_DBG_ALL);
-  event_set_fatal_callback(LibEventFatalLogCb);
+  // event_set_log_callback(LibEventLogCb);
+  // event_enable_debug_logging(EVENT_DBG_ALL);
+  // event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   base = event_base_new();
   event* e =

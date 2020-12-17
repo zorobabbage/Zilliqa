@@ -112,6 +112,8 @@ class P2PComm {
   boost::lockfree::queue<SendJob*> m_sendQueue;
   void ProcessSendJob(SendJob* job);
 
+  static void HandleNetworkErrorEvents(const Peer& peer);
+
   static void ProcessBroadCastMsg(bytes& message, const Peer& from);
   static void ProcessGossipMsg(bytes& message, Peer& from);
 
