@@ -1018,7 +1018,6 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
 void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
                                  short events, [[gnu::unused]] void* ctx) {
   LOG_MARKER();
-  lock_guard<mutex> g(m_mutexBufferEvent);
   int fd = bufferevent_getfd(bev);
   struct sockaddr_in cli_addr {};
   socklen_t addr_size = sizeof(struct sockaddr_in);
@@ -1389,7 +1388,6 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
-    lock_guard<mutex> g(m_mutexBufferEvent);
     struct bufferevent* bev = bufferevent_socket_new(
         base, -1,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS | BEV_OPT_THREADSAFE);
