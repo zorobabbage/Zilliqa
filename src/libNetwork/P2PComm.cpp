@@ -65,7 +65,7 @@ const unsigned int GOSSIP_SNDR_LISTNR_PORT_LEN = 4;
 P2PComm::Dispatcher P2PComm::m_dispatcher;
 std::mutex P2PComm::m_mutexPeerConnectionCount;
 std::map<uint128_t, uint16_t> P2PComm::m_peerConnectionCount;
-std::mutex P2PComm::m_mutexBufferEventMap;
+std::mutex P2PComm::m_mutexBufferEvent;
 std::map<std::string, struct bufferevent*> P2PComm::m_bufferEventMap;
 
 // Enable libevent logs for debugging
@@ -913,7 +913,7 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
 
     // Add bufferevent to map
     {
-      lock_guard<mutex> g(m_mutexBufferEventMap);
+      lock_guard<mutex> g(m_mutexBufferEvent);
       m_bufferEventMap[bufKey] = bev;
     }
     // Queue the message
@@ -988,9 +988,9 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
 
 void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   LOG_MARKER();
-  lock(m_mutexPeerConnectionCount, m_mutexBufferEventMap);
+  lock(m_mutexPeerConnectionCount, m_mutexBufferEvent);
   unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
-  lock_guard<mutex> g(m_mutexBufferEventMap, adopt_lock);
+  lock_guard<mutex> g(m_mutexBufferEvent, adopt_lock);
 
   string bufKey = peer.GetPrintableIPAddress() + ":" +
                   boost::lexical_cast<string>(peer.GetListenPortHost());
@@ -1029,8 +1029,10 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
   }
   if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR");
-    HandleNetworkErrorEvents(peer);
-    CloseAndFreeBufferEvent(bev);
+    if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
+      HandleNetworkErrorEvents(peer);
+      CloseAndFreeBufferEvent(bev);
+    }
   }
   if (events & BEV_EVENT_READING) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_READING");
@@ -1040,11 +1042,17 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
   }
   if (events & BEV_EVENT_EOF) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_EOF");
+    if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
+      HandleNetworkErrorEvents(peer);
+      CloseAndFreeBufferEvent(bev);
+    }
   }
   if (events & BEV_EVENT_TIMEOUT) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_TIMEOUT");
     // No need to do cleanup in other events  as timeout event will take care
-    CloseAndFreeBufferEvent(bev);
+    if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
+      CloseAndFreeBufferEvent(bev);
+    }
   }
 }
 
@@ -1380,6 +1388,7 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                           const unsigned char& startByteType) {
   LOG_MARKER();
   if (startByteType == START_BYTE_SEED_TO_SEED_REQUEST) {
+    lock_guard<mutex> g(m_mutexBufferEvent);
     struct bufferevent* bev = bufferevent_socket_new(
         base, -1,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS | BEV_OPT_THREADSAFE);
@@ -1418,15 +1427,15 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
     bytes destMsg(std::begin(buf), std::end(buf));
     destMsg.insert(destMsg.end(), message.begin(), message.end());
     LOG_GENERAL(
-        INFO, "P2PSeed request msg len=" << length + HDR_LEN
-                                         << " destMsg size=" << destMsg.size());
+        INFO, "P2PSeed request msg len=" << length + HDR_LEN << " destMsg size="
+                                         << destMsg.size() << " bev=" << bev);
     if (bufferevent_write(bev, &destMsg.at(0), HDR_LEN + length) < 0) {
       LOG_GENERAL(WARNING, "Error bufferevent_write failed !!!");
       return;
     }
     return;
   } else if (startByteType == START_BYTE_SEED_TO_SEED_RESPONSE) {
-    lock_guard<mutex> g(m_mutexBufferEventMap);
+    lock_guard<mutex> g(m_mutexBufferEvent);
     uint32_t length = message.size();
     string bufKey = peer.GetPrintableIPAddress() + ":" +
                     boost::lexical_cast<string>(peer.GetListenPortHost());

@@ -139,7 +139,7 @@ class P2PComm {
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
 
  public:
-  static std::mutex m_mutexBufferEventMap;
+  static std::mutex m_mutexBufferEvent;
   static std::map<std::string, struct bufferevent*> m_bufferEventMap;
   /// Returns the singleton P2PComm instance.
   static P2PComm& GetInstance();
