@@ -175,8 +175,7 @@ class P2PComm {
   /// Listens for incoming socket connections.
   void StartMessagePump(Dispatcher dispatcher);
 
-  void EnableListener(uint32_t listen_port_host,
-                      bool startSeedNodeListener = false);
+  void EnableListener(uint32_t listenPort, bool startSeedNodeListener = false);
   // start event loop
   void EnableConnect();
 
