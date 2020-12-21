@@ -767,7 +767,7 @@ void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer peer(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
-  LOG_GENERAL(INFO, "P2PSeed EventCbServer peer=" << peer);
+  LOG_GENERAL(INFO, "P2PSeed EventCbServer peer=" << peer << " bev=" << bev);
   if (events & BEV_EVENT_CONNECTED) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
   }
@@ -791,6 +791,7 @@ void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
     LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR or BEV_EVENT_EOF");
     if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
       bufferevent_setcb(bev, NULL, NULL, NULL, NULL);
+      RemoveBufferEventFromMap(peer);
       CloseAndFreeBufferEvent(bev);
     }
   }
@@ -1003,7 +1004,8 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
   auto it = m_bufferEventMap.find(bufKey);
   if (it != m_bufferEventMap.end()) {
     // TODO Remove this log
-    LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for bufKey=" << bufKey);
+    LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for bufKey="
+                          << it->first << " bev=" << it->second);
     const uint128_t& ipAddr = peer.GetIpAddress();
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
@@ -1011,6 +1013,27 @@ void P2PComm::RemoveBufferEventAndConnectionCount(const Peer& peer) {
                             << ipAddr << " m_peerConnectionCount = "
                             << m_peerConnectionCount[ipAddr]);
     }
+    for (const auto& it : m_bufferEventMap) {
+      LOG_GENERAL(INFO, " P2PSeed m_bufferEventMap key = "
+                            << it.first << " bev = " << it.second);
+    }
+    m_bufferEventMap.erase(it);
+  }
+}
+
+void P2PComm::RemoveBufferEventFromMap(const Peer& peer) {
+  LOG_MARKER();
+  lock_guard<mutex> g(m_mutexBufferEvent);
+
+  string bufKey = peer.GetPrintableIPAddress() + ":" +
+                  boost::lexical_cast<string>(peer.GetListenPortHost());
+  LOG_GENERAL(INFO,
+              "P2PSeed RemoveBufferEvent=" << peer << " bufKey =" << bufKey);
+  auto it = m_bufferEventMap.find(bufKey);
+  if (it != m_bufferEventMap.end()) {
+    // TODO Remove this log
+    LOG_GENERAL(INFO, "P2PSeed clearing bufferevent for bufKey="
+                          << it->first << " bev=" << it->second);
     for (const auto& it : m_bufferEventMap) {
       LOG_GENERAL(INFO, " P2PSeed m_bufferEventMap key = "
                             << it.first << " bev = " << it.second);
@@ -1027,7 +1050,7 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer peer(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
-  LOG_GENERAL(INFO, "P2PSeed EventCbClient peer=" << peer);
+  LOG_GENERAL(INFO, "P2PSeed EventCbClient peer=" << peer << " bev=" << bev);
   if (events & BEV_EVENT_CONNECTED) {
     // TODO Remove this log
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
