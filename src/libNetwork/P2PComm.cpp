@@ -788,7 +788,10 @@ void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
   }
   if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
     LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR or BEV_EVENT_EOF");
-    CloseAndFreeBufferEvent(bev);
+    if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
+      bufferevent_setcb(bev, NULL, NULL, NULL, NULL);
+      CloseAndFreeBufferEvent(bev);
+    }
   }
 }
 
@@ -1033,6 +1036,7 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
     if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
       HandleNetworkErrorEvents(peer);
       bufferevent_set_timeouts(bev, NULL, NULL);
+      bufferevent_setcb(bev, NULL, NULL, NULL, NULL);
       CloseAndFreeBufferEvent(bev);
     }
   }
@@ -1047,6 +1051,7 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
     if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
       HandleNetworkErrorEvents(peer);
       bufferevent_set_timeouts(bev, NULL, NULL);
+      bufferevent_setcb(bev, NULL, NULL, NULL, NULL);
       CloseAndFreeBufferEvent(bev);
     }
   }
@@ -1054,6 +1059,7 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_TIMEOUT");
     // No need to do cleanup in other events  as timeout event will take care
     if (!peer.GetIpAddress() == 0 && !peer.GetListenPortHost() == 0) {
+      bufferevent_setcb(bev, NULL, NULL, NULL, NULL);
       CloseAndFreeBufferEvent(bev);
     }
   }
