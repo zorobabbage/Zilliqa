@@ -767,6 +767,7 @@ void P2PComm::EventCbServerSeed(struct bufferevent* bev, short events,
   socklen_t addr_size = sizeof(struct sockaddr_in);
   getpeername(fd, (struct sockaddr*)&cli_addr, &addr_size);
   Peer peer(cli_addr.sin_addr.s_addr, cli_addr.sin_port);
+  LOG_GENERAL(INFO, "P2PSeed EventCbServer peer=" << peer);
   if (events & BEV_EVENT_CONNECTED) {
     LOG_GENERAL(INFO, "P2PSeed BEV_EVENT_CONNECTED");
   }
