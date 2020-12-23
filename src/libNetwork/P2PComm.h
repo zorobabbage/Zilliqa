@@ -137,6 +137,7 @@ class P2PComm {
                                  struct sockaddr* cli_addr, int socklen,
                                  void* arg);
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
+  static void CloseAndFreeBufferEventP2PConn(struct bufferevent* bufev);
 
  public:
   static std::mutex m_mutexBufferEvent;
