@@ -25,6 +25,7 @@ FROM ubuntu:16.04 AS builder
 RUN apt-get update \
     && apt-get install -y software-properties-common \
     && add-apt-repository ppa:tah83/secp256k1 -y \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
     autoconf \
     build-essential \
@@ -58,8 +59,10 @@ RUN apt-get update \
     python3-pip \
     python3-setuptools \
     libsecp256k1-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
+    && sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 \
+    && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.1
 ARG REPO=https://github.com/Zilliqa/Zilliqa.git
@@ -155,7 +158,8 @@ RUN apt-get update \
 COPY requirements3.txt ./
 RUN pip3 install wheel \
     && pip3 install --no-cache-dir -r requirements3.txt \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3 10 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
+    && sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 \
     && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 
 # make dirs fro scilla and zilliqa
