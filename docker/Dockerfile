@@ -111,6 +111,7 @@ FROM ubuntu:16.04
 RUN apt-get update \
     && apt-get install -y software-properties-common \
     && add-apt-repository ppa:tah83/secp256k1 -y \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
     # libs
     ca-certificates \
@@ -134,6 +135,7 @@ RUN apt-get update \
     python3-dev \
     python3-pip \
     python3-setuptools \
+    python 3.6 \
     libsecp256k1-dev \
     # tools
     curl \
@@ -153,7 +155,7 @@ RUN apt-get update \
 COPY requirements3.txt ./
 RUN pip3 install wheel \
     && pip3 install --no-cache-dir -r requirements3.txt \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3 10 # set python3 as default instead python2
+    && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 
 # make dirs fro scilla and zilliqa
 RUN mkdir -p \
