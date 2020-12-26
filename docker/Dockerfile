@@ -62,7 +62,7 @@ RUN apt-get update \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
-    && sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 \
     && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.1
