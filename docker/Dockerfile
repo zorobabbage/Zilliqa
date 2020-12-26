@@ -155,6 +155,7 @@ RUN apt-get update \
 COPY requirements3.txt ./
 RUN pip3 install wheel \
     && pip3 install --no-cache-dir -r requirements3.txt \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3 10 \
     && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 
 # make dirs fro scilla and zilliqa
