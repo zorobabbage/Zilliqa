@@ -63,6 +63,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
     && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
+
+RUN python3.6 -m pip install wheel \
+    && python3.6 -m pip install python-dateutil pyyaml jinja2 pytest awscli boto3 botocore clint tabulate prompt-toolkit netaddr kubernetes pymongo \
+    && python3.6 -m pip install --no-cache-dir -r requirements3.txt
+
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.1
 ARG REPO=https://github.com/Zilliqa/Zilliqa.git
@@ -156,10 +161,13 @@ RUN apt-get update \
 
 # install all necessary libraries for python
 COPY requirements3.txt ./
-RUN pip3 install wheel \
-    && pip3 install --no-cache-dir -r requirements3.txt \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
+
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
     && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
+
+RUN python3.6 -m pip install wheel \
+    && python3.6 -m pip install python-dateutil pyyaml jinja2 pytest awscli boto3 botocore clint tabulate prompt-toolkit netaddr kubernetes pymongo \
+    && python3.6 -m pip install --no-cache-dir -r requirements3.txt
 
 # make dirs fro scilla and zilliqa
 RUN mkdir -p \
