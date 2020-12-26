@@ -14,16 +14,17 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-ARG BASE=zilliqa/scilla:v0.9.1
+ARG BASE=zilliqa/scilla:ubuntu16-on-v0.9.1_885f339
 FROM ${BASE} AS scilla
 # run a copy -L to unfold the symlinkes, and strip all exes
 RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/0/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
 
 # start from a new ubuntu environment as builder for zilliqa, make sure the deps is consistent with those in the runner image
-FROM ubuntu:18.04 AS builder
+FROM ubuntu:16.04 AS builder
 # Format guideline: one package per line and keep them alphabetically sorted
 RUN apt-get update \
     && apt-get install -y software-properties-common \
+    && add-apt-repository ppa:tah83/secp256k1 -y \
     && apt-get update && apt-get install -y --no-install-recommends \
     autoconf \
     build-essential \
@@ -104,7 +105,7 @@ RUN git clone ${REPO} ${SOURCE_DIR} \
        /usr/local/lib/libTrie.so
 
 # start from a new ubuntu as the runner image
-FROM ubuntu:18.04
+FROM ubuntu:16.04
 
 # install all necessary libraries
 RUN apt-get update \

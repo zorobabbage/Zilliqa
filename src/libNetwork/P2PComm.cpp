@@ -133,7 +133,7 @@ uint32_t SendJob::writeMsg(const void* buf, int cli_sock, const Peer& from,
   while (written_length < message_length) {
     ssize_t n = write(cli_sock, (unsigned char*)buf + written_length,
                       message_length - written_length);
-
+    LOG_GENERAL(DEBUG, "Sent chunk of " << n << " bytes");
     if (P2PComm::IsHostHavingNetworkIssue()) {
       if (Blacklist::GetInstance().IsWhitelistedSeed(from.m_ipAddress)) {
         LOG_GENERAL(WARNING, "[blacklist] Encountered "
