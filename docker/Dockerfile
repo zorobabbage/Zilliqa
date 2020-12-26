@@ -135,7 +135,7 @@ RUN apt-get update \
     python3-dev \
     python3-pip \
     python3-setuptools \
-    python 3.6 \
+    python3.6 \
     libsecp256k1-dev \
     # tools
     curl \
