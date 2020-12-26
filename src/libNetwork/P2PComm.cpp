@@ -290,8 +290,10 @@ bool SendJob::SendMessageSocketCore(const Peer& peer, const bytes& message,
                                   (unsigned char)((length >> 8) & 0xFF),
                                   (unsigned char)(length & 0xFF)};
 
-    if (HDR_LEN != writeMsg(buf, cli_sock, peer, HDR_LEN)) {
-      LOG_GENERAL(INFO, "DEBUG: not written_length == " << HDR_LEN);
+    uint32_t written = writeMsg(buf, cli_sock, peer, HDR_LEN);
+    if (HDR_LEN != written) {
+      LOG_CHECK_FAIL("Failed to write header bytes", written, HDR_LEN);
+      return true;
     }
 
     if (start_byte != START_BYTE_BROADCAST) {
