@@ -65,8 +65,7 @@ RUN apt-get update \
     && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 
 RUN python3.6 -m pip install wheel \
-    && python3.6 -m pip install python-dateutil pyyaml jinja2 pytest awscli boto3 botocore clint tabulate prompt-toolkit netaddr kubernetes pymongo \
-    && python3.6 -m pip install --no-cache-dir -r requirements3.txt
+    && python3.6 -m pip install python-dateutil pyyaml jinja2 pytest awscli boto3 botocore clint tabulate prompt-toolkit netaddr kubernetes pymongo
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.1
