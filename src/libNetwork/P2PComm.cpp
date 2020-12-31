@@ -1473,6 +1473,10 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
                               << it.first << " bev=" << it.second);
       }
       m_bufferEventMap.erase(it);
+    } else {
+      LOG_GENERAL(
+          WARNING,
+          "Failed to send msg.Check if bufferevent is cleaned up already")
     }
     return;
   }
