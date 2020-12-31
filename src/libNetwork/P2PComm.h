@@ -112,8 +112,6 @@ class P2PComm {
   boost::lockfree::queue<SendJob*> m_sendQueue;
   void ProcessSendJob(SendJob* job);
 
-  static void HandleNetworkErrorEvents(const Peer& peer);
-
   static void ProcessBroadCastMsg(bytes& message, const Peer& from);
   static void ProcessGossipMsg(bytes& message, Peer& from);
 
@@ -137,7 +135,7 @@ class P2PComm {
                                  struct sockaddr* cli_addr, int socklen,
                                  void* arg);
   static void CloseAndFreeBufferEvent(struct bufferevent* bufev);
-  static void CloseAndFreeBufferEventP2PConn(struct bufferevent* bufev);
+  static void CloseAndFreeBevP2PSeedConn(struct bufferevent* bufev);
 
  public:
   static std::mutex m_mutexBufferEvent;
@@ -159,8 +157,8 @@ class P2PComm {
   inline static bool IsHostHavingNetworkIssue();
   inline static bool IsNodeNotRunning();
   static void ClearPeerConnectionCount();
-  static void RemoveBufferEventAndConnectionCount(const Peer& peer);
-  static void RemoveBufferEventFromMap(const Peer& peer);
+  static void RemoveBevAndDecrConnCountFromMap(const Peer& peer);
+  static void RemoveBevFromMap(const Peer& peer);
 
  private:
   using SocketCloser = std::unique_ptr<int, void (*)(int*)>;

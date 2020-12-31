@@ -125,7 +125,7 @@ void Zilliqa::ProcessMessage(
         if (message->second.second == START_BYTE_SEED_TO_SEED_REQUEST) {
           Peer requestorPeer(message->second.first.GetIpAddress(),
                              message->second.first.GetListenPortHost());
-          P2PComm::GetInstance().RemoveBufferEventAndConnectionCount(
+          P2PComm::GetInstance().RemoveBevAndDecrConnCountFromMap(
               requestorPeer);
         }
       }
