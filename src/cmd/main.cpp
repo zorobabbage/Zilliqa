@@ -241,8 +241,16 @@ int main(int argc, const char* argv[]) {
       if (vm.count("l2lsyncmode") > 0) {
         P2PComm::GetInstance().EnableConnect();
       } else {
-        P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
-                                              true);
+        if (syncType == SyncType::NEW_LOOKUP_SYNC) {
+          // Seed node(Exchange node)
+          P2PComm::GetInstance().EnableListener(
+              my_network_info.m_listenPortHost, false);
+
+        } else {
+          // Seedpub node(l2l lookup node)
+          P2PComm::GetInstance().EnableListener(
+              my_network_info.m_listenPortHost, true);
+        }
       }
     } else {
       P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
