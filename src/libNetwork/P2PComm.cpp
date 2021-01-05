@@ -1054,7 +1054,6 @@ void P2PComm ::EventCbClientSeed([[gnu::unused]] struct bufferevent* bev,
   }
   if (events & BEV_EVENT_ERROR) {
     LOG_GENERAL(WARNING, "P2PSeed BEV_EVENT_ERROR");
-    CloseAndFreeBevP2PSeedConn(bev);
   }
   if (events & BEV_EVENT_READING) {
     LOG_GENERAL(DEBUG, "P2PSeed BEV_EVENT_READING");
