@@ -1254,7 +1254,7 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
   auto funcCheckSendQueue = [this]() mutable -> void {
     SendJob* job = NULL;
     while (true) {
-      while (!m_sendQueue.empty() && m_sendQueue.pop(job)) {
+      while (m_sendQueue.pop(job)) {
         ProcessSendJob(job);
       }
       std::this_thread::sleep_for(std::chrono::microseconds(1));
