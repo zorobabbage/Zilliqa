@@ -557,7 +557,9 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
 
 void P2PComm::CloseAndFreeBevP2PSeedConn(struct bufferevent* bufev) {
   LOG_MARKER();
-  lock_guard<mutex> g(m_mutexBufferEvent);
+  lock(m_mutexPeerConnectionCount, m_mutexBufferEvent);
+  unique_lock<mutex> lock(m_mutexPeerConnectionCount, adopt_lock);
+  lock_guard<mutex> g(m_mutexBufferEvent, adopt_lock);
   int fd = bufferevent_getfd(bufev);
   struct sockaddr_in cli_addr {};
   socklen_t addr_size = sizeof(struct sockaddr_in);
@@ -569,7 +571,6 @@ void P2PComm::CloseAndFreeBevP2PSeedConn(struct bufferevent* bufev) {
                          << strAdd << " port=" << port << " bev=" << bufev);
   uint128_t ipAddr = cli_addr.sin_addr.s_addr;
   {
-    std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
       // TODO Remove log
