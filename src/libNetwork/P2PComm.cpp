@@ -1471,8 +1471,8 @@ void P2PComm::SendMessage(const Peer& peer, const bytes& message,
       }
       // TODO Remove log
       for (const auto& it : m_bufferEventMap) {
-        LOG_GENERAL(INFO, " P2PSeed m_bufferEventMap key="
-                              << it.first << " bev=" << it.second);
+        LOG_GENERAL(INFO, "P2PSeed m_bufferEventMap key=" << it.first << " bev="
+                                                          << it.second);
       }
       m_bufferEventMap.erase(it);
     } else {
