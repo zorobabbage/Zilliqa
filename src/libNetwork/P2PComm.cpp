@@ -539,15 +539,15 @@ void P2PComm::CloseAndFreeBufferEvent(struct bufferevent* bufev) {
   char* strAdd = inet_ntoa(cli_addr.sin_addr);
   int port = cli_addr.sin_port;
   // TODO Remove log
-  LOG_GENERAL(INFO, "P2PSeed CloseAndFreeBevP2PSeedConn ip="
-                        << strAdd << " port=" << port << " bev=" << bufev);
+  LOG_GENERAL(DEBUG, "CloseAndFreeBufferEvent ip=" << strAdd << " port=" << port
+                                                   << " bev=" << bufev);
   uint128_t ipAddr = cli_addr.sin_addr.s_addr;
   {
     std::unique_lock<std::mutex> lock(m_mutexPeerConnectionCount);
     if (m_peerConnectionCount[ipAddr] > 0) {
       m_peerConnectionCount[ipAddr]--;
       // TODO Remove log
-      LOG_GENERAL(DEBUG, "P2PSeed decrementing connection count for ipaddr="
+      LOG_GENERAL(DEBUG, "Decrementing connection count for ipaddr="
                              << ipAddr << " m_peerConnectionCount="
                              << m_peerConnectionCount[ipAddr]);
     }
@@ -955,9 +955,6 @@ void P2PComm::AcceptConnectionCallback([[gnu::unused]] evconnlistener* listener,
       return;
     }
     m_peerConnectionCount[from.GetIpAddress()]++;
-    // TODO Remove the log
-    LOG_GENERAL(DEBUG, "P2PSeed m_peerConnectionCount="
-                           << m_peerConnectionCount[from.GetIpAddress()]);
   }
 
   // Set up buffer event for this new connection
