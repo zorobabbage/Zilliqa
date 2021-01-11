@@ -427,6 +427,7 @@ std::pair<bool, RumorManager::RawBytes> RumorManager::VerifyMessage(
 
     RawBytes tmp;
     tmp.push_back((unsigned char)(CHAIN_ID >> 8) & 0XFF);
+    tmp.push_back((unsigned char)(CHAIN_ID & 0xFF));
     tmp.insert(tmp.end(), message_wo_keysig.begin(), message_wo_keysig.end());
     if (!P2PComm::GetInstance().VerifyMessage(tmp, toVerify, senderPubKey)) {
       LOG_GENERAL(WARNING,
@@ -611,6 +612,7 @@ void RumorManager::AppendKeyAndSignature(RawBytes& result,
 
   RawBytes tmp2;
   tmp2.push_back((unsigned char)(CHAIN_ID >> 8) & 0XFF);
+  tmp2.push_back((unsigned char)(CHAIN_ID & 0xFF));
   tmp2.insert(tmp2.end(), messageToSig.begin(), messageToSig.end());
 
   Signature sig = P2PComm::GetInstance().SignMessage(tmp2);
