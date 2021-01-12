@@ -69,15 +69,14 @@ std::mutex P2PComm::m_mutexBufferEvent;
 std::map<std::string, struct bufferevent*> P2PComm::m_bufferEventMap;
 
 // Enable libevent logs for debugging
- static void LibEventFatalLogCb(int err) {
-   LOG_GENERAL(FATAL,
-               " P2PSeed Something went wrong. Fatal-ing with error = " <<
-               err);
- }
+static void LibEventFatalLogCb(int err) {
+  LOG_GENERAL(FATAL,
+              " P2PSeed Something went wrong. Fatal-ing with error = " << err);
+}
 
- static void LibEventLogCb(int sev, const char* msg) {
-   LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
- }
+static void LibEventLogCb(int sev, const char* msg) {
+  LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
+}
 
 /// Comparison operator for ordering the list of message hashes.
 struct HashCompare {
