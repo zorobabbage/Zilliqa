@@ -325,11 +325,14 @@ void Node::ProcessTransactionWhenShardLeader(
 
   vector<Transaction> gasLimitExceededTxnBuffer;
   vector<pair<TxnHash, TxnStatus>> droppedTxns;
+  unsigned int count_addrNonceTxnMap = 0;
+  unsigned int count_createdTxns = 0;
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
+      LOG_GENERAL(INFO, "txnProcTimeout is set!");
       break;
     }
 
@@ -339,6 +342,7 @@ void Node::ProcessTransactionWhenShardLeader(
     // check m_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
     if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+      count_addrNonceTxnMap++;
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
       // (*optional step)
@@ -375,7 +379,7 @@ void Node::ProcessTransactionWhenShardLeader(
     // if no txn in u_map meet right nonce process new come-in transactions
     else if (t_createdTxns.findOne(t)) {
       // LOG_GENERAL(INFO, "findOneFromCreated");
-
+      count_createdTxns++;
       Address senderAddr = t.GetSenderAddr();
       // check nonce, if nonce larger than expected, put it into
       // m_addrNonceTxnMap
@@ -441,9 +445,13 @@ void Node::ProcessTransactionWhenShardLeader(
         }
       }
     } else {
+      LOG_GENERAL(INFO, "Ending txn processing loop");
       break;
     }
   }
+
+  LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
+  LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
@@ -599,11 +607,14 @@ void Node::ProcessTransactionWhenShardBackup(
 
   vector<Transaction> gasLimitExceededTxnBuffer;
   vector<pair<TxnHash, TxnStatus>> droppedTxns;
+  unsigned int count_addrNonceTxnMap = 0;
+  unsigned int count_createdTxns = 0;
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
+      LOG_GENERAL(INFO, "txnProcTimeout is set!");
       break;
     }
 
@@ -613,6 +624,7 @@ void Node::ProcessTransactionWhenShardBackup(
     // check t_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
     if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+      count_addrNonceTxnMap++;
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
       // (*optional step)
@@ -650,6 +662,7 @@ void Node::ProcessTransactionWhenShardBackup(
     }
     // if no txn in u_map meet right nonce process new come-in transactions
     else if (t_createdTxns.findOne(t)) {
+      count_createdTxns++;
       Address senderAddr = t.GetSenderAddr();
       // check nonce, if nonce larger than expected, put it into
       // t_addrNonceTxnMap
@@ -712,6 +725,9 @@ void Node::ProcessTransactionWhenShardBackup(
       break;
     }
   }
+
+  LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
+  LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
