@@ -330,6 +330,8 @@ void Node::ProcessTransactionWhenShardLeader(
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
+  LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
+
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
       LOG_GENERAL(INFO, "txnProcTimeout is set!");
@@ -349,6 +351,9 @@ void Node::ProcessTransactionWhenShardLeader(
       t_createdTxns.findSameNonceButHigherGas(t);
 
       if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+        LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+        LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+        LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
         gasLimitExceededTxnBuffer.emplace_back(t);
         continue;
       }
@@ -418,6 +423,9 @@ void Node::ProcessTransactionWhenShardLeader(
       // if nonce correct, process it
       else {
         if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+          LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+          LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+          LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
           gasLimitExceededTxnBuffer.emplace_back(t);
           continue;
         }
@@ -453,7 +461,6 @@ void Node::ProcessTransactionWhenShardLeader(
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
   LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
   LOG_GENERAL(INFO, "m_gasUsedTotal         = " << m_gasUsedTotal);
-  LOG_GENERAL(INFO, "microblock_gas_limit   = " << microblock_gas_limit);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
@@ -633,6 +640,9 @@ void Node::ProcessTransactionWhenShardBackup(
       t_createdTxns.findSameNonceButHigherGas(t);
 
       if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+        LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+        LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+        LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
         gasLimitExceededTxnBuffer.emplace_back(t);
         continue;
       }
@@ -697,6 +707,9 @@ void Node::ProcessTransactionWhenShardBackup(
       // if nonce correct, process it
       else {
         if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+          LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+          LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+          LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
           gasLimitExceededTxnBuffer.emplace_back(t);
           continue;
         }
