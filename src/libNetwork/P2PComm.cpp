@@ -69,15 +69,15 @@ std::mutex P2PComm::m_mutexBufferEvent;
 std::map<std::string, struct bufferevent*> P2PComm::m_bufferEventMap;
 
 // Enable libevent logs for debugging
-// static void LibEventFatalLogCb(int err) {
-//   LOG_GENERAL(FATAL,
-//               " P2PSeed Something went wrong. Fatal-ing with error = " <<
-//               err);
-// }
+ static void LibEventFatalLogCb(int err) {
+   LOG_GENERAL(FATAL,
+               " P2PSeed Something went wrong. Fatal-ing with error = " <<
+               err);
+ }
 
-// static void LibEventLogCb(int sev, const char* msg) {
-//   LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
-// }
+ static void LibEventLogCb(int sev, const char* msg) {
+   LOG_GENERAL(INFO, "P2PSeed libevent sev = " << sev << " msg = " << msg);
+ }
 
 /// Comparison operator for ordering the list of message hashes.
 struct HashCompare {
@@ -1279,9 +1279,9 @@ void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
 
   // TODO Remove later on
   // TODO Remove event library logging later on
-  // event_set_log_callback(LibEventLogCb);
-  // event_enable_debug_logging(EVENT_DBG_ALL);
-  // event_set_fatal_callback(LibEventFatalLogCb);
+  event_set_log_callback(LibEventLogCb);
+  event_enable_debug_logging(EVENT_DBG_ALL);
+  event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   // Create the listener
   base = event_base_new();
@@ -1333,9 +1333,9 @@ void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
 void P2PComm::EnableConnect() {
   LOG_MARKER();
   // TODO Remove event library logging later on
-  // event_set_log_callback(LibEventLogCb);
-  // event_enable_debug_logging(EVENT_DBG_ALL);
-  // event_set_fatal_callback(LibEventFatalLogCb);
+  event_set_log_callback(LibEventLogCb);
+  event_enable_debug_logging(EVENT_DBG_ALL);
+  event_set_fatal_callback(LibEventFatalLogCb);
   evthread_use_pthreads();
   base = event_base_new();
   event* e =
