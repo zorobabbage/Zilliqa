@@ -452,6 +452,8 @@ void Node::ProcessTransactionWhenShardLeader(
 
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
   LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
+  LOG_GENERAL(INFO, "m_gasUsedTotal         = " << m_gasUsedTotal);
+  LOG_GENERAL(INFO, "microblock_gas_limit   = " << microblock_gas_limit);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
@@ -729,6 +731,8 @@ void Node::ProcessTransactionWhenShardBackup(
 
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
   LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
+  LOG_GENERAL(INFO, "m_gasUsedTotal         = " << m_gasUsedTotal);
+  LOG_GENERAL(INFO, "microblock_gas_limit   = " << microblock_gas_limit);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
