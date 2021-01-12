@@ -722,6 +722,7 @@ void Node::ProcessTransactionWhenShardBackup(
         }
       }
     } else {
+      LOG_GENERAL(INFO, "Ending txn processing loop");
       break;
     }
   }
