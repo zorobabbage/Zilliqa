@@ -2645,7 +2645,8 @@ bool Node::ProcessNewShardNodeNetworkInfo(
 }
 
 bool Node::ProcessGetVersion(const bytes& message, unsigned int offset,
-                             const Peer& from) {
+                             const Peer& from,
+                             [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (!m_versionChecked) {
@@ -2669,7 +2670,8 @@ bool Node::ProcessGetVersion(const bytes& message, unsigned int offset,
 }
 
 bool Node::ProcessSetVersion(const bytes& message, unsigned int offset,
-                             const Peer& from) {
+                             const Peer& from,
+                             [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   string version_tag;

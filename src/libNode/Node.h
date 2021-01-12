@@ -313,9 +313,11 @@ class Node : public Executable {
       [[gnu::unused]] const unsigned char& startByte);
 
   bool ProcessGetVersion(const bytes& message, unsigned int offset,
-                         const Peer& from);
+                         const Peer& from,
+                         [[gnu::unused]] const unsigned char& startByte);
   bool ProcessSetVersion(const bytes& message, unsigned int offset,
-                         const Peer& from);
+                         const Peer& from,
+                         [[gnu::unused]] const unsigned char& startByte);
 
   // bool ProcessCreateAccounts(const bytes & message,
   // unsigned int offset, const Peer & from);
