@@ -344,6 +344,7 @@ void Node::ProcessTransactionWhenShardLeader(
     // check m_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
     if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+      LOG_GENERAL(INFO, "Tx = " << t.GetTranID());
       count_addrNonceTxnMap++;
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
@@ -351,9 +352,9 @@ void Node::ProcessTransactionWhenShardLeader(
       t_createdTxns.findSameNonceButHigherGas(t);
 
       if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
-        LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
-        LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
-        LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
+        LOG_GENERAL(WARNING, "Gas limit exceeded");
+        LOG_GENERAL(WARNING, "m_gasUsedTotal = " << m_gasUsedTotal);
+        LOG_GENERAL(WARNING, "t.GetGasLimit  = " << t.GetGasLimit());
         gasLimitExceededTxnBuffer.emplace_back(t);
         continue;
       }
@@ -378,11 +379,13 @@ void Node::ProcessTransactionWhenShardLeader(
 
         continue;
       } else {
+        LOG_GENERAL(WARNING, "Tx dropped");
         droppedTxns.emplace_back(t.GetTranID(), error_code);
       }
     }
     // if no txn in u_map meet right nonce process new come-in transactions
     else if (t_createdTxns.findOne(t)) {
+      LOG_GENERAL(INFO, "Tx = " << t.GetTranID());
       // LOG_GENERAL(INFO, "findOneFromCreated");
       count_createdTxns++;
       Address senderAddr = t.GetSenderAddr();
@@ -390,12 +393,12 @@ void Node::ProcessTransactionWhenShardLeader(
       // m_addrNonceTxnMap
       if (t.GetNonce() >
           AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1) {
-        // LOG_GENERAL(INFO, "High nonce: "
-        //                     << t.GetNonce() << " cur sender " <<
-        //                     senderAddr.hex()
-        //                     << " nonce: "
-        //                     <<
-        //                     AccountStore::GetInstance().GetNonceTemp(senderAddr));
+        LOG_GENERAL(INFO, "High nonce: "
+                            << t.GetNonce() << " cur sender " <<
+                            senderAddr.hex()
+                            << " nonce: "
+                            <<
+                            AccountStore::GetInstance().GetNonceTemp(senderAddr));
         auto it1 = t_addrNonceTxnMap.find(senderAddr);
         if (it1 != t_addrNonceTxnMap.end()) {
           auto it2 = it1->second.find(t.GetNonce());
@@ -449,6 +452,7 @@ void Node::ProcessTransactionWhenShardLeader(
           }
           appendOne(t, tr);
         } else {
+          LOG_GENERAL(WARNING, "Tx dropped");
           droppedTxns.emplace_back(t.GetTranID(), error_code);
         }
       }
@@ -633,6 +637,7 @@ void Node::ProcessTransactionWhenShardBackup(
     // check t_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
     if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+      LOG_GENERAL(INFO, "Tx = " << t.GetTranID());
       count_addrNonceTxnMap++;
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
@@ -640,9 +645,9 @@ void Node::ProcessTransactionWhenShardBackup(
       t_createdTxns.findSameNonceButHigherGas(t);
 
       if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
-        LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
-        LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
-        LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
+        LOG_GENERAL(WARNING, "Gas limit exceeded");
+        LOG_GENERAL(WARNING, "m_gasUsedTotal = " << m_gasUsedTotal);
+        LOG_GENERAL(WARNING, "t.GetGasLimit  = " << t.GetGasLimit());
         gasLimitExceededTxnBuffer.emplace_back(t);
         continue;
       }
@@ -668,18 +673,26 @@ void Node::ProcessTransactionWhenShardBackup(
       }
 
       else {
+        LOG_GENERAL(WARNING, "Tx dropped");
         droppedTxns.emplace_back(t.GetTranID(), error_code);
       }
 
     }
     // if no txn in u_map meet right nonce process new come-in transactions
     else if (t_createdTxns.findOne(t)) {
+      LOG_GENERAL(INFO, "Tx = " << t.GetTranID());
       count_createdTxns++;
       Address senderAddr = t.GetSenderAddr();
       // check nonce, if nonce larger than expected, put it into
       // t_addrNonceTxnMap
       if (t.GetNonce() >
           AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1) {
+        LOG_GENERAL(INFO, "High nonce: "
+                            << t.GetNonce() << " cur sender " <<
+                            senderAddr.hex()
+                            << " nonce: "
+                            <<
+                            AccountStore::GetInstance().GetNonceTemp(senderAddr));
         auto it1 = t_addrNonceTxnMap.find(senderAddr);
         if (it1 != t_addrNonceTxnMap.end()) {
           auto it2 = it1->second.find(t.GetNonce());
@@ -733,6 +746,7 @@ void Node::ProcessTransactionWhenShardBackup(
           }
           appendOne(t, tr);
         } else {
+          LOG_GENERAL(WARNING, "Tx dropped");
           droppedTxns.emplace_back(t.GetTranID(), error_code);
         }
       }
