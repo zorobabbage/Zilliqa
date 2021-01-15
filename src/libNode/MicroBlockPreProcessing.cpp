@@ -325,11 +325,16 @@ void Node::ProcessTransactionWhenShardLeader(
 
   vector<Transaction> gasLimitExceededTxnBuffer;
   vector<pair<TxnHash, TxnStatus>> droppedTxns;
+  unsigned int count_addrNonceTxnMap = 0;
+  unsigned int count_createdTxns = 0;
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
+  LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
+
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
+      LOG_GENERAL(INFO, "txnProcTimeout is set!");
       break;
     }
 
@@ -339,12 +344,16 @@ void Node::ProcessTransactionWhenShardLeader(
     // check m_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
     if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+      count_addrNonceTxnMap++;
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
       // (*optional step)
       t_createdTxns.findSameNonceButHigherGas(t);
 
       if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+        LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+        LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+        LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
         gasLimitExceededTxnBuffer.emplace_back(t);
         continue;
       }
@@ -369,11 +378,13 @@ void Node::ProcessTransactionWhenShardLeader(
 
         continue;
       } else {
+
         droppedTxns.emplace_back(t.GetTranID(), error_code);
       }
     }
     // if no txn in u_map meet right nonce process new come-in transactions
     else if (t_createdTxns.findOne(t)) {
+      count_createdTxns++;
       // LOG_GENERAL(INFO, "findOneFromCreated");
 
       Address senderAddr = t.GetSenderAddr();
@@ -381,12 +392,11 @@ void Node::ProcessTransactionWhenShardLeader(
       // m_addrNonceTxnMap
       if (t.GetNonce() >
           AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1) {
-        // LOG_GENERAL(INFO, "High nonce: "
-        //                     << t.GetNonce() << " cur sender " <<
-        //                     senderAddr.hex()
-        //                     << " nonce: "
-        //                     <<
-        //                     AccountStore::GetInstance().GetNonceTemp(senderAddr));
+        LOG_GENERAL(
+            INFO, "High nonce: "
+                      << t.GetNonce() << " cur sender " << senderAddr.hex()
+                      << " nonce: "
+                      << AccountStore::GetInstance().GetNonceTemp(senderAddr));
         auto it1 = t_addrNonceTxnMap.find(senderAddr);
         if (it1 != t_addrNonceTxnMap.end()) {
           auto it2 = it1->second.find(t.GetNonce());
@@ -407,13 +417,16 @@ void Node::ProcessTransactionWhenShardLeader(
         LOG_GENERAL(
             INFO, "Nonce too small"
                       << " Expected "
-                      << AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                      << AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1
                       << " Found " << t.GetNonce() << " for " << t.GetTranID());
         droppedTxns.emplace_back(t.GetTranID(), TxnStatus::NONCE_TOO_LOW);
       }
       // if nonce correct, process it
       else {
         if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+          LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+          LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+          LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
           gasLimitExceededTxnBuffer.emplace_back(t);
           continue;
         }
@@ -441,9 +454,14 @@ void Node::ProcessTransactionWhenShardLeader(
         }
       }
     } else {
+      LOG_GENERAL(INFO, "Ending txn processing loop");
       break;
     }
   }
+
+  LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
+  LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
+  LOG_GENERAL(INFO, "m_gasUsedTotal         = " << m_gasUsedTotal);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
@@ -599,11 +617,16 @@ void Node::ProcessTransactionWhenShardBackup(
 
   vector<Transaction> gasLimitExceededTxnBuffer;
   vector<pair<TxnHash, TxnStatus>> droppedTxns;
+  unsigned int count_addrNonceTxnMap = 0;
+  unsigned int count_createdTxns = 0;
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
+  LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
+
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
+      LOG_GENERAL(INFO, "txnProcTimeout is set!");
       break;
     }
 
@@ -613,12 +636,16 @@ void Node::ProcessTransactionWhenShardBackup(
     // check t_addrNonceTxnMap contains any txn meets right nonce,
     // if contains, process it
     if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+      count_addrNonceTxnMap++;
       // check whether m_createdTransaction have transaction with same Addr and
       // nonce if has and with larger gasPrice then replace with that one.
       // (*optional step)
       t_createdTxns.findSameNonceButHigherGas(t);
 
       if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+        LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+        LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+        LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
         gasLimitExceededTxnBuffer.emplace_back(t);
         continue;
       }
@@ -650,11 +677,17 @@ void Node::ProcessTransactionWhenShardBackup(
     }
     // if no txn in u_map meet right nonce process new come-in transactions
     else if (t_createdTxns.findOne(t)) {
+      count_createdTxns++;
       Address senderAddr = t.GetSenderAddr();
       // check nonce, if nonce larger than expected, put it into
       // t_addrNonceTxnMap
       if (t.GetNonce() >
           AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1) {
+        LOG_GENERAL(
+            INFO, "High nonce: "
+                      << t.GetNonce() << " cur sender " << senderAddr.hex()
+                      << " nonce: "
+                      << AccountStore::GetInstance().GetNonceTemp(senderAddr));
         auto it1 = t_addrNonceTxnMap.find(senderAddr);
         if (it1 != t_addrNonceTxnMap.end()) {
           auto it2 = it1->second.find(t.GetNonce());
@@ -675,13 +708,16 @@ void Node::ProcessTransactionWhenShardBackup(
         LOG_GENERAL(
             INFO, "Nonce too small"
                       << " Expected "
-                      << AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                      << AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1
                       << " Found " << t.GetNonce() << " for " << t.GetTranID());
         droppedTxns.emplace_back(t.GetTranID(), TxnStatus::NONCE_TOO_LOW);
       }
       // if nonce correct, process it
       else {
         if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+          LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+          LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+          LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
           gasLimitExceededTxnBuffer.emplace_back(t);
           continue;
         }
@@ -709,9 +745,14 @@ void Node::ProcessTransactionWhenShardBackup(
         }
       }
     } else {
+      LOG_GENERAL(INFO, "Ending txn processing loop");
       break;
     }
   }
+
+  LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
+  LOG_GENERAL(INFO, "t_createdTxns   # txns = " << count_createdTxns);
+  LOG_GENERAL(INFO, "m_gasUsedTotal         = " << m_gasUsedTotal);
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
