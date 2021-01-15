@@ -378,7 +378,6 @@ void Node::ProcessTransactionWhenShardLeader(
 
         continue;
       } else {
-
         droppedTxns.emplace_back(t.GetTranID(), error_code);
       }
     }
