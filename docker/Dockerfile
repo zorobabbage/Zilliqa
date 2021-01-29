@@ -17,10 +17,6 @@
 ARG BASE=zilliqa/scilla:ubuntu16-on-v0.9.1_885f339
 FROM ${BASE}
 
-COPY requirements2.txt ./
-COPY requirements2.preq.txt ./
-COPY requirements3.txt ./
-
 # Format guideline: one package per line and keep them alphabetically sorted
 RUN apt-get update \
     && apt-get install -y software-properties-common \
