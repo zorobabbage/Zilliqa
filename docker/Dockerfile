@@ -58,7 +58,7 @@ RUN apt-get update \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
-    && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2 \
+    && update-alternatives  --set python /usr/bin/python3.6 \
     && python3.6 -m pip install wheel \
     && python3.6 -m pip install --no-cache-dir -r requirements3.txt
 
