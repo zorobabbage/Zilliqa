@@ -25,6 +25,7 @@ COPY requirements3.txt ./
 RUN apt-get update \
     && apt-get install -y software-properties-common \
     && add-apt-repository ppa:tah83/secp256k1 -y \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
     autoconf \
     build-essential \
