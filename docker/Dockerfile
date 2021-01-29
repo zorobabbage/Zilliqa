@@ -75,8 +75,9 @@ ARG MONGO_INSTALL_DIR=${BUILD_DIR}/mongo
 RUN git clone ${REPO} ${SOURCE_DIR} \
     && git -C ${SOURCE_DIR} checkout ${COMMIT_OR_TAG} \
     && cmake -H${SOURCE_DIR} -B${BUILD_DIR} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-    -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${EXTRA_CMAKE_ARGS} \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${EXTRA_CMAKE_ARGS} \
     && cmake --build ${BUILD_DIR} -- -j$(nproc) \
+    && cmake --build ${BUILD_DIR} --target install \
     && rm -rf ${BUILD_DIR}
 
 ENV LD_LIBRARY_PATH=${INSTALL_DIR}/lib
