@@ -17,6 +17,9 @@
 ARG BASE=zilliqa/scilla:ubuntu16-on-v0.9.1_885f339
 FROM ${BASE}
 
+# install all necessary libraries for python
+COPY requirements3.txt ./
+
 # Format guideline: one package per line and keep them alphabetically sorted
 RUN apt-get update \
     && apt-get install -y software-properties-common \
@@ -55,7 +58,9 @@ RUN apt-get update \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
-    && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
+    && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2 \
+    && python3.6 -m pip install wheel \
+    && python3.6 -m pip install --no-cache-dir -r requirements3.txt
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.1.0
