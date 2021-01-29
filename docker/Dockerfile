@@ -51,16 +51,14 @@ RUN apt-get update \
     libtool \
     ocl-icd-opencl-dev \
     pkg-config \
-    python \
-    python-pip \
     python3-dev \
     python3-pip \
     python3-setuptools \
+    python3.6 \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install -r requirements2.preq.txt \
-    && pip install -r requirements2.txt \
-    && pip3 install -r requirements3.txt
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
+    && update-alternatives  --set python /usr/bin/python3.6 # set python3 as default instead python2
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.1.0
