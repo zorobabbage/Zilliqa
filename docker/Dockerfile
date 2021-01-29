@@ -60,7 +60,7 @@ RUN apt-get update \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
     && update-alternatives  --set python /usr/bin/python3.6 \
     && python3.6 -m pip install wheel \
-    && python3.6 -m pip install --no-cache-dir -r requirements3.txt
+    && python3.6 -m pip install --no-cache-dir -r requirements3.txt 
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.1.0
@@ -78,8 +78,9 @@ RUN git clone ${REPO} ${SOURCE_DIR} \
         -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${EXTRA_CMAKE_ARGS} \
     && cmake --build ${BUILD_DIR} -- -j$(nproc) \
     && cmake --build ${BUILD_DIR} --target install \
-    && rm -rf ${BUILD_DIR}
+    && echo "built files:" && ls -lh ${BUILD_DIR} && echo "installed libs:" && ls -lh ${INSTALL_DIR}/lib \
+    && echo "mongo files:" && ls -lh ${MONGO_INSTALL_DIR}/lib
 
-ENV LD_LIBRARY_PATH=${INSTALL_DIR}/lib
+ENV LD_LIBRARY_PATH=${INSTALL_DIR}/lib:${MONGO_INSTALL_DIR}/lib
 
 ENTRYPOINT ["/bin/bash"]
