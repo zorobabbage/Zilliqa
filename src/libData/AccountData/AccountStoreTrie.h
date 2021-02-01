@@ -52,6 +52,8 @@ class AccountStoreTrie : public AccountStoreSC<MAP> {
   bool UpdateStateTrieAll();
 
   void PrintAccountState() override;
+
+  void PrintTrie();
 };
 
 #include "AccountStoreTrie.tpp"

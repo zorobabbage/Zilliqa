@@ -56,6 +56,17 @@ bool DataConversion::HexStrToStdArray(const string& hex_input,
   return false;
 }
 
+bool DataConversion::StringToHexStr(const string& hex_str, string& str) {
+  try {
+    str = "";
+    boost::algorithm::hex(hex_str, back_inserter(str));
+  } catch (exception& e) {
+    LOG_GENERAL(WARNING, "Failed Uint8VecToHexStr conversion");
+    return false;
+  }
+  return true;
+}
+
 bool DataConversion::HexStrToStdArray64(const string& hex_input,
                                         array<uint8_t, 64>& d) {
   d = {{0}};

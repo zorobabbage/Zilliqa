@@ -270,6 +270,8 @@ bool AccountStore::MoveUpdatesToDisk() {
     }
   }
 
+  PrintTrie();
+
   try {
     lock_guard<mutex> g(m_mutexTrie);
     if (!m_state.db()->commit()) {
@@ -287,6 +289,8 @@ bool AccountStore::MoveUpdatesToDisk() {
   }
 
   m_addressToAccount->clear();
+
+  PrintTrie();
 
   return true;
 }

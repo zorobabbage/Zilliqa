@@ -155,3 +155,36 @@ void AccountStoreTrie<DB, MAP>::PrintAccountState() {
   AccountStoreBase<MAP>::PrintAccountState();
   LOG_GENERAL(INFO, "State Root: " << GetStateRootHash());
 }
+
+
+template <class DB, class MAP>
+void AccountStoreTrie<DB, MAP>::PrintTrie() {
+  m_state.db()->printDB();
+
+  std::lock_guard<std::mutex> g(m_mutexTrie);
+  if (m_prevRoot != dev::h256()) {
+    try {
+      LOG_GENERAL(INFO, "prevRoot: " << m_prevRoot.hex());
+      m_state.setRoot(m_prevRoot);
+    } catch (...) {
+      LOG_GENERAL(INFO, "setRoot failed");
+      return;
+    }
+  }
+
+  LOG_GENERAL(INFO, "setRoot finished");
+
+  for (const auto& i : m_state) {
+    Address address(i.first);
+
+    LOG_GENERAL(INFO, "Address: " << address.hex());
+
+    AccountBase ab;
+    if (!ab.Deserialize(bytes(i.second.begin(), i.second.end()), 0)) {
+      LOG_GENERAL(WARNING, "Account::DeserializeBase failed");
+      return;
+    }
+
+    LOG_GENERAL(INFO, "Address: " << address.hex() << " AccountBase: " << ab);
+  }
+}

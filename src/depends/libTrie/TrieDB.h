@@ -24,6 +24,7 @@
 #include "depends/common/Exceptions.h"
 #include "depends/common/SHA3.h"
 #include "TrieCommon.h"
+#include "libUtils/DataConversion.h"
 
 namespace dev
 {
@@ -587,6 +588,11 @@ namespace dev
                         "assertion failed (" << __FILE__ << ":" << __LINE__ << ": "
                                              << __FUNCTION__ << ")");
         }
+
+        std::string hex;
+        DataConversion::StringToHexStr(b.key, hex);
+        LOG_GENERAL(INFO, "b.key: " << hex);
+        LOG_GENERAL(INFO, "size: " << b.key.size());
 
         if((b.key[0] & 0x10) != 0)
         {

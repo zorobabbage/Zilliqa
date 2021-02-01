@@ -54,7 +54,7 @@ namespace dev
 			/// delete removed nodes in both mem and disk
 			std::vector<h256> purged;
 			purge(purged, false);
-			m_levelDB.BatchDelete(purged);
+			// m_levelDB.BatchDelete(purged);
 
 			/// add newly created nodes in disk
 			if (!m_levelDB.BatchInsert(m_main, m_aux)) {
