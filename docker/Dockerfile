@@ -30,6 +30,7 @@ RUN apt-get update \
     ca-certificates \
     cmake \
     # curl is not a build dependency
+    wget \
     curl \
     git \
     golang \
@@ -58,6 +59,13 @@ RUN apt-get update \
     python3-setuptools \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install cmake 3.19
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh \
+    && mkdir -p "${HOME}"/.local \
+    && bash ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix="${HOME}"/.local/ \
+    && cmake --version \
+    && rm cmake-3.19.3-Linux-x86_64.sh
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.0-alpha.0
@@ -147,12 +155,6 @@ RUN apt-get update \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Install cmake 3.19
-RUN wget https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh \
-    && mkdir -p "${HOME}"/.local \
-    && bash ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix="${HOME}"/.local/ \
-    && cmake --version \
-    && rm cmake-3.19.3-Linux-x86_64.sh \
 
 # install all necessary libraries for python
 COPY requirements3.txt ./
