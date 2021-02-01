@@ -147,6 +147,13 @@ RUN apt-get update \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
+# Install cmake 3.19
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh \
+    && mkdir -p "${HOME}"/.local \
+    && bash ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix="${HOME}"/.local/ \
+    && cmake --version \
+    && rm cmake-3.19.3-Linux-x86_64.sh \
+
 # install all necessary libraries for python
 COPY requirements3.txt ./
 RUN pip3 install wheel \
