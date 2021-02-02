@@ -63,4 +63,4 @@ endif()
 
 list(APPEND CMAKE_PREFIX_PATH ${CRYPTOUTILS_INSTALL_DIR})
 link_directories(${CRYPTOUTILS_INSTALL_DIR}/lib)
-message(("############################# Chetan end of file #############################"))
+message("############################# Chetan end of file #############################")
