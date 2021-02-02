@@ -60,15 +60,15 @@ RUN apt-get update \
     libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install cmake 3.19
+# Install cmake 3.19 
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh \
-    && echo "chetan home:${HOME}" \
     && mkdir -p "${HOME}"/.local \
-    && bash ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix="${HOME}"/.local/ \
-    && ln -sf "${HOME}"/.local/bin/cmake /usr/bin/cmake \
-    && cmake --version \
+    && bash ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix="${HOME}"/.local/
+
+ENV PATH="/root/.local/bin:${PATH}"
+
+RUN cmake --version \
     && rm cmake-3.19.3-Linux-x86_64.sh \
-    && echo "chetan cmake version:" && cmake --version
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.0-alpha.0
