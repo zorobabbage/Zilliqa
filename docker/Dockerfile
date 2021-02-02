@@ -68,7 +68,7 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3
 ENV PATH="/root/.local/bin:${PATH}"
 
 RUN cmake --version \
-    && rm cmake-3.19.3-Linux-x86_64.sh \
+    && rm cmake-3.19.3-Linux-x86_64.sh
 
 # Manually input tag or commit, can be overwritten by docker build-args
 ARG COMMIT_OR_TAG=v7.0.0-alpha.0
