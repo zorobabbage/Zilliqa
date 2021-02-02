@@ -332,17 +332,21 @@ endif()
 
 # installation
 
+message("############## debug1 #########################")
 set_target_properties(zilliqa sendcmd genaccounts genkeypair getpub getaddr gentxn signmultisig verifymultisig zilliqad gensigninitialds grepperf getnetworkhistory getrewardhistory validateDB restore genTxnBodiesFromS3 isolatedServer data_migrate
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+message("############## debug2 #########################")
 set_target_properties(Common Trie CryptoUtils NAT
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 if(OPENCL_MINE)
+    message("############## debug3 #########################")
     set_target_properties(ethash-cl PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 endif()
 
 if(CUDA_MINE)
+    message("############## debug4 #########################")
     set_target_properties(ethash-cuda PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 endif()
 
@@ -352,9 +356,11 @@ install(
     USE_SOURCE_PERMISSIONS
 )
 
+message("############## debug5 #########################")
 # add clang-format and clang-tidy targets lastly
 if(LLVM_EXTRA_TOOLS)
     include(LLVMExtraTools)
 endif()
 
+message("############## debug6 #########################")
 include(CPack)
