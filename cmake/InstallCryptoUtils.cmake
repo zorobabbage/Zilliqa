@@ -20,3 +20,47 @@ execute_process(
 if(NOT "${CRYPTOUTILS_INSTALL_RET}" STREQUAL "0")
     message(FATAL_ERROR "Error when building and installing cryptoutils (1), see more in log ${CRYPTOUTILS_INSTALL_LOG}")
 endif()
+
+# generate build directory
+execute_process(
+    COMMAND ${CMAKE_COMMAND}
+        -H${CRYPTOUTILS_SOURCE_DIR}
+        -B${CRYPTOUTILS_BINARY_DIR}
+        -DCMAKE_INSTALL_PREFIX=${CRYPTOUTILS_INSTALL_DIR}
+        -DCMAKE_BUILD_TYPE:STRING=Release
+        -Wno-dev
+    RESULT_VARIABLE CRYPTOUTILS_INSTALL_RET
+    OUTPUT_FILE ${CRYPTOUTILS_INSTALL_LOG}
+    ERROR_FILE ${CRYPTOUTILS_INSTALL_LOG}
+)
+
+if(NOT "${CRYPTOUTILS_INSTALL_RET}" STREQUAL "0")
+    message(FATAL_ERROR "Error when building and installing Cryptoutils (2), see more in log ${CRYPTOUTILS_INSTALL_LOG}")
+endif()
+
+# build and install proto
+execute_process(
+    COMMAND ${CMAKE_COMMAND} --build ${CRYPTOUTILS_BINARY_DIR} -- -j${N}
+    RESULT_VARIABLE CRYPTOUTILS_INSTALL_RET
+    OUTPUT_FILE ${CRYPTOUTILS_INSTALL_LOG}
+    ERROR_FILE ${CRYPTOUTILS_INSTALL_LOG}
+)
+
+if(NOT "${CRYPTOUTILS_INSTALL_RET}" STREQUAL "0")
+    message(FATAL_ERROR "Error when building and installing Cryptoutils (3), see more in log ${CRYPTOUTILS_INSTALL_LOG}")
+endif()
+
+execute_process(
+    COMMAND ${CMAKE_COMMAND} --build ${CRYPTOUTILS_BINARY_DIR} --target install
+    RESULT_VARIABLE CRYPTOUTILS_INSTALL_RET
+    OUTPUT_FILE ${CRYPTOUTILS_INSTALL_LOG}
+    ERROR_FILE ${CRYPTOUTILS_INSTALL_LOG}
+)
+
+if(NOT "${CRYPTOUTILS_INSTALL_RET}" STREQUAL "0")
+    message(FATAL_ERROR "Error when building and installing Cryptoutils (4), see more in log ${CRYPTOUTILS_INSTALL_LOG}")
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH ${CRYPTOUTILS_INSTALL_DIR})
+link_directories(${CRYPTOUTILS_INSTALL_DIR}/lib)
+message(("############################# Chetan end of file #############################"))
