@@ -47,6 +47,7 @@
 #include "libUtils/TimeUtils.h"
 #include "libUtils/TimestampVerifier.h"
 #include "libUtils/ThreadPool.h"
+#include "libPersistence/ContractStorage2.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -286,6 +287,7 @@ void Node::ProcessTransactionWhenShardLeader(
     t_createdTxns = m_createdTxns;
   }
   map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMap;
+  map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMapCon;
   t_processedTransactions.clear();
   m_TxnOrder.clear();
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Leader of shard " << m_myshardId << ") Have " << t_createdTxns.size () << " transactions");
@@ -348,6 +350,10 @@ void Node::ProcessTransactionWhenShardLeader(
 
       Address senderAddr = t.GetSenderAddr();
       uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+      auto& cs = Contract::ContractStorage2::GetContractStorage();
+      Json::Value sh_info;
+      const auto& toAddr = t.GetToAddr();
+      Account* toAccount = AccountStore::GetInstance().GetAccount(toAddr);
 
       if (t.GetNonce() >= expectedNonce) {
         // LOG_GENERAL(INFO, "High nonce: "
@@ -366,6 +372,17 @@ void Node::ProcessTransactionWhenShardLeader(
               it2->second = t;
             }
             continue;
+          }
+        }
+
+        // get sharding info of transaction
+        if (toAccount != nullptr && toAccount->isContract()
+            && cs.FetchContractShardingInfo(toAddr, sh_info)) {
+          // based on sharding info, split contracts into concurrent/sequential maps
+
+          if (LOG_SC) {
+            string sh_info_str = JSONUtils::GetInstance().convertJsontoStr(sh_info);
+            LOG_GENERAL(INFO, "Node got sharding info:\n" << sh_info_str);
           }
         }
         t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
@@ -555,13 +572,14 @@ void Node::ProcessTransactionWhenShardBackup(
 
   TxnPool t_createdTxns;
   {
-    LOG_GENERAL(INFO, "Waiting on" << m_txnPacketsInQueue.load() << " txnPackets to finish processing");
+    LOG_GENERAL(INFO, "Waiting on " << m_txnPacketsInQueue.load() << " txnPackets to finish processing");
     while (m_txnPacketsInQueue.load() != 0) {this_thread::sleep_for(chrono::milliseconds(100));}
     lock_guard<mutex> g(m_mutexCreatedTransactions);
     t_createdTxns = m_createdTxns;
   }
   m_expectedTranOrdering.clear();
   map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMap;
+  map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMapCon;
   t_processedTransactions.clear();
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Backup in shard " << m_myshardId << ") Have " << t_createdTxns.size () << " transactions");
 
@@ -595,11 +613,11 @@ void Node::ProcessTransactionWhenShardBackup(
     return false;
   };
 
-  // auto appendOne = [this](const Transaction& t, const TransactionReceipt& tr) {
-  //   m_expectedTranOrdering.emplace_back(t.GetTranID());
-  //   t_processedTransactions.insert(
-  //       make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
-  // };
+  auto appendOne = [this](const Transaction& t, const TransactionReceipt& tr) {
+    m_expectedTranOrdering.emplace_back(t.GetTranID());
+    t_processedTransactions.insert(
+        make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+  };
 
   m_gasUsedTotal = 0;
   m_txnFees = 0;
@@ -624,6 +642,10 @@ void Node::ProcessTransactionWhenShardBackup(
     if (t_createdTxns.findOne(t)) {
       Address senderAddr = t.GetSenderAddr();
       uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+      auto& cs = Contract::ContractStorage2::GetContractStorage();
+      Json::Value sh_info;
+      const auto& toAddr = t.GetToAddr();
+      Account* toAccount = AccountStore::GetInstance().GetAccount(toAddr);
 
       if (t.GetNonce() >= expectedNonce) {
         auto it1 = t_addrNonceTxnMap.find(senderAddr);
@@ -638,8 +660,18 @@ void Node::ProcessTransactionWhenShardBackup(
             continue;
           }
         }
-        // LOG_GENERAL(INFO, "Expected nonce " << expectedNonce << " got " << t.GetNonce());
-        t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+        
+        // get sharding info of transaction
+        if (toAccount != nullptr && toAccount->isContract()
+            && cs.FetchContractShardingInfo(toAddr, sh_info)) {
+          // based on sharding info, split contracts into concurrent/sequential maps
+
+          if (LOG_SC) {
+            string sh_info_str = JSONUtils::GetInstance().convertJsontoStr(sh_info);
+            LOG_GENERAL(INFO, "Node got sharding info:\n" << sh_info_str);
+          }
+        }
+          t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
       }
       // if nonce too small, ignore it
       // TODO: what if microblock gets lost!
