@@ -114,7 +114,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
                                          TransactionReceipt& receipt) {
   // LOG_MARKER();
   LOG_GENERAL(INFO, "Process txn: " << transaction.GetTranID());
-  std::lock_guard<std::mutex> g(m_mutexUpdateAccounts);
+  std::lock_guard<std::mutex> g(m_mutexUpdateAccounts); // might need to remove lock so other threads can update concurrently
 
   m_curIsDS = isDS;
   m_txnProcessTimeout = false;

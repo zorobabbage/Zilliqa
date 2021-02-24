@@ -46,6 +46,7 @@
 #include "libUtils/TimeLockedFunction.h"
 #include "libUtils/TimeUtils.h"
 #include "libUtils/TimestampVerifier.h"
+#include "libUtils/ThreadPool.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -269,6 +270,11 @@ void Node::ProcessTransactionWhenShardLeader(
     const uint64_t& microblock_gas_limit) {
   LOG_MARKER();
 
+  std::chrono::system_clock::time_point tpStart;
+      if (ENABLE_CHECK_PERFORMANCE_LOG) {
+            tpStart = r_timer_start();
+      }
+
   if (ENABLE_ACCOUNTS_POPULATING && UPDATE_PREGENED_ACCOUNTS) {
     UpdateBalanceForPreGeneratedAccounts();
   }
@@ -326,6 +332,9 @@ void Node::ProcessTransactionWhenShardLeader(
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
+  // if (SEMANTIC_SHARDING) {
+  //   const unsigned int NUMTHREADS = 2;
+  //   ThreadPool processPool(NUMTHREADS, "ProcessPool");
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
       break;
@@ -383,9 +392,20 @@ void Node::ProcessTransactionWhenShardLeader(
         continue;
       }
 
+      // processPool.AddJob([this, t, tr]() mutable -> void {
+      //     LOG_GENERAL(INFO, "Threadpool going to run transaction")
+      //     bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr);
+
+      //     std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
+      //     m_expectedTranOrdering.emplace_back(t.GetTranID());
+      //     t_processedTransactions.insert(
+      //       make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+            
+      //     LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);
+      //   });
       if (m_mediator.m_validator->CheckCreatedTransaction(t, tr)) {
         if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                     m_gasUsedTotal)) {
+                                    m_gasUsedTotal)) {
           LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
           break;
         }
@@ -409,6 +429,7 @@ void Node::ProcessTransactionWhenShardLeader(
       break;
     }
   }
+  // }
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
@@ -418,6 +439,12 @@ void Node::ProcessTransactionWhenShardLeader(
   if (ENABLE_TXNS_BACKUP) {
     SaveTxnsToS3(t_processedTransactions);
   }
+
+  if (ENABLE_CHECK_PERFORMANCE_LOG) {
+    LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Leader) Processed " << t_processedTransactions.size ()
+              << " transactions in " << r_timer_end(tpStart) << " microseconds");
+  }
+
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Leader) Processed " << t_processedTransactions.size ()
             << " transactions using " << m_gasUsedTotal << " gas");
   // Put txns in map back into pool
@@ -517,6 +544,11 @@ void Node::ProcessTransactionWhenShardBackup(
     const uint64_t& microblock_gas_limit) {
   LOG_MARKER();
 
+  std::chrono::system_clock::time_point tpStart;
+    if (ENABLE_CHECK_PERFORMANCE_LOG) {
+          tpStart = r_timer_start();
+    }
+
   if (ENABLE_ACCOUNTS_POPULATING && UPDATE_PREGENED_ACCOUNTS) {
     UpdateBalanceForPreGeneratedAccounts();
   }
@@ -563,11 +595,11 @@ void Node::ProcessTransactionWhenShardBackup(
     return false;
   };
 
-  auto appendOne = [this](const Transaction& t, const TransactionReceipt& tr) {
-    m_expectedTranOrdering.emplace_back(t.GetTranID());
-    t_processedTransactions.insert(
-        make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
-  };
+  // auto appendOne = [this](const Transaction& t, const TransactionReceipt& tr) {
+  //   m_expectedTranOrdering.emplace_back(t.GetTranID());
+  //   t_processedTransactions.insert(
+  //       make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+  // };
 
   m_gasUsedTotal = 0;
   m_txnFees = 0;
@@ -575,6 +607,10 @@ void Node::ProcessTransactionWhenShardBackup(
   vector<Transaction> gasLimitExceededTxnBuffer;
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
+
+  // if (SEMANTIC_SHARDING) {
+  //   const unsigned int NUMTHREADS = 2;
+  //   ThreadPool processPool(NUMTHREADS, "ProcessPool");
 
   while (m_gasUsedTotal < microblock_gas_limit) {
     if (txnProcTimeout) {
@@ -629,6 +665,17 @@ void Node::ProcessTransactionWhenShardBackup(
         continue;
       }
 
+      // processPool.AddJob([this, t, tr]() mutable -> void {
+      //   LOG_GENERAL(INFO, "Threadpool going to run transaction")
+      //   bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr);
+
+      //   std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
+      //   m_expectedTranOrdering.emplace_back(t.GetTranID());
+      //   t_processedTransactions.insert(
+      //     make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+          
+      //   LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);
+      // });
       if (m_mediator.m_validator->CheckCreatedTransaction(t, tr)) {
         if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
                                      m_gasUsedTotal)) {
@@ -654,6 +701,7 @@ void Node::ProcessTransactionWhenShardBackup(
       break;
     }
   }
+  // }
 
   AccountStore::GetInstance().ProcessStorageRootUpdateBufferTemp();
   AccountStore::GetInstance().CleanNewLibrariesCacheTemp();
@@ -661,6 +709,11 @@ void Node::ProcessTransactionWhenShardBackup(
   cv_TxnProcFinished.notify_all();
 
   PutTxnsInTempDataBase(t_processedTransactions);
+
+  if (ENABLE_CHECK_PERFORMANCE_LOG) {
+    LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Backup) Processed " << t_processedTransactions.size ()
+              << " transactions in " << r_timer_end(tpStart) << " microseconds");
+  }
 
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Backup) Processed " << t_processedTransactions.size ()
             << " transactions using " << m_gasUsedTotal << " gas");
@@ -1118,10 +1171,10 @@ unsigned char Node::CheckLegitimacyOfTxnHashes(bytes& errorMsg) {
        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
            TXN_DS_TARGET_NUM)) {
     vector<TxnHash> missingTxnHashes;
-    if (!VerifyTxnsOrdering(m_microblock->GetTranHashes(), missingTxnHashes)) {
-      LOG_GENERAL(WARNING, "The leader may have composed wrong order");
-      return LEGITIMACYRESULT::WRONGORDER;
-    }
+    // if (!VerifyTxnsOrdering(m_microblock->GetTranHashes(), missingTxnHashes)) {
+    //   LOG_GENERAL(WARNING, "The leader may have composed wrong order");
+    //   return LEGITIMACYRESULT::WRONGORDER;
+    // }
 
     if (missingTxnHashes.size() > 0) {
       if (!Messenger::SetNodeMissingTxnsErrorMsg(

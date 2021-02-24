@@ -240,7 +240,7 @@
     </recovery>
     <smart_contract>
         <ENABLE_SC>true</ENABLE_SC>
-        <SCILLA_ROOT>/home/dranov/Developer/scilla-deployment</SCILLA_ROOT>
+        <SCILLA_ROOT>/home/nick/GitHub/scilla</SCILLA_ROOT>
         <SCILLA_CHECKER>bin/scilla-checker</SCILLA_CHECKER>
         <SCILLA_BINARY>bin/scilla-runner</SCILLA_BINARY>
         <SCILLA_FILES>scilla_files</SCILLA_FILES>
@@ -255,11 +255,11 @@
         <CONTRACT_FILE_EXTENSION>.scilla</CONTRACT_FILE_EXTENSION>
         <LIBRARY_CODE_EXTENSION>.scillib</LIBRARY_CODE_EXTENSION>
         <EXTLIB_FOLDER>scilla_libs</EXTLIB_FOLDER>
-        <ENABLE_SCILLA_MULTI_VERSION>true</ENABLE_SCILLA_MULTI_VERSION>
+        <ENABLE_SCILLA_MULTI_VERSION>false</ENABLE_SCILLA_MULTI_VERSION>
         <FIELDS_MAP_DEPTH_INDICATOR>_fields_map_depth</FIELDS_MAP_DEPTH_INDICATOR>
         <SEMANTIC_SHARDING>true</SEMANTIC_SHARDING>
         <SHARDING_INFO_INDICATOR>_sharding_info</SHARDING_INFO_INDICATOR>
-        <LOG_SC>false</LOG_SC>
+        <LOG_SC>true</LOG_SC>
     </smart_contract>
     <tests>
         <ENABLE_CHECK_PERFORMANCE_LOG>true</ENABLE_CHECK_PERFORMANCE_LOG>
@@ -310,8 +310,8 @@
     <!-- These are the genesis accounts -->
     <accounts>
         <account>
-            <private_key>6409DF90B2377C0103F1BD8CA7AB6BA4CB5FD07B937C10C27B9A1E4BBAE21897</private_key>
-            <wallet_address>1c2c7516dac2140c47cbae264e8349bb7c07a534</wallet_address>
+            <private_key>BC12B191851545A6316E1CE58B71242139BE20C4C72DD9100A516F885C0E2245</private_key>
+            <wallet_address>4c6b3db64042e2b6c8e55591b1c943876050b152</wallet_address>
         </account>
     </accounts>
     <!-- For constants.xml, the remaining constants below are auto-populated -->
