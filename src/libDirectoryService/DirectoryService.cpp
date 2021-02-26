@@ -862,13 +862,6 @@ bool DirectoryService::UpdateDSGuardIdentity() {
     return false;
   }
 
-  // Send to all lookups
-  m_mediator.m_lookup->SendMessageToLookupNodesSerial(
-      updatedsguardidentitymessage);
-
-  // Send to all upper seed nodes
-  m_mediator.m_lookup->SendMessageToSeedNodes(updatedsguardidentitymessage);
-
   vector<Peer> peerInfo;
   {
     // Multicast to all DS committee
@@ -881,6 +874,13 @@ bool DirectoryService::UpdateDSGuardIdentity() {
   }
 
   P2PComm::GetInstance().SendMessage(peerInfo, updatedsguardidentitymessage);
+
+  // Send to all lookups
+  m_mediator.m_lookup->SendMessageToLookupNodesSerial(
+      updatedsguardidentitymessage);
+
+  // Send to all upper seed nodes
+  m_mediator.m_lookup->SendMessageToSeedNodes(updatedsguardidentitymessage);
 
   m_awaitingToSubmitNetworkInfoUpdate = false;
 
