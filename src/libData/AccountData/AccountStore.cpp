@@ -574,6 +574,10 @@ bool AccountStore::MigrateContractStates2(
       return false;
     }
 
+    // adding old values for ParseContractCheckerOutput to run, but otherwise unused
+    bytes map_depth_data;
+    bytes sharding_info;
+
     // adding scilla_version metadata
     t_metadata.emplace(
         Contract::ContractStorage2::GetContractStorage().GenerateStorageKey(
@@ -581,8 +585,8 @@ bool AccountStore::MigrateContractStates2(
         DataConversion::StringToCharArray(std::to_string(scilla_version)));
 
     // adding depth and type metadata
-    if (!ParseContractCheckerOutput(address, checkerPrint, receipt, t_metadata,
-                                    gasRem)) {
+    if (!ParseContractCheckerOutput(address, checkerPrint, receipt, map_depth_data,
+                                    sharding_info, t_metadata, gasRem)) {
       LOG_GENERAL(WARNING, "ParseContractCheckerOutput failed");
       if (ignoreCheckerFailure) {
         continue;
