@@ -46,10 +46,10 @@ class AccountStoreAtomic
   GetAddressToAccount();
 };
 
+enum INVOKE_TYPE { CHECKER, RUNNER_CREATE, RUNNER_CALL };
+
 template <class MAP>
 class AccountStoreSC : public AccountStoreBase<MAP> {
-  enum INVOKE_TYPE { CHECKER, RUNNER_CREATE, RUNNER_CALL };
-
   /// the amount transfers happened within the current txn will only commit when
   /// the txn is successful
   std::unique_ptr<AccountStoreAtomic<MAP>> m_accountStoreAtomic;
@@ -73,7 +73,7 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
   uint64_t m_curGasLimit{0};
 
   /// the gas price while executing each txn
-  uint128_t m_curGasPrice{GAS_PRICE_MIN_VALUE};
+  uint128_t m_curGasPrice{0};
 
   /// the gas price while executing each txn will be used in calculating the
   /// shard allocation of sender/recipient during chain call
@@ -170,13 +170,9 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
                              const uint128_t& delta);
   /// commit the existing transfers in m_accountStoreAtomic to update the
   /// balance of accounts
-  void CommitTransferAtomic();
+  void CommitAtomics();
   /// discard the existing transfers in m_accountStoreAtomic
-  void DiscardTransferAtomic();
-
-  bool PopulateExtlibsExports(
-      uint32_t scilla_version, const std::vector<Address>& extlibs,
-      std::map<Address, std::pair<std::string, std::string>>& extlibs_exports);
+  void DiscardAtomics();
 
  protected:
   AccountStoreSC();
@@ -198,17 +194,23 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
 
   /// verify the return from scilla_checker for deployment is valid
   /// expose in protected for using by data migration
-  bool ParseContractCheckerOutput(const std::string& checkerPrint,
+  bool ParseContractCheckerOutput(const Address& addr,
+                                  const std::string& checkerPrint,
                                   TransactionReceipt& receipt,
                                   bytes& map_depth_data,
                                   bytes& sharding_info,
+                                  std::map<std::string, bytes>& metadata,
                                   uint64_t& gasRemained,
                                   bool is_library = false);
 
   /// external interface for processing txn
   bool UpdateAccounts(const uint64_t& blockNum, const unsigned int& numShards,
                       const bool& isDS, const Transaction& transaction,
-                      TransactionReceipt& receipt);
+                      TransactionReceipt& receipt, TxnStatus& error_code);
+
+  bool PopulateExtlibsExports(
+      uint32_t scilla_version, const std::vector<Address>& extlibs,
+      std::map<Address, std::pair<std::string, std::string>>& extlibs_exports);
 
  public:
   /// Initialize the class

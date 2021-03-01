@@ -29,7 +29,6 @@
 #include "libData/AccountData/AccountStore.h"
 #include "libData/AccountData/Transaction.h"
 #include "libData/AccountData/TransactionReceipt.h"
-#include "libPersistence/ContractStorage.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/Logger.h"
 
@@ -79,8 +78,9 @@ bool InvokeFunction(string icfDataStr, string icfOutStr, int blockNum,
   Transaction icfTx(DataConversion::Pack(CHAIN_ID, 1), nonce, icfAddress,
                     sender, amount, gasPrice, gasLimit, {}, icfData);
   TransactionReceipt icfTr;
+  TxnStatus error_code;
   if (!AccountStore::GetInstance().UpdateAccounts(blockNum, 1, true, icfTx,
-                                                  icfTr)) {
+                                                  icfTr, error_code)) {
     LOG_GENERAL(INFO, "InvokeFunction Failed");
     return false;
   }
@@ -162,9 +162,9 @@ bool CreateContract(const int& blockNum, ResetType rType) {
   Transaction createTx(DataConversion::Pack(CHAIN_ID, 1), nonce, dev::h160(),
                        sender, 0, PRECISION_MIN_VALUE, 50, code, initData);
   TransactionReceipt createTr;
-
+  TxnStatus error_code;
   AccountStore::GetInstance().UpdateAccounts(blockNum, 1, true, createTx,
-                                             createTr);
+                                             createTr, error_code);
 
   bool checkAddr = false;
   Account* account = AccountStore::GetInstance().GetAccount(tAddress);
@@ -230,8 +230,9 @@ void AutoTest(bool doResetCF, bool doResetICF,
                          samples[i].cfSender, samples[i].amount,
                          samples[i].gasPrice, samples[i].gasLimit, {}, cfData);
         TransactionReceipt cfTr;
-        if (!AccountStore::GetInstance().UpdateAccounts(samples[i].blockNum, 1,
-                                                        true, cfTx, cfTr)) {
+        TxnStatus error_code;
+        if (!AccountStore::GetInstance().UpdateAccounts(
+                samples[i].blockNum, 1, true, cfTx, cfTr, error_code)) {
           continue;
         }
 

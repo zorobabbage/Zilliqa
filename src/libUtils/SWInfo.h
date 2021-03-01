@@ -22,7 +22,7 @@
 #include <iostream>
 #include "common/Serializable.h"
 
-const std::string VERSION_TAG = "v6.2.0-alpha.0";
+const std::string VERSION_TAG = "v7.0.0-alpha.0";
 const std::string ZILLIQA_BRAND = "Copyright (C) Zilliqa. Version " +
                                   VERSION_TAG + ".  <https://www.zilliqa.com/>";
 
@@ -54,12 +54,6 @@ class SWInfo : public Serializable {
          const uint32_t& scillaMajorVersion, const uint32_t& scillaMinorVersion,
          const uint32_t& scillaFixVersion, const uint64_t& scillaUpgradeDS,
          const uint32_t& scillaCommit);
-
-  /// Destructor.
-  ~SWInfo();
-
-  /// Copy constructor.
-  SWInfo(const SWInfo&);
 
   /// Implements the Serialize function inherited from Serializable.
   unsigned int Serialize(bytes& dst, unsigned int offset) const;

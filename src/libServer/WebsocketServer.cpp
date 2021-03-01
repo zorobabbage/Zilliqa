@@ -49,16 +49,27 @@ std::map<websocketpp::connection_hdl, std::unordered_map<Address, Json::Value>,
          std::owner_less<connection_hdl>>
     WebsocketServer::m_eventLogDataBuffer;
 
+std::mutex WebsocketServer::m_mutexTxnLogDataBuffer;
+
+std::map<websocketpp::connection_hdl, std::unordered_map<Address, Json::Value>,
+         std::owner_less<websocketpp::connection_hdl>>
+    WebsocketServer::m_txnLogDataBuffer;
+
+EventLogAddrHdlTracker WebsocketServer::m_txnLogAddrHdlTracker;
+std::mutex WebsocketServer::m_mutexTxnLogAddrHdlTracker;
+
 bool WebsocketServer::start() {
   LOG_MARKER();
   clean();
   // Initialising websocketserver
   m_server.init_asio();
+  m_server.set_reuse_addr(true);
 
   // Register the message handlers.
   m_server.set_message_handler(&WebsocketServer::on_message);
   // m_server.set_fail_handler(&WebsocketServer::on_fail);
   m_server.set_close_handler(&WebsocketServer::on_close);
+  m_server.set_http_handler(&WebsocketServer::on_http);
 
   try {
     m_server.listen(WEBSOCKET_PORT);
@@ -146,6 +157,14 @@ void WebsocketServer::clean() {
     lock_guard<mutex> g(m_mutexTxnBlockNTxnHashes);
     m_jsonTxnBlockNTxnHashes.clear();
   }
+  {
+    lock_guard<mutex> g(m_mutexTxnLogDataBuffer);
+    m_txnLogDataBuffer.clear();
+  }
+  {
+    lock_guard<mutex> g(m_mutexTxnLogAddrHdlTracker);
+    m_txnLogAddrHdlTracker.clear();
+  }
 }
 
 bool WebsocketServer::sendData(const connection_hdl& hdl, const string& data) {
@@ -167,6 +186,8 @@ bool GetQueryEnum(const string& query, WEBSOCKETQUERY& q_enum) {
     q_enum = EVENTLOG;
   } else if (query == "Unsubscribe") {
     q_enum = UNSUBSCRIBE;
+  } else if (query == "TxnLog") {
+    q_enum = TXNLOG;
   }
 
   return true;
@@ -180,6 +201,9 @@ string GetQueryString(const WEBSOCKETQUERY& q_enum) {
       break;
     case EVENTLOG:
       ret = "EventLog";
+      break;
+    case TXNLOG:
+      ret = "TxnLog";
       break;
     case UNSUBSCRIBE:
       ret = "Unsubscribe";
@@ -201,7 +225,7 @@ void WebsocketServer::on_message(const connection_hdl& hdl,
   Json::Value j_query;
   WEBSOCKETQUERY q_enum;
 
-  string response;
+  string response{};
 
   if (!query.empty() &&
       JSONUtils::GetInstance().convertStrtoJson(query, j_query) &&
@@ -218,17 +242,27 @@ void WebsocketServer::on_message(const connection_hdl& hdl,
         if (j_query.isMember("addresses") && j_query["addresses"].isArray() &&
             !j_query["addresses"].empty()) {
           set<Address> el_addresses;
-          for (const auto& address : j_query["addresses"]) {
-            try {
-              Address addr(address.asString());
-              Account* acc = AccountStore::GetInstance().GetAccount(addr);
-              if (acc == nullptr || !acc->isContract()) {
-                continue;
+
+          {
+            shared_lock<shared_timed_mutex> lock(
+                AccountStore::GetInstance().GetPrimaryMutex());
+            for (const auto& address : j_query["addresses"]) {
+              try {
+                const auto& addr_str = address.asString();
+                if (!JSONConversion::checkStringAddress(addr_str)) {
+                  response = "Invalid hex address";
+                  break;
+                }
+                Address addr(addr_str);
+                Account* acc = AccountStore::GetInstance().GetAccount(addr);
+                if (acc == nullptr || !acc->isContract()) {
+                  continue;
+                }
+                el_addresses.emplace(addr);
+              } catch (...) {
+                response = "invalid address";
+                break;
               }
-              el_addresses.emplace(addr);
-            } catch (...) {
-              response = "invalid address";
-              break;
             }
           }
           if (el_addresses.empty()) {
@@ -260,10 +294,48 @@ void WebsocketServer::on_message(const connection_hdl& hdl,
         }
         break;
       }
+      case TXNLOG: {
+        set<Address> track_addresses;
+        if (j_query.isMember("addresses") && j_query["addresses"].isArray() &&
+            !j_query["addresses"].empty()) {
+          for (const auto& addr_json : j_query["addresses"]) {
+            try {
+              const auto& addr_str = addr_json.asString();
+              if (!JSONConversion::checkStringAddress(addr_str)) {
+                response = "invalid hex address";
+                break;
+              }
+              Address addr(addr_str);
+              track_addresses.emplace(addr);
+            } catch (...) {
+              response = "invalid address";
+              break;
+            }
+          }
+
+          if (!track_addresses.empty()) {
+            {
+              lock_guard<mutex> g(m_mutexSubscriptions);
+              m_subscriptions[hdl].subscribe(TXNLOG);
+            }
+            {
+              lock_guard<mutex> h(m_mutexTxnLogDataBuffer);
+              m_txnLogAddrHdlTracker.update(hdl, track_addresses);
+            }
+          } else {
+            response = "no valid address found";
+          }
+        } else {
+          response = "invalid addresses field";
+        }
+        break;
+      }
       default:
         break;
     }
-    response = query;
+    if (response.empty()) {
+      response = query;
+    }
   } else {
     response = "invalid query field";
   }
@@ -280,6 +352,25 @@ void WebsocketServer::on_close(const connection_hdl& hdl) {
   closeSocket(hdl, "connection closed", websocketpp::close::status::going_away);
 }
 
+void WebsocketServer::on_http(const connection_hdl& hdl) {
+  websocketserver::connection_ptr con = m_server.get_con_from_hdl(hdl);
+  // websocketpp::http::parser::request rt = con->get_request();
+  // const string& strUri = rt.get_uri();
+  // const string& strMethod = rt.get_method();
+  // const string& strBody = rt.get_body();
+  // const string& strVersion = rt.get_version();
+  // LOG_GENERAL(INFO, "received a" << strMethod << " of: " << strBody << " by:"
+  // << strUri.c_str());
+
+  string res = "got HTTP request with " +
+               to_string(con->get_request_body().size()) +
+               " bytes of body data.";
+  // LOG_GENERAL(INFO, res);
+
+  con->set_body(res);
+  con->set_status(websocketpp::http::status_code::ok);
+}
+
 void WebsocketServer::PrepareTxBlockAndTxHashes(
     const Json::Value& json_txblock, const Json::Value& json_txhashes) {
   // LOG_MARKER();
@@ -290,8 +381,56 @@ void WebsocketServer::PrepareTxBlockAndTxHashes(
   m_jsonTxnBlockNTxnHashes["TxHashes"] = json_txhashes;
 }
 
+Json::Value CreateReturnAddressJson(const TransactionWithReceipt& twr) {
+  Json::Value _json;
+
+  _json["toAddr"] = twr.GetTransaction().GetToAddr().hex();
+  _json["fromAddr"] = twr.GetTransaction().GetSenderAddr().hex();
+  _json["amount"] = twr.GetTransaction().GetAmount().str();
+  _json["success"] = twr.GetTransactionReceipt().GetJsonValue()["success"];
+  _json["ID"] = twr.GetTransaction().GetTranID().hex();
+
+  return _json;
+}
+
+void WebsocketServer::ParseTxnLog(const TransactionWithReceipt& twr) {
+  LOG_MARKER();
+
+  const auto& txn_to_addr = twr.GetTransaction().GetToAddr();
+
+  const auto txn_from_addr = twr.GetTransaction().GetSenderAddr();
+
+  lock_guard<mutex> g(m_mutexTxnLogAddrHdlTracker);
+
+  auto addr_confirmed = txn_to_addr;
+
+  auto find_addr = m_txnLogAddrHdlTracker.m_addr_hdl_map.find(txn_to_addr);
+
+  if (find_addr == m_txnLogAddrHdlTracker.m_addr_hdl_map.end()) {
+    find_addr = m_txnLogAddrHdlTracker.m_addr_hdl_map.find(txn_from_addr);
+
+    if (find_addr == m_txnLogAddrHdlTracker.m_addr_hdl_map.end()) {
+      return;
+    }
+    addr_confirmed = txn_from_addr;
+  }
+  const auto log_json = CreateReturnAddressJson(twr);
+
+  lock_guard<mutex> h(m_mutexTxnLogDataBuffer);
+  for (const connection_hdl& hdl : find_addr->second) {
+    m_txnLogDataBuffer[hdl][addr_confirmed].append(log_json);
+  }
+}
+
+void WebsocketServer::ParseTxn(const TransactionWithReceipt& twr) {
+  ParseTxnEventLog(twr);
+
+  ParseTxnLog(twr);
+}
+
 void WebsocketServer::ParseTxnEventLog(const TransactionWithReceipt& twr) {
   LOG_MARKER();
+
   if (Transaction::GetTransactionType(twr.GetTransaction()) !=
       Transaction::CONTRACT_CALL) {
     return;
@@ -374,11 +513,21 @@ void WebsocketServer::SendOutMessages() {
     lock_guard<mutex> g1(m_mutexSubscriptions);
 
     if (m_subscriptions.empty()) {
+      {
+        lock_guard<mutex> g(m_mutexEventLogDataBuffer);
+        m_eventLogDataBuffer.clear();
+      }
+      {
+        lock_guard<mutex> h(m_mutexTxnLogDataBuffer);
+        m_txnLogDataBuffer.clear();
+      }
       return;
     }
-
-    lock_guard<mutex> g2(m_mutexTxnBlockNTxnHashes);
-    lock_guard<mutex> g3(m_mutexEventLogDataBuffer);
+    lock(m_mutexTxnLogDataBuffer, m_mutexEventLogDataBuffer,
+         m_mutexTxnBlockNTxnHashes);
+    lock_guard<mutex> g2(m_mutexTxnBlockNTxnHashes, adopt_lock);
+    lock_guard<mutex> g3(m_mutexEventLogDataBuffer, adopt_lock);
+    lock_guard<mutex> g4(m_mutexTxnLogDataBuffer, adopt_lock);
 
     for (auto it = m_subscriptions.begin(); it != m_subscriptions.end();) {
       if (it->second.queries.empty()) {
@@ -408,6 +557,20 @@ void WebsocketServer::SendOutMessages() {
                   j_eventlogs.append(j_contract);
                 }
                 value["value"] = std::move(j_eventlogs);
+              }
+              break;
+            }
+            case TXNLOG: {
+              Json::Value j_txnlogs;
+              auto buffer = m_txnLogDataBuffer.find(it->first);
+              if (buffer != m_txnLogDataBuffer.end()) {
+                for (const auto& entry : buffer->second) {
+                  Json::Value _json;
+                  _json["address"] = entry.first.hex();
+                  _json["log"] = entry.second;
+                  j_txnlogs.append(_json);
+                }
+                value["value"] = move(j_txnlogs);
               }
               break;
             }
@@ -445,6 +608,7 @@ void WebsocketServer::SendOutMessages() {
     }
 
     m_eventLogDataBuffer.clear();
+    m_txnLogDataBuffer.clear();
   }
 
   for (const auto& pair : hdlToRemove) {

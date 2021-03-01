@@ -125,6 +125,11 @@ DSBlockHeader GenerateRandomDSBlockHeader() {
   std::vector<PubKey> removeDSNodePubkeys;
   DSBlockHashSet hash;
   CommitteeHash committeeHash;
+  GovDSShardVotesMap govProposalMap;
+  govProposalMap[DistUint32()].first[1]++;
+  govProposalMap[DistUint32()].second[2]++;
+  govProposalMap[DistUint32()].first[1]++;
+  govProposalMap[DistUint32()].second[2]++;
 
   for (unsigned int i = 0, count = Dist1to99(); i < count; i++) {
     powDSWinners.emplace(GenerateRandomPubKey(), GenerateRandomPeer());
@@ -132,8 +137,8 @@ DSBlockHeader GenerateRandomDSBlockHeader() {
 
   return DSBlockHeader(dsDifficulty, difficulty, leaderPubKey, blockNum,
                        epochNum, gasPrice, swInfo, powDSWinners,
-                       removeDSNodePubkeys, hash, version, committeeHash,
-                       prevHash);
+                       removeDSNodePubkeys, hash, govProposalMap, version,
+                       committeeHash, prevHash);
 }
 
 MicroBlockHeader GenerateRandomMicroBlockHeader() {
@@ -196,30 +201,14 @@ VCBlockHeader GenerateRandomVCBlockHeader() {
                        prevHash);
 }
 
-FallbackBlockHeader GenerateRandomFallbackBlockHeader() {
-  uint32_t version = DistUint32();
-  uint64_t fallbackDSEpochNo = DistUint32();
-  uint64_t fallbackEpochNo = DistUint32();
-  unsigned char fallbackState = DistUint8();
-  FallbackBlockHashSet hashset;
-  uint32_t leaderConsensusId = DistUint32();
-  Peer leaderNetworkInfo = GenerateRandomPeer();
-  PubKey leaderPubKey = GenerateRandomPubKey();
-  uint32_t shardId = DistUint32();
-  CommitteeHash committeeHash;
-  BlockHash prevHash;
-
-  return FallbackBlockHeader(fallbackDSEpochNo, fallbackEpochNo, fallbackState,
-                             hashset, leaderConsensusId, leaderNetworkInfo,
-                             leaderPubKey, shardId, version, committeeHash,
-                             prevHash);
-}
-
 DSBlockHeader createDSBlockHeader(const uint64_t& blockNum) {
-  return DSBlockHeader(
-      DistUint8(), DistUint8(), GenerateRandomPubKey(), blockNum, DistUint64(),
-      DistUint128(), SWInfo(), map<PubKey, Peer>(), std::vector<PubKey>(),
-      DSBlockHashSet(), DistUint32(), CommitteeHash(), BlockHash());
+  return DSBlockHeader(DistUint8(), DistUint8(), GenerateRandomPubKey(),
+                       blockNum, DistUint64(), DistUint128(), SWInfo(),
+                       map<PubKey, Peer>(), std::vector<PubKey>(),
+                       DSBlockHashSet(),
+                       map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                                               std::map<uint32_t, uint32_t>>>(),
+                       DistUint32(), CommitteeHash(), BlockHash());
 }
 
 TxBlockHeader createTxBlockHeader(const uint64_t& blockNum) {

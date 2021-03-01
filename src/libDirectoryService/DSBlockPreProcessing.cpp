@@ -30,6 +30,7 @@
 #include "libCrypto/Sha2.h"
 #include "libMediator/Mediator.h"
 #include "libMessage/Messenger.h"
+#include "libNetwork/Blacklist.h"
 #include "libNetwork/Guard.h"
 #include "libNetwork/P2PComm.h"
 #include "libPOW/pow.h"
@@ -304,6 +305,12 @@ void DirectoryService::InjectPoWForDSNode(
       LOG_GENERAL(INFO, "Injecting into PoW connections " << rit->second);
     }
 
+    if (m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
+        UPGRADE_TARGET_DS_NUM) {
+      // Remove this node from blacklist if it exists
+      Peer& p = rit->second;
+      Blacklist::GetInstance().Remove(p.GetIpAddress());
+    }
     ++counter;
   }
 
@@ -348,20 +355,20 @@ bool DirectoryService::VerifyPoWWinner(
 
         auto headerHash = POW::GenHeaderHash(
             m_mediator.m_dsBlockRand, m_mediator.m_txBlockRand, peer,
-            DSPowWinner.first, dsPowSoln.lookupId, dsPowSoln.gasPrice);
+            DSPowWinner.first, dsPowSoln.m_lookupId, dsPowSoln.m_gasPrice);
 
         string resultStr, mixHashStr;
-        if (!DataConversion::charArrToHexStr(dsPowSoln.result, resultStr)) {
+        if (!DataConversion::charArrToHexStr(dsPowSoln.m_result, resultStr)) {
           return false;
         }
-        if (!DataConversion::charArrToHexStr(dsPowSoln.mixhash, mixHashStr)) {
+        if (!DataConversion::charArrToHexStr(dsPowSoln.m_mixhash, mixHashStr)) {
           return false;
         }
 
         // Validate the PoW submission
         bool result = POW::GetInstance().PoWVerify(
             m_pendingDSBlock->GetHeader().GetBlockNum(), expectedDSDiff,
-            headerHash, dsPowSoln.nonce, resultStr, mixHashStr);
+            headerHash, dsPowSoln.m_nonce, resultStr, mixHashStr);
         if (!result) {
           LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
                     "WARNING: Failed to verify DS PoW from node "
@@ -555,7 +562,7 @@ bool DirectoryService::VerifyPoWOrdering(
                                  << toFind << " " << sortedPoWSolns.size());
 
         if (m_allPoWs.find(toFind) != m_allPoWs.end()) {
-          result = m_allPoWs.at(toFind).result;
+          result = m_allPoWs.at(toFind).m_result;
           LOG_GENERAL(INFO, "Found the PoW from local PoW list");
         } else {
           LOG_GENERAL(INFO,
@@ -565,7 +572,7 @@ bool DirectoryService::VerifyPoWOrdering(
             const auto& peer = std::get<SHARD_NODE_PEER>(shardNode);
             const auto& powSoln = pubKeyToPoW->second;
             if (VerifyPoWFromLeader(peer, pubKeyToPoW->first, powSoln)) {
-              result = powSoln.result;
+              result = powSoln.m_result;
             } else {
               ret = false;
               break;
@@ -644,7 +651,7 @@ bool DirectoryService::VerifyPoWFromLeader(const Peer& peer,
                                            const PoWSolution& powSoln) {
   auto headerHash =
       POW::GenHeaderHash(m_mediator.m_dsBlockRand, m_mediator.m_txBlockRand,
-                         peer, pubKey, powSoln.lookupId, powSoln.gasPrice);
+                         peer, pubKey, powSoln.m_lookupId, powSoln.m_gasPrice);
 
   auto difficulty =
       (GUARD_MODE && Guard::GetInstance().IsNodeInShardGuardList(pubKey))
@@ -654,16 +661,16 @@ bool DirectoryService::VerifyPoWFromLeader(const Peer& peer,
                 .GetDifficulty();
 
   string resultStr, mixHashStr;
-  if (!DataConversion::charArrToHexStr(powSoln.result, resultStr)) {
+  if (!DataConversion::charArrToHexStr(powSoln.m_result, resultStr)) {
     return false;
   }
 
-  if (!DataConversion::charArrToHexStr(powSoln.mixhash, mixHashStr)) {
+  if (!DataConversion::charArrToHexStr(powSoln.m_mixhash, mixHashStr)) {
     return false;
   }
 
   if (!POW::GetInstance().PoWVerify(m_pendingDSBlock->GetHeader().GetBlockNum(),
-                                    difficulty, headerHash, powSoln.nonce,
+                                    difficulty, headerHash, powSoln.m_nonce,
                                     resultStr, mixHashStr)) {
     LOG_GENERAL(WARNING, "Failed to verify PoW solution from leader for node: "
                              << pubKey);
@@ -678,7 +685,7 @@ bool DirectoryService::VerifyPoWFromLeader(const Peer& peer,
       m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetDSDifficulty();
 
   if (POW::GetInstance().PoWVerify(m_pendingDSBlock->GetHeader().GetBlockNum(),
-                                   dsDifficulty, headerHash, powSoln.nonce,
+                                   dsDifficulty, headerHash, powSoln.m_nonce,
                                    resultStr, mixHashStr)) {
     AddDSPoWs(pubKey, powSoln);
   }
@@ -747,7 +754,7 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
     const unsigned int byzantineRemoved) {
   std::map<array<unsigned char, 32>, PubKey> PoWOrderSorter;
   for (const auto& powsoln : mapOfPoWs) {
-    PoWOrderSorter[powsoln.second.result] = powsoln.first;
+    PoWOrderSorter[powsoln.second.m_result] = powsoln.first;
   }
 
   // Put it back to vector for easy manipulation and adjustment of the ordering
@@ -933,11 +940,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
 
   // Determine the losers from the performance.
   unsigned int numByzantine = 0;
-  if (m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
-      UPGRADE_TARGET_DS_NUM) {
-    numByzantine =
-        DetermineByzantineNodes(numOfProposedDSMembers, removeDSNodePubkeys);
-  }
+  numByzantine =
+      DetermineByzantineNodes(numOfProposedDSMembers, removeDSNodePubkeys);
 
   // Sort and trim the PoW solutions.
   auto sortedPoWSolns = SortPoWSoln(allPoWs, true, numByzantine);
@@ -973,6 +977,38 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
 
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
+
+  GovDSShardVotesMap govProposalMap;
+  for (const auto& dsnode : powDSWinners) {
+    if (GUARD_MODE && !Guard::GetInstance().IsNodeInDSGuardList(dsnode.first)) {
+      const auto& powSolIter = allDSPoWs.find(dsnode.first);
+      if (powSolIter != allDSPoWs.end()) {
+        const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
+        const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
+        if (proposalId > 0 && voteValue > 0) {
+          LOG_GENERAL(INFO, "[Gov] DS proposalId=" << proposalId
+                                                   << " vote=" << voteValue);
+          govProposalMap[proposalId].first[voteValue]++;
+        }
+      }
+    }
+  }
+
+  for (const auto& miner : sortedPoWSolns) {
+    if (GUARD_MODE &&
+        !Guard::GetInstance().IsNodeInShardGuardList(miner.second)) {
+      const auto& powSolIter = allPoWs.find(miner.second);
+      if (powSolIter != allPoWs.end()) {
+        const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
+        const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
+        if (proposalId > 0 && voteValue > 0) {
+          LOG_GENERAL(INFO, "[Gov] Shard proposalId=" << proposalId
+                                                      << " vote=" << voteValue);
+          govProposalMap[proposalId].second[voteValue]++;
+        }
+      }
+    }
+  }
 
   vector<Peer> proposedDSMembersInfo;
   proposedDSMembersInfo.reserve(sortedDSPoWSolns.size());
@@ -1013,7 +1049,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         DSBlockHeader(dsDifficulty, difficulty, m_mediator.m_selfKey.second,
                       blockNum, m_mediator.m_currentEpochNum, GetNewGasPrice(),
                       m_mediator.m_curSWInfo, powDSWinners, removeDSNodePubkeys,
-                      dsBlockHashSet, version, committeeHash, prevHash),
+                      dsBlockHashSet, govProposalMap, version, committeeHash,
+                      prevHash),
         CoSignatures(m_mediator.m_DSCommittee->size())));
   }
 
@@ -1036,11 +1073,11 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   }
 #endif  // VC_TEST_DS_SUSPEND_1
 
-#ifdef VC_TEST_DS_SUSPEND_3
+#if defined(VC_TEST_DS_SUSPEND_3) || defined(GOVVC_TEST_DS_SUSPEND_3)
   if (m_mode == PRIMARY_DS && m_viewChangeCounter < 3) {
-    LOG_EPOCH(
-        WARNING, m_mediator.m_currentEpochNum,
-        "I am suspending myself to test viewchange (VC_TEST_DS_SUSPEND_3)");
+    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
+              "I am suspending myself to test viewchange "
+              "(VC_TEST_DS_SUSPEND_3) or (GOVVC_TEST_DS_SUSPEND_3)");
     return false;
   }
 #endif  // VC_TEST_DS_SUSPEND_3
@@ -1064,7 +1101,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
       << std::setw(15) << std::left
       << m_mediator.m_selfPeer.GetPrintableIPAddress() << "]["
       << m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum() + 1
-      << "] BGIN, POWS = " << m_allPoWs.size());
+      << "] BEGIN, POWS = " << m_allPoWs.size());
 
   // Refer to Effective mordern C++. Item 32: Use init capture to move objects
   // into closures.
@@ -1222,9 +1259,7 @@ bool DirectoryService::DSBlockValidator(
   // validation.
   const uint32_t REMOVED_FIELD_DSBLOCK_VERSION = 2;
   if (m_pendingDSBlock->GetHeader().GetVersion() >=
-          REMOVED_FIELD_DSBLOCK_VERSION &&
-      m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
-          UPGRADE_TARGET_DS_NUM) {
+      REMOVED_FIELD_DSBLOCK_VERSION) {
     // Verify the injected Byzantine nodes to be removed in the winners list.
     if (!VerifyRemovedByzantineNodes()) {
       LOG_GENERAL(WARNING,

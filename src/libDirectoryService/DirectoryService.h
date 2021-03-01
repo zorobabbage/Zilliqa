@@ -43,28 +43,36 @@
 class Mediator;
 
 struct PoWSolution {
-  uint64_t nonce;
-  std::array<unsigned char, 32> result;
-  std::array<unsigned char, 32> mixhash;
-  uint32_t lookupId;
-  uint128_t gasPrice;
+  uint64_t m_nonce;
+  std::array<unsigned char, 32> m_result;
+  std::array<unsigned char, 32> m_mixhash;
+  uint32_t m_lookupId;
+  uint128_t m_gasPrice;
+  GovProposalIdVotePair m_govProposal;  // proposal id and vote value pair
 
   PoWSolution()
-      : nonce(0),
-        result({{0}}),
-        mixhash({{0}}),
-        lookupId(uint32_t() - 1),
-        gasPrice(0) {
+      : m_nonce(0),
+        m_result({{0}}),
+        m_mixhash({{0}}),
+        m_lookupId(uint32_t() - 1),
+        m_gasPrice(0),
+        m_govProposal({0, 0}) {
 
   }  // The oldest DS (and now new shard node) will have this default value
   PoWSolution(const uint64_t n, const std::array<unsigned char, 32>& r,
               const std::array<unsigned char, 32>& m, uint32_t l,
-              const uint128_t& gp)
-      : nonce(n), result(r), mixhash(m), lookupId(l), gasPrice(gp) {}
+              const uint128_t& gp, const std::pair<uint32_t, uint32_t>& gvp)
+      : m_nonce(n),
+        m_result(r),
+        m_mixhash(m),
+        m_lookupId(l),
+        m_gasPrice(gp),
+        m_govProposal(gvp) {}
   bool operator==(const PoWSolution& rhs) const {
-    return std::tie(nonce, result, mixhash, lookupId, gasPrice) ==
-           std::tie(rhs.nonce, rhs.result, rhs.mixhash, rhs.lookupId,
-                    rhs.gasPrice);
+    return std::tie(m_nonce, m_result, m_mixhash, m_lookupId, m_gasPrice,
+                    m_govProposal) ==
+           std::tie(rhs.m_nonce, rhs.m_result, rhs.m_mixhash, rhs.m_lookupId,
+                    rhs.m_gasPrice, rhs.m_govProposal);
   }
 };
 
@@ -220,35 +228,48 @@ class DirectoryService : public Executable {
 
   // Message handlers
   bool ProcessSetPrimary(const bytes& message, unsigned int offset,
-                         const Peer& from);
+                         const Peer& from,
+                         [[gnu::unused]] const unsigned char& startByte);
   bool ProcessPoWSubmission(const bytes& message, unsigned int offset,
-                            const Peer& from);
-  bool ProcessPoWPacketSubmission(const bytes& message, unsigned int offset,
-                                  const Peer& from);
+                            const Peer& from,
+                            [[gnu::unused]] const unsigned char& startByte);
+  bool ProcessPoWPacketSubmission(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
   bool VerifyPoWSubmission(const DSPowSolution& sol);
 
   bool ProcessDSBlockConsensus(const bytes& message, unsigned int offset,
-                               const Peer& from);
-  bool ProcessMicroblockSubmission(const bytes& message, unsigned int offset,
-                                   const Peer& from);
+                               const Peer& from,
+                               [[gnu::unused]] const unsigned char& startByte);
+  bool ProcessMicroblockSubmission(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
   bool ProcessFinalBlockConsensus(const bytes& message, unsigned int offset,
-                                  const Peer& from);
-  bool ProcessFinalBlockConsensusCore(const bytes& message, unsigned int offset,
-                                      const Peer& from);
-  bool ProcessViewChangeConsensus(const bytes& message, unsigned int offset,
-                                  const Peer& from);
+                                  const Peer& from,
+                                  const unsigned char& startByte);
+  bool ProcessFinalBlockConsensusCore(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
+  bool ProcessViewChangeConsensus(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
   bool ProcessPushLatestDSBlock(const bytes& message, unsigned int offset,
-                                const Peer& from);
+                                const Peer& from,
+                                [[gnu::unused]] const unsigned char& startByte);
   bool ProcessPushLatestTxBlock(const bytes& message, unsigned int offset,
-                                const Peer& from);
-  bool ProcessGetDSTxBlockMessage(const bytes& message, unsigned int offset,
-                                  const Peer& from);
-  bool ProcessNewDSGuardNetworkInfo(const bytes& message, unsigned int offset,
-                                    const Peer& from);
+                                const Peer& from,
+                                [[gnu::unused]] const unsigned char& startByte);
+  bool ProcessVCPushLatestDSTxBlock(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
+  bool ProcessNewDSGuardNetworkInfo(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
 
   // Get cosig and rewards for given epoch
-  bool ProcessCosigsRewardsFromSeed(const bytes& message, unsigned int offset,
-                                    const Peer& from);
+  bool ProcessCosigsRewardsFromSeed(
+      const bytes& message, unsigned int offset, const Peer& from,
+      [[gnu::unused]] const unsigned char& startByte);
 
   // To block certain types of incoming message for certain states
   bool ToBlockMessage(unsigned char ins_byte);
@@ -347,8 +368,6 @@ class DirectoryService : public Executable {
   void ExtractDataFromMicroblocks(std::vector<MicroBlockInfo>& mbInfos,
                                   uint64_t& allGasLimit, uint64_t& allGasUsed,
                                   uint128_t& allRewards, uint32_t& numTxs);
-  bool VerifyMicroBlockCoSignature(const MicroBlock& microBlock,
-                                   uint32_t shardId);
   bool ProcessStateDelta(const bytes& stateDelta,
                          const uint32_t& shardId,
                          const uint32_t& numShards,
@@ -470,6 +489,9 @@ class DirectoryService : public Executable {
     CHECKFINALBLOCK = 0x02,
     DSFBMISSINGMB = 0x03
   };
+
+  /// whether should accept pow submissions from miner
+  std::atomic_bool m_powSubmissionWindowExpired = {false};
 
   /// Sharing assignment for state delta
   VectorOfPeer m_sharingAssignment;
@@ -612,7 +634,8 @@ class DirectoryService : public Executable {
           coinbase_rewardees);
 
   /// Implements the Execute function inherited from Executable.
-  bool Execute(const bytes& message, unsigned int offset, const Peer& from);
+  bool Execute(const bytes& message, unsigned int offset, const Peer& from,
+               const unsigned char& startByte);
 
   /// Used by PoW winner to configure sharding variables as the next DS leader
   bool ProcessShardingStructure(
@@ -627,8 +650,7 @@ class DirectoryService : public Executable {
   void StartNextTxEpoch();
 
   /// Begin next round of DS consensus
-  void StartNewDSEpochConsensus(bool fromFallback = false,
-                                bool isRejoin = false);
+  void StartNewDSEpochConsensus(bool isRejoin = false);
 
   static uint8_t CalculateNewDifficultyCore(uint8_t currentDifficulty,
                                             uint8_t minDifficulty,
@@ -658,6 +680,12 @@ class DirectoryService : public Executable {
   // For DS guard to update it's network information while in GUARD_MODE
   bool UpdateDSGuardIdentity();
 
+  // Update shard node's network info
+  bool UpdateShardNodeNetworkInfo(const Peer& shardNodeNetworkInfo,
+                                  const PubKey& pubKey);
+
+  bool CheckIfShardNode(const PubKey& submitterPubKey);
+
   // Get entire network peer info
   void GetEntireNetworkPeerInfo(VectorOfNode& peers,
                                 std::vector<PubKey>& pubKeys);
@@ -666,6 +694,9 @@ class DirectoryService : public Executable {
                                        VCBlockSharedPtr& prevVCBlockptr);
 
   std::string GetStateString() const;
+
+  bool VerifyMicroBlockCoSignature(const MicroBlock& microBlock,
+                                   uint32_t shardId);
 
   // DS Reputation functions with no state access.
   static void SaveDSPerformanceCore(
@@ -697,7 +728,6 @@ class DirectoryService : public Executable {
   void ClearVCBlockVector();
   bool RunConsensusOnFinalBlockWhenDSPrimary();
   bool CheckIfDSNode(const PubKey& submitterPubKey);
-  bool CheckIfShardNode(const PubKey& submitterPubKey);
   void RemoveDSMicroBlock();
 };
 

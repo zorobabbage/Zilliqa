@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Zilliqa
+ * Copyright (C) 2020 Zilliqa
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -154,7 +154,6 @@ Json::Value ScillaUtils::GetCallContractJson(const string& root_w_version,
   ret["argv"].append(root_w_version + '/' + SCILLA_LIB + ":" +
                      boost::filesystem::current_path().string() + '/' +
                      EXTLIB_FOLDER);
-  ret["argv"].append("-disable-validate-json");
   ret["argv"].append("-jsonerrors");
 
   return ret;

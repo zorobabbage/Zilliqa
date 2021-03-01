@@ -6,7 +6,7 @@ cache:
 matrix:
   include:
     - os: linux
-      dist: xenial
+      dist: bionic
     # - os: osx
     #  osx_image: xcode10.1
 
@@ -14,7 +14,7 @@ addons:
   apt:
     update: true
     packages:
-    # APT packages are organized into two groups, build dependency and 
+    # APT packages are organized into two groups, build dependency and
     # development dependency, where the former is necessary for users who
     # want to build Zilliqa whereas the latter is only for CI.
     # Note that the names are sorted in each group.
@@ -47,10 +47,18 @@ addons:
     - git
     - lcov
     - libxml2-utils
-    - python-pip
-
+    - python-dev
+    - python3-dev
+    - libsecp256k1-dev
 script:
   - ./scripts/ci_build.sh;
+
+install:
+  - wget https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh
+  - mkdir -p "${HOME}"/.local
+  - bash ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix="${HOME}"/.local/
+  - cmake --version
+  - rm cmake-3.19.3-Linux-x86_64.sh
 
 # Code coverage is currently only implemented for GCC builds, so OSX is currently excluded from reporting
 after_success:

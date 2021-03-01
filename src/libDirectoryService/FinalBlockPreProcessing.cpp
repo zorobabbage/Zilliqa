@@ -226,6 +226,7 @@ bool DirectoryService::RunConsensusOnFinalBlockWhenDSPrimary() {
     LOG_GENERAL(WARNING, "DS ComposeMicroBlock Failed");
     m_mediator.m_node->m_microblock = nullptr;
   } else {
+    lock_guard<mutex> g(m_mutexMicroBlocks);
     m_microBlocks[m_mediator.m_currentEpochNum].emplace(
         *(m_mediator.m_node->m_microblock));
   }
@@ -286,7 +287,7 @@ bool DirectoryService::RunConsensusOnFinalBlockWhenDSPrimary() {
         << "]["
         << m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum() +
                1
-        << "] BGIN");
+        << "] BEGIN");
   }
 
   auto announcementGeneratorFunc =
@@ -735,6 +736,7 @@ bool DirectoryService::CheckMicroBlockInfo() {
     //                 << "; hashes: " << hashesInMicroBlocks[i]
     //                 << "; IsMicroBlockEmpty: "
     //                 << m_finalBlock->GetIsMicroBlockEmpty()[i]);
+    lock_guard<mutex> g(m_mutexMicroBlocks);
     auto& microBlocks = m_microBlocks[m_mediator.m_currentEpochNum];
     for (auto& microBlock : microBlocks) {
       if (microBlock.GetBlockHash() == microBlockInfos.at(i).m_microBlockHash) {
@@ -924,6 +926,7 @@ bool DirectoryService::CheckMicroBlockValidity(bytes& errorMsg) {
   if (!ret) {
     m_mediator.m_node->m_microblock = nullptr;
   } else {
+    lock_guard<mutex> g(m_mutexMicroBlocks);
     m_microBlocks[m_mediator.m_currentEpochNum].emplace(
         *(m_mediator.m_node->m_microblock));
   }
@@ -1167,14 +1170,6 @@ void DirectoryService::RunConsensusOnFinalBlock() {
                       << m_state);
       return;
     }
-
-#ifdef FALLBACK_TEST
-    if (m_mediator.m_currentEpochNum == FALLBACK_TEST_EPOCH &&
-        m_mediator.m_consensusID > 1) {
-      LOG_GENERAL(INFO, "Stop DS for testing fallback");
-      return;
-    }
-#endif  // FALLBACK_TEST
 
     if (m_doRejoinAtFinalConsensus) {
       RejoinAsDS();

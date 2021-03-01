@@ -15,8 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "libPersistence/ContractStorage.h"
-
 #include "libMessage/MessengerAccountStoreTrie.h"
 
 template <class DB, class MAP>
@@ -78,6 +76,7 @@ Account* AccountStoreTrie<DB, MAP>::GetAccount(const Address& address) {
   if (!account->DeserializeBase(
           bytes(rawAccountBase.begin(), rawAccountBase.end()), 0)) {
     LOG_GENERAL(WARNING, "Account::DeserializeBase failed");
+    delete account;
     return nullptr;
   }
 
@@ -86,6 +85,8 @@ Account* AccountStoreTrie<DB, MAP>::GetAccount(const Address& address) {
   }
 
   auto it2 = this->m_addressToAccount->emplace(address, *account);
+
+  delete account;
 
   return &it2.first->second;
 }

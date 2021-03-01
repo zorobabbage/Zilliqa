@@ -412,7 +412,6 @@ void DirectoryService::StartNextTxEpoch() {
   }
 
   m_mediator.m_node->m_myshardId = m_shards.size();
-  m_mediator.m_node->m_justDidFallback = false;
   m_stateDeltaFromShards.clear();
 
   // if this happens to be first tx epoch of current ds epoch after ds syncing.
@@ -560,7 +559,6 @@ void DirectoryService::StartFirstTxEpoch() {
 
     // m_mediator.m_node->m_myshardId = std::numeric_limits<uint32_t>::max();
     m_mediator.m_node->m_myshardId = m_shards.size();
-    m_mediator.m_node->m_justDidFallback = false;
     m_stateDeltaFromShards.clear();
 
     // Start sharding work
@@ -831,8 +829,8 @@ void DirectoryService::ProcessDSBlockConsensusWhenDone() {
 }
 
 bool DirectoryService::ProcessDSBlockConsensus(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::ProcessDSBlockConsensus not expected to "

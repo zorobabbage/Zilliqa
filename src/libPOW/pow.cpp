@@ -22,8 +22,9 @@
 #include <iostream>
 
 #include "common/Serializable.h"
-#include "depends/libethash/include/ethash/ethash.hpp"
-#include "depends/libethash/lib/ethash/ethash-internal.hpp"
+#include "ethash/ethash.hpp"
+// TODO: Move contents of internal to ethash.hpp
+#include "depends/cryptoutils/lib/ethash/ethash-internal.hpp"
 #include "libCrypto/Sha2.h"
 #include "libServer/GetWorkServer.h"
 #include "libUtils/DataConversion.h"
@@ -46,6 +47,7 @@ POW::POW() {
 
   if (REMOTE_MINE) {
     m_httpClient = std::make_unique<jsonrpc::HttpClient>(MINING_PROXY_URL);
+    m_httpClient->SetTimeout(MINING_PROXY_TIMEOUT_IN_MS);
   }
 
   if (!GETWORK_SERVER_MINE && FULL_DATASET_MINE && !CUDA_GPU_MINE &&

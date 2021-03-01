@@ -24,11 +24,9 @@
 #include <vector>
 
 #include <Schnorr.h>
-#include "ContractStorage.h"
 #include "common/Singleton.h"
 #include "depends/libDatabase/LevelDB.h"
 #include "libData/BlockData/Block.h"
-#include "libData/BlockData/Block/FallbackBlockWShardingStructure.h"
 #include "libData/MiningData/MinerInfo.h"
 
 typedef std::tuple<uint32_t, uint64_t, uint64_t, BlockType, BlockHash>
@@ -37,7 +35,6 @@ typedef std::tuple<uint32_t, uint64_t, uint64_t, BlockType, BlockHash>
 typedef std::shared_ptr<DSBlock> DSBlockSharedPtr;
 typedef std::shared_ptr<TxBlock> TxBlockSharedPtr;
 typedef std::shared_ptr<VCBlock> VCBlockSharedPtr;
-typedef std::shared_ptr<FallbackBlockWShardingStructure> FallbackBlockSharedPtr;
 typedef std::shared_ptr<BlockLink> BlockLinkSharedPtr;
 typedef std::shared_ptr<MicroBlock> MicroBlockSharedPtr;
 typedef std::shared_ptr<TransactionWithReceipt> TxBodySharedPtr;
@@ -83,12 +80,14 @@ class BlockStorage : public Singleton<BlockStorage> {
   std::shared_ptr<LevelDB> m_metadataDB;
   std::shared_ptr<LevelDB> m_dsBlockchainDB;
   std::shared_ptr<LevelDB> m_txBlockchainDB;
-  std::shared_ptr<LevelDB> m_txBodyDB;
-  std::shared_ptr<LevelDB> m_microBlockDB;
-  std::shared_ptr<LevelDB> m_txBodyTmpDB;
+  std::vector<std::shared_ptr<LevelDB>> m_txBodyDBs;
+  std::shared_ptr<LevelDB> m_txBodyOrigDB;
+  std::shared_ptr<LevelDB> m_txEpochDB;
+  std::vector<std::shared_ptr<LevelDB>> m_microBlockDBs;
+  std::shared_ptr<LevelDB> m_microBlockOrigDB;
+  std::shared_ptr<LevelDB> m_microBlockKeyDB;
   std::shared_ptr<LevelDB> m_dsCommitteeDB;
   std::shared_ptr<LevelDB> m_VCBlockDB;
-  std::shared_ptr<LevelDB> m_fallbackBlockDB;
   std::shared_ptr<LevelDB> m_blockLinkDB;
   std::shared_ptr<LevelDB> m_shardStructureDB;
   std::shared_ptr<LevelDB> m_stateDeltaDB;
@@ -100,22 +99,20 @@ class BlockStorage : public Singleton<BlockStorage> {
   std::shared_ptr<LevelDB> m_diagnosticDBNodes;
   std::shared_ptr<LevelDB> m_diagnosticDBCoinbase;
   std::shared_ptr<LevelDB> m_stateRootDB;
-  /// used for historical data
-  std::shared_ptr<LevelDB> m_txnHistoricalDB;
-  std::shared_ptr<LevelDB> m_MBHistoricalDB;
   /// used for miner nodes (DS committee) retrieval
   std::shared_ptr<LevelDB> m_minerInfoDSCommDB;
   /// used for miner nodes (shards) retrieval
   std::shared_ptr<LevelDB> m_minerInfoShardsDB;
+  /// used for extseed pub key storage and retrieval
+  std::shared_ptr<LevelDB> m_extSeedPubKeysDB;
 
   BlockStorage(const std::string& path = "", bool diagnostic = false)
       : m_metadataDB(std::make_shared<LevelDB>("metadata")),
         m_dsBlockchainDB(std::make_shared<LevelDB>("dsBlocks")),
         m_txBlockchainDB(std::make_shared<LevelDB>("txBlocks")),
-        m_microBlockDB(std::make_shared<LevelDB>("microBlocks")),
+        m_microBlockKeyDB(std::make_shared<LevelDB>("microBlockKeys")),
         m_dsCommitteeDB(std::make_shared<LevelDB>("dsCommittee")),
         m_VCBlockDB(std::make_shared<LevelDB>("VCBlocks")),
-        m_fallbackBlockDB(std::make_shared<LevelDB>("fallbackBlocks")),
         m_blockLinkDB(std::make_shared<LevelDB>("blockLinks")),
         m_shardStructureDB(std::make_shared<LevelDB>("shardStructure")),
         m_stateDeltaDB(std::make_shared<LevelDB>("stateDelta")),
@@ -129,11 +126,13 @@ class BlockStorage : public Singleton<BlockStorage> {
         m_diagnosticDBNodesCounter(0),
         m_diagnosticDBCoinbaseCounter(0) {
     if (LOOKUP_NODE_MODE) {
-      m_txBodyDB = std::make_shared<LevelDB>("txBodies");
-      m_txBodyTmpDB = std::make_shared<LevelDB>("txBodiesTmp");
+      m_txBodyDBs.emplace_back(std::make_shared<LevelDB>("txBodies"));
+      m_txEpochDB = std::make_shared<LevelDB>("txEpochs");
       m_minerInfoDSCommDB = std::make_shared<LevelDB>("minerInfoDSComm");
       m_minerInfoShardsDB = std::make_shared<LevelDB>("minerInfoShards");
+      m_extSeedPubKeysDB = std::make_shared<LevelDB>("extSeedPubKeys");
     }
+    m_microBlockDBs.emplace_back(std::make_shared<LevelDB>("microBlocks"));
   };
   ~BlockStorage() = default;
   bool PutBlock(const uint64_t& blockNum, const bytes& body,
@@ -145,11 +144,9 @@ class BlockStorage : public Singleton<BlockStorage> {
     DS_BLOCK,
     TX_BLOCK,
     TX_BODY,
-    TX_BODY_TMP,
     MICROBLOCK,
     DS_COMMITTEE,
     VC_BLOCK,
-    FB_BLOCK,
     BLOCKLINK,
     SHARD_STRUCTURE,
     STATE_DELTA,
@@ -160,6 +157,7 @@ class BlockStorage : public Singleton<BlockStorage> {
     PROCESSED_TEMP,
     MINER_INFO_DSCOMM,
     MINER_INFO_SHARDS,
+    EXTSEED_PUBKEYS
   };
 
   /// Returns the singleton BlockStorage instance.
@@ -172,19 +170,18 @@ class BlockStorage : public Singleton<BlockStorage> {
   /// Adds a DS block to storage.
   bool PutDSBlock(const uint64_t& blockNum, const bytes& body);
   bool PutVCBlock(const BlockHash& blockhash, const bytes& body);
-  bool PutFallbackBlock(const BlockHash& blockhash, const bytes& body);
   bool PutBlockLink(const uint64_t& index, const bytes& body);
-
-  bool InitiateHistoricalDB(const std::string& path);
 
   /// Adds a Tx block to storage.
   bool PutTxBlock(const uint64_t& blockNum, const bytes& body);
 
   // /// Adds a micro block to storage.
-  bool PutMicroBlock(const BlockHash& blockHash, const bytes& body);
+  bool PutMicroBlock(const BlockHash& blockHash, const uint64_t& epochNum,
+                     const uint32_t& shardID, const bytes& body);
 
   /// Adds a transaction body to storage.
-  bool PutTxBody(const dev::h256& key, const bytes& body);
+  bool PutTxBody(const uint64_t& epochNum, const dev::h256& key,
+                 const bytes& body);
 
   bool PutProcessedTxBodyTmp(const dev::h256& key, const bytes& body);
 
@@ -192,9 +189,6 @@ class BlockStorage : public Singleton<BlockStorage> {
   bool GetDSBlock(const uint64_t& blockNum, DSBlockSharedPtr& block);
 
   bool GetVCBlock(const BlockHash& blockhash, VCBlockSharedPtr& block);
-  bool GetFallbackBlock(
-      const BlockHash& blockhash,
-      FallbackBlockSharedPtr& fallbackblockwshardingstructure);
   bool GetBlockLink(const uint64_t& index, BlockLinkSharedPtr& block);
   /// Retrieves the requested Tx block.
   bool GetTxBlock(const uint64_t& blockNum, TxBlockSharedPtr& block);
@@ -205,8 +199,11 @@ class BlockStorage : public Singleton<BlockStorage> {
 
   bool ReleaseDB();
 
-  /// Retrieves the requested Micro block
+  /// Retrieves the requested Micro block using hash
   bool GetMicroBlock(const BlockHash& blockHash,
+                     MicroBlockSharedPtr& microblock);
+  /// Retrieves the requested Micro block using epochNum+shardID
+  bool GetMicroBlock(const uint64_t& epochNum, const uint32_t& shardID,
                      MicroBlockSharedPtr& microblock);
 
   bool CheckMicroBlock(const BlockHash& blockHash);
@@ -219,11 +216,6 @@ class BlockStorage : public Singleton<BlockStorage> {
 
   /// Retrieves the requested transaction body.
   bool GetTxBody(const dev::h256& key, TxBodySharedPtr& body);
-
-  bool GetTxnFromHistoricalDB(const dev::h256& key, TxBodySharedPtr& body);
-
-  bool GetHistoricalMicroBlock(const BlockHash& blockhash,
-                               MicroBlockSharedPtr& microblock);
 
   /// Deletes the requested DS block
   bool DeleteDSBlock(const uint64_t& blocknum);
@@ -239,17 +231,9 @@ class BlockStorage : public Singleton<BlockStorage> {
 
   bool DeleteVCBlock(const BlockHash& blockhash);
 
-  bool DeleteFallbackBlock(const BlockHash& blockhash);
-
   bool DeleteStateDelta(const uint64_t& finalBlockNum);
 
   bool DeleteMicroBlock(const BlockHash& blockHash);
-  // /// Adds a transaction body to storage.
-  // bool PutTxBody(const std::string & key, const bytes &
-  // body);
-
-  // /// Retrieves the requested transaction body.
-  // void GetTxBody(const std::string & key, TxBodySharedPtr & body);
 
   /// Retrieves all the DSBlocks
   bool GetAllDSBlocks(std::list<DSBlockSharedPtr>& blocks);
@@ -257,11 +241,20 @@ class BlockStorage : public Singleton<BlockStorage> {
   /// Retrieves all the TxBlocks
   bool GetAllTxBlocks(std::deque<TxBlockSharedPtr>& blocks);
 
-  /// Retrieves all the TxBodiesTmp
-  bool GetAllTxBodiesTmp(std::list<TxnHash>& txnHashes);
+  /// Retrieves all the VCBlocks
+  bool GetAllVCBlocks(std::list<VCBlockSharedPtr>& blocks);
 
   /// Retrieve all the blocklink
   bool GetAllBlockLink(std::list<BlockLink>& blocklinks);
+
+  /// Put extseed public key to storage
+  bool PutExtSeedPubKey(const PubKey& pubK);
+
+  /// Delete extseed public key from storage
+  bool DeleteExtSeedPubKey(const PubKey& pubK);
+
+  /// Retrieve all the extseed pubkeys
+  bool GetAllExtSeedPubKeys(std::unordered_set<PubKey>& pubKeys);
 
   /// Save Last Transactions Trie Root Hash
   bool PutMetadata(MetaType type, const bytes& data);
@@ -387,25 +380,25 @@ class BlockStorage : public Singleton<BlockStorage> {
   mutable std::shared_timed_mutex m_mutexMetadata;
   mutable std::shared_timed_mutex m_mutexDsBlockchain;
   mutable std::shared_timed_mutex m_mutexTxBlockchain;
-  mutable std::shared_timed_mutex m_mutexMicroBlock;
+  mutable std::mutex m_mutexMicroBlock;
   mutable std::shared_timed_mutex m_mutexDsCommittee;
   mutable std::shared_timed_mutex m_mutexVCBlock;
-  mutable std::shared_timed_mutex m_mutexFallbackBlock;
   mutable std::shared_timed_mutex m_mutexBlockLink;
   mutable std::shared_timed_mutex m_mutexShardStructure;
   mutable std::shared_timed_mutex m_mutexStateDelta;
   mutable std::shared_timed_mutex m_mutexTempState;
-  mutable std::shared_timed_mutex m_mutexTxBody;
-  mutable std::shared_timed_mutex m_mutexTxBodyTmp;
+  mutable std::mutex m_mutexTxBody;
   mutable std::shared_timed_mutex m_mutexStateRoot;
-  mutable std::shared_timed_mutex m_mutexTxnHistorical;
-  mutable std::shared_timed_mutex m_mutexMBHistorical;
   mutable std::shared_timed_mutex m_mutexProcessTx;
   mutable std::shared_timed_mutex m_mutexMinerInfoDSComm;
   mutable std::shared_timed_mutex m_mutexMinerInfoShards;
+  mutable std::shared_timed_mutex m_mutexExtSeedPubKeys;
 
   unsigned int m_diagnosticDBNodesCounter;
   unsigned int m_diagnosticDBCoinbaseCounter;
+
+  std::shared_ptr<LevelDB> GetMicroBlockDB(const uint64_t& epochNum);
+  std::shared_ptr<LevelDB> GetTxBodyDB(const uint64_t& epochNum);
 };
 
 #endif  // ZILLIQA_SRC_LIBPERSISTENCE_BLOCKSTORAGE_H_

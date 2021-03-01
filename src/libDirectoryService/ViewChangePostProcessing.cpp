@@ -330,10 +330,13 @@ void DirectoryService::ProcessViewChangeConsensusWhenDone() {
 
     // Acquire shard receivers cosigs from MicroBlocks
     unordered_map<uint32_t, BlockBase> t_microBlocks;
-    const auto& microBlocks = m_microBlocks
-        [m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum()];
-    for (const auto& microBlock : microBlocks) {
-      t_microBlocks.emplace(microBlock.GetHeader().GetShardId(), microBlock);
+    {
+      lock_guard<mutex> g(m_mutexMicroBlocks);
+      const auto& microBlocks = m_microBlocks
+          [m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum()];
+      for (const auto& microBlock : microBlocks) {
+        t_microBlocks.emplace(microBlock.GetHeader().GetShardId(), microBlock);
+      }
     }
 
     DequeOfShard t_shards;
@@ -383,9 +386,9 @@ void DirectoryService::ProcessNextConsensus(unsigned char viewChangeState) {
   }
 }
 
-bool DirectoryService::ProcessViewChangeConsensus(const bytes& message,
-                                                  unsigned int offset,
-                                                  const Peer& from) {
+bool DirectoryService::ProcessViewChangeConsensus(
+    const bytes& message, unsigned int offset, const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::ProcessViewChangeConsensus not expected "

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Zilliqa
+ * Copyright (C) 2020 Zilliqa
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,10 +31,12 @@ class ScillaClient {
   std::map<uint32_t, std::shared_ptr<jsonrpc::UnixDomainSocketClient>>
       m_connectors;
 
+  std::mutex m_mutexMain;
+
   ScillaClient(){};
   ~ScillaClient(){};
 
-  bool CheckClient(uint32_t version);
+  bool OpenServer(uint32_t version);
 
  public:
   static ScillaClient& GetInstance() {
@@ -42,7 +44,9 @@ class ScillaClient {
     return scillaclient;
   }
 
-  bool OpenServer(uint32_t version);
+  bool CheckClient(uint32_t version, bool enforce = false);
+
+  void Init();
 
   bool CallChecker(uint32_t version, const Json::Value& _json,
                    std::string& result, uint32_t counter = MAXRETRYCONN);

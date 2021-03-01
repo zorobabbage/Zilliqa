@@ -99,6 +99,8 @@ class BlockChain {
                           << blockNumMissed);
           m_blocks.increase_size(blockNumMissed);
         }
+      } else {
+        m_blocks.increase_size(blockNumOfNewBlock);
       }
       m_blocks.insert_new(blockNumOfNewBlock, block);
     } else {
@@ -142,14 +144,6 @@ class VCBlockChain : public BlockChain<VCBlock> {
   VCBlock GetBlockFromPersistentStorage([
       [gnu::unused]] const uint64_t& blockNum) override {
     throw "vc block persistent storage not supported";
-  }
-};
-
-class FallbackBlockChain : public BlockChain<FallbackBlock> {
- public:
-  FallbackBlock GetBlockFromPersistentStorage([
-      [gnu::unused]] const uint64_t& blockNum) override {
-    throw "fallback block persistent storage not supported";
   }
 };
 

@@ -99,23 +99,24 @@ void Node::StoreDSBlockToDisk(const DSBlock& dsblock) {
 }
 
 void Node::UpdateDSCommitteeComposition(DequeOfNode& dsComm,
-                                        const DSBlock& dsblock) {
-  // Update the DS committee composition.
-  LOG_MARKER();
+                                        const DSBlock& dsblock,
+                                        const bool showLogs) {
+  if (showLogs) {
+    LOG_MARKER();
+  }
 
   MinerInfoDSComm dummy;
   UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm, dsblock,
-                                   dummy);
+                                   dummy, showLogs);
 }
 
 void Node::UpdateDSCommitteeComposition(DequeOfNode& dsComm,
                                         const DSBlock& dsblock,
                                         MinerInfoDSComm& minerInfo) {
-  // Update the DS committee composition.
   LOG_MARKER();
 
   UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm, dsblock,
-                                   minerInfo);
+                                   minerInfo, true);
 }
 
 bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
@@ -169,6 +170,22 @@ bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
   }
 
   return true;
+}
+
+void Node ::UpdateGovProposalRemainingVoteInfo() {
+  LOG_MARKER();
+  lock_guard<mutex> g(m_mutexGovProposal);
+  if (m_govProposalInfo.isGovProposalActive) {
+    uint64_t curDSEpochNo =
+        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+    if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
+        curDSEpochNo <= m_govProposalInfo.endDSEpoch &&
+        m_govProposalInfo.remainingVoteCount > 1) {
+      --m_govProposalInfo.remainingVoteCount;
+    } else {
+      m_govProposalInfo.reset();
+    }
+  }
 }
 
 void Node::LogReceivedDSBlockDetails([[gnu::unused]] const DSBlock& dsblock) {
@@ -242,7 +259,7 @@ bool Node::LoadShardingStructure(bool callByRetrieve) {
   return true;
 }
 
-void Node::StartFirstTxEpoch() {
+void Node::StartFirstTxEpoch(bool fbWaitState) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Node::StartFirstTxEpoch not expected to be called from "
@@ -252,6 +269,7 @@ void Node::StartFirstTxEpoch() {
 
   LOG_MARKER();
   m_requestedForDSGuardNetworkInfoUpdate = false;
+  m_versionChecked = false;
   ResetConsensusId();
   // blacklist pop for shard nodes
   {
@@ -260,7 +278,7 @@ void Node::StartFirstTxEpoch() {
         *m_mediator.m_DSCommittee);
   }
   m_mediator.m_lookup->RemoveSeedNodesFromBlackList();
-  Blacklist::GetInstance().Pop(BLACKLIST_NUM_TO_POP);
+  Blacklist::GetInstance().Clear();
   P2PComm::ClearPeerConnectionCount();
 
   CleanWhitelistReqs();
@@ -271,55 +289,56 @@ void Node::StartFirstTxEpoch() {
         m_mediator.m_txBlockChain.GetLastBlock().GetBlockHash().asBytes());
   }
 
-  lock_guard<mutex> g(m_mutexShardMember);
+  {
+    lock_guard<mutex> g(m_mutexShardMember);
 
-  if (m_mediator.m_ds->m_mode != DirectoryService::IDLE && GUARD_MODE) {
-    m_consensusLeaderID =
-        lastBlockHash % Guard::GetInstance().GetNumOfDSGuard();
-  } else {
-    m_consensusLeaderID = CalculateShardLeaderFromDequeOfNode(
-        lastBlockHash, m_myShardMembers->size(), *m_myShardMembers);
+    if (m_mediator.m_ds->m_mode != DirectoryService::IDLE && GUARD_MODE) {
+      m_consensusLeaderID =
+          lastBlockHash % Guard::GetInstance().GetNumOfDSGuard();
+    } else {
+      m_consensusLeaderID = CalculateShardLeaderFromDequeOfNode(
+          lastBlockHash, m_myShardMembers->size(), *m_myShardMembers);
+    }
+
+    // If node was restarted consensusID needs to be calculated ( will not be 1)
+    m_mediator.m_consensusID =
+        (m_mediator.m_txBlockChain.GetBlockCount()) % NUM_FINAL_BLOCK_PER_POW;
+
+    // Check if I am the leader or backup of the shard
+    if (m_mediator.m_selfKey.second ==
+        (*m_myShardMembers)[m_consensusLeaderID].first) {
+      m_isPrimary = true;
+      LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
+                "I am leader of the sharded committee");
+
+      LOG_STATE("[IDENT][" << std::setw(15) << std::left
+                           << m_mediator.m_selfPeer.GetPrintableIPAddress()
+                           << "][" << m_mediator.m_currentEpochNum << "]["
+                           << m_myshardId << "][  0] SCLD");
+    } else {
+      m_isPrimary = false;
+
+      LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
+                "I am backup member of the sharded committee");
+
+      LOG_STATE("[SHSTU][" << setw(15) << left
+                           << m_mediator.m_selfPeer.GetPrintableIPAddress()
+                           << "]["
+                           << m_mediator.m_txBlockChain.GetLastBlock()
+                                      .GetHeader()
+                                      .GetBlockNum() +
+                                  1
+                           << "] RECVD SHARDING STRUCTURE");
+
+      LOG_STATE("[IDENT][" << std::setw(15) << std::left
+                           << m_mediator.m_selfPeer.GetPrintableIPAddress()
+                           << "][" << m_mediator.m_currentEpochNum << "]["
+                           << m_myshardId << "][" << std::setw(3) << std::left
+                           << m_consensusMyID << "] SCBK");
+    }
   }
 
-  // If node was restarted consensusID needs to be calculated ( will not be 1)
-  m_mediator.m_consensusID =
-      (m_mediator.m_txBlockChain.GetBlockCount()) % NUM_FINAL_BLOCK_PER_POW;
-
-  // Check if I am the leader or backup of the shard
-  if (m_mediator.m_selfKey.second ==
-      (*m_myShardMembers)[m_consensusLeaderID].first) {
-    m_isPrimary = true;
-    LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-              "I am leader of the sharded committee");
-
-    LOG_STATE("[IDENT][" << std::setw(15) << std::left
-                         << m_mediator.m_selfPeer.GetPrintableIPAddress()
-                         << "][" << m_mediator.m_currentEpochNum << "]["
-                         << m_myshardId << "][  0] SCLD");
-  } else {
-    m_isPrimary = false;
-
-    LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-              "I am backup member of the sharded committee");
-
-    LOG_STATE(
-        "[SHSTU]["
-        << setw(15) << left << m_mediator.m_selfPeer.GetPrintableIPAddress()
-        << "]["
-        << m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum() +
-               1
-        << "] RECVD SHARDING STRUCTURE");
-
-    LOG_STATE("[IDENT][" << std::setw(15) << std::left
-                         << m_mediator.m_selfPeer.GetPrintableIPAddress()
-                         << "][" << m_mediator.m_currentEpochNum << "]["
-                         << m_myshardId << "][" << std::setw(3) << std::left
-                         << m_consensusMyID << "] SCBK");
-  }
-
-  m_justDidFallback = false;
-
-  if (BROADCAST_GOSSIP_MODE) {
+  if (BROADCAST_GOSSIP_MODE && !LOOKUP_NODE_MODE) {
     VectorOfNode peers;
     std::vector<PubKey> pubKeys;
     GetEntireNetworkPeerInfo(peers, pubKeys);
@@ -330,21 +349,23 @@ void Node::StartFirstTxEpoch() {
 
   CommitTxnPacketBuffer();
 
-  auto main_func3 = [this]() mutable -> void { RunConsensusOnMicroBlock(); };
-
-  DetachedFunction(1, main_func3);
-
-  FallbackTimerLaunch();
-  FallbackTimerPulse();
+  if (fbWaitState) {
+    SetState(WAITING_FINALBLOCK);
+    CleanMicroblockConsensusBuffer();
+  } else {
+    auto main_func3 = [this]() mutable -> void { RunConsensusOnMicroBlock(); };
+    DetachedFunction(1, main_func3);
+  }
 }
 
 void Node::ResetConsensusId() {
   m_mediator.m_consensusID = m_mediator.m_currentEpochNum == 1 ? 1 : 0;
 }
 
-bool Node::ProcessVCDSBlocksMessage(const bytes& message,
-                                    unsigned int cur_offset,
-                                    [[gnu::unused]] const Peer& from) {
+bool Node::ProcessVCDSBlocksMessage(
+    const bytes& message, unsigned int cur_offset,
+    [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   unsigned int oldNumShards = m_mediator.m_ds->GetNumShards();
@@ -505,7 +526,10 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     }
   }
 
-  m_mediator.m_ds->m_shards = move(t_shards);
+  {
+    lock_guard<mutex> g(m_mediator.m_ds->m_mutexShards);
+    m_mediator.m_ds->m_shards = move(t_shards);
+  }
 
   MinerInfoDSComm minerInfoDSComm;
   MinerInfoShards minerInfoShards;
@@ -539,6 +563,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
 
   // Add to block chain and Store the DS block to disk.
   StoreDSBlockToDisk(dsblock);
+
+  m_mediator.m_lookup->m_confirmedLatestDSBlock = false;
 
   if (!BlockStorage::GetBlockStorage().ResetDB(BlockStorage::STATE_DELTA)) {
     LOG_GENERAL(WARNING, "BlockStorage::ResetDB failed");
@@ -653,6 +679,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
                     "I am now DS backup for the next round");
         }
       }
+      // reset governance proposal and vote if DS member
+      UpdateGovProposalRemainingVoteInfo();
 
       m_mediator.m_ds->StartFirstTxEpoch();
     } else {
@@ -678,6 +706,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
           SendDSBlockToOtherShardNodes(message2);
         }
       }
+      // reset governance proposal and vote if shard member
+      UpdateGovProposalRemainingVoteInfo();
 
       // Finally, start as a shard node
       StartFirstTxEpoch();
@@ -702,9 +732,6 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     if (m_mediator.m_lookup->GetIsServer() && !ARCHIVAL_LOOKUP) {
       m_mediator.m_lookup->SenderTxnBatchThread(oldNumShards);
     }
-
-    FallbackTimerLaunch();
-    FallbackTimerPulse();
   }
 
   if (!BlockStorage::GetBlockStorage().PutDSCommittee(
@@ -715,6 +742,32 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
 
   m_mediator.m_blocklinkchain.SetBuiltDSComm(*m_mediator.m_DSCommittee);
 
+  if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
+    if (MULTIPLIER_SYNC_MODE) {
+      // Avoid using the original message in case it contains
+      // excess data beyond the VCDSBlock
+      bytes message2 = {MessageType::NODE, NodeInstructionType::DSBLOCK};
+
+      if (!Messenger::SetNodeVCDSBlocksMessage(
+              message2, MessageOffset::BODY, shardId, dsblock, vcBlocks,
+              shardingStructureVersion, m_mediator.m_ds->m_shards)) {
+        LOG_GENERAL(WARNING, "Messenger::SetNodeVCDSBlocksMessage failed");
+      } else {
+        // Store to local map for VCDSBLOCK
+        std::lock_guard<mutex> g1(m_mutexVCDSBlockStore);
+        m_vcDSBlockStore[dsblock.GetHeader().GetBlockNum()] = message2;
+      }
+
+      // house keeping / clearing older entries from all in-memory stores.
+      CleanLocalRawStores();
+    } else {
+      {
+        unique_lock<mutex> lock(m_mediator.m_lookup->m_mutexVCDSBlockProcessed);
+        m_mediator.m_lookup->m_vcDsBlockProcessed = true;
+      }
+      m_mediator.m_lookup->cv_vcDsBlockProcessed.notify_all();
+    }
+  }
   if (LOOKUP_NODE_MODE) {
     if (!BlockStorage::GetBlockStorage().PutMinerInfoDSComm(
             dsblock.GetHeader().GetBlockNum(), minerInfoDSComm)) {

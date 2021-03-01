@@ -66,12 +66,15 @@ const unsigned int INIT_DS_EPOCH_NUM = 2;
 
 const unsigned int MAINNET_CHAIN_ID = 1;
 
+// ISOLATED SERVER TOGGLE
+
+extern bool ISOLATED_SERVER;
+
 // Testing parameters
 
 // Metadata type
 enum MetaType : unsigned char {
   STATEROOT = 0x00,
-  DSINCOMPLETED,  // [deprecated soon]
   LATESTACTIVEDSBLOCKNUM,
   WAKEUPFORUPGRADE,
   LATEST_EPOCH_STATES_UPDATED,  // [deprecated soon]
@@ -91,6 +94,8 @@ enum SyncType : unsigned int {
   DB_VERIF,  // Deprecated
   SYNC_TYPE_COUNT
 };
+
+enum class ValidateState : unsigned char { IDLE = 0, INPROGRESS, DONE, ERROR };
 
 namespace Contract {
 using VName = std::string;
@@ -131,9 +136,11 @@ extern const bool ENABLE_DO_REJOIN;
 extern const bool LOOKUP_NODE_MODE;
 extern const unsigned int MAX_ENTRIES_FOR_DIAGNOSTIC_DATA;
 extern const uint16_t CHAIN_ID;
+extern const uint16_t NETWORK_ID;
 extern const std::string GENESIS_PUBKEY;
 extern const unsigned int UPGRADE_TARGET_DS_NUM;
 extern const std::string STORAGE_PATH;
+extern const unsigned int NUM_EPOCHS_PER_PERSISTENT_DB;
 
 // Version constants
 extern const unsigned int MSG_VERSION;
@@ -142,7 +149,6 @@ extern const unsigned int DSBLOCK_VERSION;
 extern const unsigned int TXBLOCK_VERSION;
 extern const unsigned int MICROBLOCK_VERSION;
 extern const unsigned int VCBLOCK_VERSION;
-extern const unsigned int FALLBACKBLOCK_VERSION;
 extern const unsigned int BLOCKLINK_VERSION;
 extern const unsigned int DSCOMMITTEE_VERSION;
 extern const unsigned int SHARDINGSTRUCTURE_VERSION;
@@ -153,14 +159,29 @@ extern const unsigned int CONTRACT_STATE_VERSION;
 extern const bool ARCHIVAL_LOOKUP;
 extern const unsigned int SEED_TXN_COLLECTION_TIME_IN_SEC;
 extern const unsigned int TXN_STORAGE_LIMIT;
+extern bool MULTIPLIER_SYNC_MODE;
+extern const unsigned int SEED_SYNC_SMALL_PULL_INTERVAL;
+extern const unsigned int SEED_SYNC_LARGE_PULL_INTERVAL;
+extern const bool ENABLE_SEED_TO_SEED_COMMUNICATION;
+extern const unsigned int P2P_SEED_CONNECT_PORT;
+
+// RemoteStorageDB
+extern const std::string REMOTESTORAGE_DB_HOST;
+extern const std::string REMOTESTORAGE_DB_NAME;
+extern const unsigned int REMOTESTORAGE_DB_PORT;
+extern const unsigned int REMOTESTORAGE_DB_SERVER_SELECTION_TIMEOUT_MS;
+extern const std::string REMOTESTORAGE_DB_TLS_FILE;
+extern bool REMOTESTORAGE_DB_ENABLE;
 
 // Consensus constants
+extern const double TOLERANCE_FRACTION;
 extern const unsigned int COMMIT_WINDOW_IN_SECONDS;
 extern const unsigned int CONSENSUS_MSG_ORDER_BLOCK_WINDOW;
 extern const unsigned int CONSENSUS_OBJECT_TIMEOUT;
 extern const unsigned int DS_NUM_CONSENSUS_SUBSETS;
 extern const unsigned int SHARD_NUM_CONSENSUS_SUBSETS;
 extern const unsigned int COMMIT_TOLERANCE_PERCENT;
+extern const unsigned int SUBSET0_RESPONSE_DELAY_IN_MS;
 
 // Data sharing constants
 extern const bool BROADCAST_TREEBASED_CLUSTER_MODE;
@@ -174,6 +195,7 @@ extern const unsigned int NUM_SHARE_PENDING_TXNS;
 
 // Dispatcher constants
 extern const bool USE_REMOTE_TXN_CREATOR;
+extern const unsigned int NUM_DISPATCHERS;
 extern const std::string TXN_PATH;
 
 // Epoch timing constants
@@ -196,13 +218,6 @@ extern const unsigned int RETRY_GETSTATEDELTAS_COUNT;
 extern const unsigned int MAX_FETCHMISSINGMBS_NUM;
 extern const unsigned int LAST_N_TXBLKS_TOCHECK_FOR_MISSINGMBS;
 extern const unsigned int REMOVENODEFROMBLACKLIST_DELAY_IN_SECONDS;
-
-// Fallback constants
-extern const bool ENABLE_FALLBACK;
-extern const unsigned int FALLBACK_CHECK_INTERVAL;
-extern const unsigned int FALLBACK_EXTRA_TIME;
-extern const unsigned int FALLBACK_INTERVAL_STARTED;
-extern const unsigned int FALLBACK_INTERVAL_WAITING;
 
 // Gas constants
 extern const unsigned int DS_MICROBLOCK_GAS_LIMIT;
@@ -271,6 +286,10 @@ extern const std::string SCILLA_SERVER_SOCKET_PATH;
 extern const std::string SCILLA_SERVER_BINARY;
 extern bool ENABLE_WEBSOCKET;
 extern const unsigned int WEBSOCKET_PORT;
+extern const bool ENABLE_GETTXNBODIESFORTXBLOCK;
+extern const unsigned int NUM_TTL_PENDING_TXN;
+extern const unsigned int NUM_TTL_DROPPED_TXN;
+extern const unsigned int NUM_TXNS_PER_PAGE;
 
 // Network composition constants
 extern const unsigned int COMM_SIZE;
@@ -285,7 +304,8 @@ extern const unsigned int STORE_DS_COMMITTEE_INTERVAL;
 extern const unsigned int BROADCAST_INTERVAL;
 extern const unsigned int BROADCAST_EXPIRY;
 extern const unsigned int FETCH_LOOKUP_MSG_MAX_RETRY;
-extern const uint32_t MAXMESSAGE;
+extern const uint32_t MAXSENDMESSAGE;
+extern const uint32_t MAXRECVMESSAGE;
 extern const unsigned int MAXRETRYCONN;
 extern const unsigned int MSGQUEUE_SIZE;
 extern const unsigned int PUMPMESSAGE_MILLISECONDS;
@@ -296,6 +316,7 @@ extern const unsigned int MAX_READ_WATERMARK_IN_BYTES;
 extern const unsigned int BLACKLIST_NUM_TO_POP;
 extern const unsigned int MAX_PEER_CONNECTION;
 extern const unsigned int MAX_WHITELISTREQ_LIMIT;
+extern const unsigned int SENDJOBPEERS_TIMEOUT;
 
 // PoW constants
 extern const bool CUDA_GPU_MINE;
@@ -303,6 +324,7 @@ extern const bool FULL_DATASET_MINE;
 extern const bool OPENCL_GPU_MINE;
 extern const bool REMOTE_MINE;
 extern const std::string MINING_PROXY_URL;
+extern const unsigned int MINING_PROXY_TIMEOUT_IN_MS;
 extern const unsigned int MAX_RETRY_SEND_POW_TIME;
 extern const unsigned int CHECK_MINING_RESULT_INTERVAL;
 extern const bool GETWORK_SERVER_MINE;
@@ -325,6 +347,8 @@ extern const unsigned int TXN_SHARD_TARGET_DIFFICULTY;
 extern const unsigned int TXN_DS_TARGET_DIFFICULTY;
 extern const unsigned int TXN_DS_TARGET_NUM;
 extern const unsigned int PRIORITY_TOLERANCE_IN_PERCENT;
+extern const bool SKIP_POW_REATTEMPT_FOR_DS_DIFF;
+extern const std::string POW_SUBMISSION_VERSION_TAG;
 
 // Recovery and upgrading constants
 extern const unsigned int WAIT_LOOKUP_WAKEUP_IN_SECONDS;
@@ -333,11 +357,11 @@ extern const unsigned int SHARD_DELAY_WAKEUP_IN_SECONDS;
 extern const unsigned int TERMINATION_COUNTDOWN_IN_SECONDS;
 extern const std::string UPGRADE_HOST_ACCOUNT;
 extern const std::string UPGRADE_HOST_REPO;
-extern const bool RECOVERY_TRIM_INCOMPLETED_BLOCK;
 extern const bool REJOIN_NODE_NOT_IN_NETWORK;
 extern const unsigned int RESUME_BLACKLIST_DELAY_IN_SECONDS;
 extern const unsigned int INCRDB_DSNUMS_WITH_STATEDELTAS;
 extern const bool CONTRACT_STATES_MIGRATED;
+extern const unsigned int MAX_IPCHANGE_REQUEST_LIMIT;
 
 // Smart contract constants
 extern const bool ENABLE_SC;
@@ -361,18 +385,25 @@ extern const std::string FIELDS_MAP_DEPTH_INDICATOR;
 extern const bool SEMANTIC_SHARDING;
 extern const std::string SHARDING_INFO_INDICATOR;
 extern const bool LOG_SC;
+extern const bool DISABLE_SCILLA_LIB;
+extern const unsigned int SCILLA_SERVER_PENDING_IN_MS;
+// TODO: Remove FIELDS_MAP_DEPTH_INDICATOR after data migration
+const std::string FIELDS_MAP_DEPTH_INDICATOR = "_fields_map_depth";
+const std::string MAP_DEPTH_INDICATOR = "_depth";
+const std::string SCILLA_VERSION_INDICATOR = "_version";
+const std::string TYPE_INDICATOR = "_type";
+const std::string HAS_MAP_INDICATOR = "_hasmap";
+const std::string CONTRACT_ADDR_INDICATOR = "_addr";
 
 // Test constants
 extern const bool ENABLE_CHECK_PERFORMANCE_LOG;
-#ifdef FALLBACK_TEST
-extern const unsigned int FALLBACK_TEST_EPOCH;
-#endif  // FALLBACK_TEST
 extern const unsigned int NUM_TXN_TO_SEND_PER_ACCOUNT;
 extern const bool ENABLE_ACCOUNTS_POPULATING;
 extern const bool UPDATE_PREGENED_ACCOUNTS;
 extern const unsigned int NUM_ACCOUNTS_PREGENERATE;
 extern const unsigned int PREGEN_ACCOUNT_TIMES;
 extern const std::string PREGENED_ACCOUNTS_FILE;
+extern const bool LOG_PARAMETERS;
 
 // Transaction constants
 extern const uint128_t TOTAL_COINBASE_REWARD;
@@ -398,6 +429,8 @@ extern const std::string BUCKET_NAME;
 extern const std::string TXN_PERSISTENCE_NAME;
 extern const bool ENABLE_TXNS_BACKUP;
 extern const bool SHARDLDR_SAVE_TXN_LOCALLY;
+extern const double BLOOM_FILTER_FALSE_RATE;
+extern const unsigned int TXN_DISPATCH_ATTEMPT_LIMIT;
 
 // Viewchange constants
 extern const unsigned int POST_VIEWCHANGE_BUFFER;
@@ -410,7 +443,5 @@ extern const std::vector<std::string> GENESIS_WALLETS;
 extern const std::vector<std::string> GENESIS_KEYS;
 
 // DBVerifier constants
-extern const std::string VERIFIER_PATH;
-extern const std::string VERIFIER_PUBKEY;
-extern const unsigned int SEED_PORT;
+extern const std::vector<std::pair<uint64_t, uint32_t>> VERIFIER_EXCLUSION_LIST;
 #endif  // ZILLIQA_SRC_COMMON_CONSTANTS_H_

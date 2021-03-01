@@ -27,17 +27,20 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Thread, Lock
 import hashlib
 from distutils.dir_util import copy_tree
+from pprint import pformat
+import download_static_DB
 
 PERSISTENCE_SNAPSHOT_NAME='incremental'
 STATEDELTA_DIFF_NAME='statedelta'
 BUCKET_NAME='BUCKET_NAME'
+TESTNET_NAME= 'TEST_NET_NAME'
 CHUNK_SIZE = 4096
 EXPEC_LEN = 2
-TESTNET_NAME= 'TEST_NET_NAME'
 MAX_WORKER_JOBS = 50
 S3_MULTIPART_CHUNK_SIZE_IN_MB = 8
 NUM_DSBLOCK= "PUT_INCRDB_DSNUMS_WITH_STATEDELTAS_HERE"
 NUM_FINAL_BLOCK_PER_POW= "PUT_NUM_FINAL_BLOCK_PER_POW_HERE"
+MAX_FAILED_DOWNLOAD_RETRY = 2
 
 Exclude_txnBodies = True
 Exclude_microBlocks = True
@@ -46,6 +49,9 @@ Exclude_minerInfo = True
 BASE_PATH = os.path.dirname(os.path.realpath(sys.argv[0]))
 STORAGE_PATH = BASE_PATH
 mutex = Lock()
+
+DOWNLOADED_LIST = []
+DOWNLOAD_STARTED_LIST = []
 
 def getURL():
 	return "http://"+BUCKET_NAME+".s3.amazonaws.com"
@@ -101,9 +107,22 @@ def GetStateDeltaFromS3():
 	GetAllObjectsFromS3(getURL(), STATEDELTA_DIFF_NAME)
 	ExtractAllGzippedObjects()
 
+def Diff(list1, list2):
+	return (list(list(set(list1)-set(list2)) + list(set(list2)-set(list1))))
+
+def LaunchParallelUrlFetch(list_of_keyurls):
+	with ThreadPoolExecutor(max_workers=MAX_WORKER_JOBS) as pool:
+		pool.map(GetPersistenceKey,list_of_keyurls)
+		pool.shutdown(wait=True)
+
 def GetAllObjectsFromS3(url, folderName=""):
 	MARKER = ''
+	global DOWNLOADED_LIST
+	global DOWNLOAD_STARTED_LIST
+	DOWNLOADED_LIST = []
+	DOWNLOAD_STARTED_LIST = []
 	list_of_keyurls = []
+	failed_list_of_keyurls = []
 	prefix = ""
 	if folderName:
 		prefix = folderName+"/"+TESTNET_NAME
@@ -120,7 +139,7 @@ def GetAllObjectsFromS3(url, folderName=""):
 		lastkey = ''
 		for key in tree[startInd:]:
 			key_url = key[0].text
-			if (not (Exclude_txnBodies and "txBodies" in key_url) and not (Exclude_microBlocks and "microBlocks" in key_url) and not (Exclude_minerInfo and (("minerInfoDSComm" in key_url) or ("minerInfoShards" in key_url))) and not ("diff_persistence" in key_url)):
+			if (not (Exclude_txnBodies and "txEpochs" in key_url) and not (Exclude_txnBodies and "txBodies" in key_url) and not (Exclude_microBlocks and "microBlock" in key_url) and not (Exclude_minerInfo and "minerInfo" in key_url) and not ("diff_persistence" in key_url)):
 				list_of_keyurls.append(url+"/"+key_url)
 				print(key_url)
 			lastkey = key_url
@@ -131,17 +150,51 @@ def GetAllObjectsFromS3(url, folderName=""):
 		else:
 			break
 
-	with ThreadPoolExecutor(max_workers=MAX_WORKER_JOBS) as pool:
-		pool.map(GetPersistenceKey,list_of_keyurls)
-		pool.shutdown(wait=True)
+	LaunchParallelUrlFetch(list_of_keyurls)
+	DOWNLOADED_LIST.sort()
+	DOWNLOAD_STARTED_LIST.sort()
+	list_of_keyurls.sort()
+	failed_list_of_keyurls = Diff(list_of_keyurls, DOWNLOAD_STARTED_LIST) + Diff(list_of_keyurls, DOWNLOADED_LIST)
+	failed_retry_download_count = 0
+
+	print("DIFF keyurls vs download started = " + pformat(Diff(list_of_keyurls, DOWNLOAD_STARTED_LIST)))
+	print("DIFF keyurls vs downloaded = " + pformat(Diff(list_of_keyurls, DOWNLOADED_LIST)))
+
+	# retry download missing files
+	while(len(failed_list_of_keyurls) > 0 and failed_retry_download_count < MAX_FAILED_DOWNLOAD_RETRY):
+		LaunchParallelUrlFetch(failed_list_of_keyurls)
+		failed_list_of_keyurls = Diff(list_of_keyurls, DOWNLOAD_STARTED_LIST) + Diff(list_of_keyurls, DOWNLOADED_LIST)
+		failed_retry_download_count = failed_retry_download_count + 1
+
+	if(len(failed_list_of_keyurls) > 0):
+		print("DIFF after retry, keyurls vs download started = " + pformat(Diff(list_of_keyurls, DOWNLOAD_STARTED_LIST)))
+		print("DIFF after retry, keyurls vs downloaded = " + pformat(Diff(list_of_keyurls, DOWNLOADED_LIST)))
+
 	print("[" + str(datetime.datetime.now()) + "]"+" All objects from " + url + " completed!")
 	return 0
 
+
 def GetPersistenceKey(key_url):
+	global DOWNLOADED_LIST
+	global DOWNLOAD_STARTED_LIST
 	retry_counter = 0
+	mutex.acquire()
+	DOWNLOAD_STARTED_LIST.append(key_url)
+	mutex.release()
 	while True:
-		response = requests.get(key_url, stream=True)
+		try:
+			response = requests.get(key_url, stream=True)
+		except Exception as e:
+			print("Exception occurred while downloading " + key_url + ": " + str(e))
+			retry_counter+=1
+			if retry_counter > 3:
+				print("Failed to download " + key_url + " after " + str(retry_counter) + " retries")
+				break
+			time.sleep(5)
+			print("[Retry: " + str(retry_counter) + "] Downloading again " + key_url)
+			continue
 		if response.status_code != 200:
+			print("Error in downloading file " + key_url + " status_code " + str(response.status_code))
 			break
 		filename = key_url.replace(key_url[:key_url.index(TESTNET_NAME+"/")+len(TESTNET_NAME+"/")],"").strip()
 
@@ -161,6 +214,9 @@ def GetPersistenceKey(key_url):
 					f.write(chunk)
 					f.flush()
 			print("[" + str(datetime.datetime.now()) + "]"+" Downloaded " + filename + " successfully")
+			mutex.acquire()
+			DOWNLOADED_LIST.append(key_url)
+			mutex.release()
 		calc_md5_hash = calculate_multipart_etag(filename, S3_MULTIPART_CHUNK_SIZE_IN_MB * 1024 *1024)
 		if calc_md5_hash != md5_hash:
 			print("md5 checksum mismatch for " + filename + ". Expected: " + md5_hash + ", Actual: " + calc_md5_hash)
@@ -267,8 +323,9 @@ def run():
 			while(currTxBlk < newTxBlk):
 				lst.append(currTxBlk+1)
 				currTxBlk += 1
-			GetPersistenceDiffFromS3(lst)
-			GetStateDeltaDiffFromS3(lst)
+			if lst:
+				GetPersistenceDiffFromS3(lst)
+				GetStateDeltaDiffFromS3(lst)
 			break
 
 		except Exception as e:
@@ -278,6 +335,11 @@ def run():
 			continue
 
 	print("[" + str(datetime.datetime.now()) + "] Done!")
+
+	if(Exclude_microBlocks == False and Exclude_txnBodies == False):
+		# download the static db
+		download_static_DB.start(STORAGE_PATH)
+
 	return True
 def start():
 	global Exclude_txnBodies

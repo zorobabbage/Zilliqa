@@ -100,8 +100,11 @@ bool Node::VerifyVCBlockCoSignature(const VCBlock& vcblock) {
 }
 
 bool Node::ProcessVCBlock(const bytes& message, unsigned int cur_offset,
-                          [[gnu::unused]] const Peer& from) {
+                          [[gnu::unused]] const Peer& from,
+                          [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
+
+  lock_guard<mutex> g(m_mutexVCBlock);
 
   VCBlock vcblock;
 
@@ -133,15 +136,18 @@ bool Node::ProcessVCBlock(const bytes& message, unsigned int cur_offset,
     return false;
   }
 
-  if (!LOOKUP_NODE_MODE && BROADCAST_TREEBASED_CLUSTER_MODE) {
-    // Avoid using the original message for broadcasting in case it contains
-    // excess data beyond the VCBlock
-    bytes message2 = {MessageType::NODE, NodeInstructionType::VCBLOCK};
-    if (!Messenger::SetNodeVCBlock(message2, MessageOffset::BODY, vcblock)) {
-      LOG_GENERAL(WARNING, "Messenger::SetNodeVCBlock failed");
-    } else {
-      SendVCBlockToOtherShardNodes(message2);
-    }
+  // Avoid using the original message for broadcasting in case it contains
+  // excess data beyond the VCBlock
+  bytes message2 = {MessageType::NODE, NodeInstructionType::VCBLOCK};
+  if (!Messenger::SetNodeVCBlock(message2, MessageOffset::BODY, vcblock)) {
+    LOG_GENERAL(WARNING, "Messenger::SetNodeVCBlock failed");
+  } else if (!LOOKUP_NODE_MODE && BROADCAST_TREEBASED_CLUSTER_MODE) {
+    SendVCBlockToOtherShardNodes(message2);
+  } else if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP && MULTIPLIER_SYNC_MODE) {
+    // push to local store of VCBLOCKS which maintains vcblocks only of
+    // latest tx block.
+    std::lock_guard<mutex> g1(m_mutexvcBlocksStore);
+    m_vcBlockStore.push_back(vcblock);
   }
 
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
@@ -301,9 +307,13 @@ void Node::UpdateDSCommitteeCompositionAfterVC(const VCBlock& vcblock,
 
 // Only compares the pubkeys to kickout
 void Node::UpdateRetrieveDSCommitteeCompositionAfterVC(const VCBlock& vcblock,
-                                                       DequeOfNode& dsComm) {
+                                                       DequeOfNode& dsComm,
+                                                       const bool showLogs) {
   if (GUARD_MODE) {
-    LOG_GENERAL(INFO, "In guard mode. No updating of DS composition requried");
+    if (showLogs) {
+      LOG_GENERAL(INFO,
+                  "In guard mode. No updating of DS composition requried");
+    }
     return;
   }
   for (const auto& faultyLeader : vcblock.GetHeader().GetFaultyLeaders()) {

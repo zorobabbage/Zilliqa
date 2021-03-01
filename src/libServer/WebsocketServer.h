@@ -34,7 +34,7 @@
 
 typedef websocketpp::server<websocketpp::config::asio> websocketserver;
 
-enum WEBSOCKETQUERY : unsigned int { NEWBLOCK, EVENTLOG, UNSUBSCRIBE };
+enum WEBSOCKETQUERY : unsigned int { NEWBLOCK, EVENTLOG, TXNLOG, UNSUBSCRIBE };
 
 struct Subscription {
   std::set<WEBSOCKETQUERY> queries;
@@ -115,12 +115,22 @@ class WebsocketServer : public Singleton<WebsocketServer> {
   static std::mutex m_mutexEventLogAddrHdlTracker;
   static EventLogAddrHdlTracker m_eventLogAddrHdlTracker;
 
+  static std::mutex m_mutexTxnLogAddrHdlTracker;
+  static EventLogAddrHdlTracker m_txnLogAddrHdlTracker;
+
   /// a buffer for keeping the eventlog to send for each subscriber
+
   static std::mutex m_mutexEventLogDataBuffer;
   static std::map<websocketpp::connection_hdl,
                   std::unordered_map<Address, Json::Value>,
                   std::owner_less<websocketpp::connection_hdl>>
       m_eventLogDataBuffer;
+
+  static std::mutex m_mutexTxnLogDataBuffer;
+  static std::map<websocketpp::connection_hdl,
+                  std::unordered_map<Address, Json::Value>,
+                  std::owner_less<websocketpp::connection_hdl>>
+      m_txnLogDataBuffer;
 
   /// make run() detached in a new thread to avoid blocking
   websocketpp::lib::shared_ptr<websocketpp::lib::thread> m_thread;
@@ -142,12 +152,18 @@ class WebsocketServer : public Singleton<WebsocketServer> {
   /// Public interface to digest contract event from transaction receipts
   void ParseTxnEventLog(const TransactionWithReceipt& twr);
 
+  //
+  void ParseTxn(const TransactionWithReceipt& twr);
+
+  void ParseTxnLog(const TransactionWithReceipt& twr);
+
   // /// Public interface to send all digested contract events to subscriber
   void SendOutMessages();
 
  private:
   /// Singleton constructor and start service immediately
   WebsocketServer() {
+    m_server.clear_access_channels(websocketpp::log::alevel::all);
     if (!start()) {
       LOG_GENERAL(FATAL, "WebsocketServer start failed");
       ENABLE_WEBSOCKET = false;
@@ -182,6 +198,7 @@ class WebsocketServer : public Singleton<WebsocketServer> {
                          const websocketserver::message_ptr& msg);
   // static void on_fail(const websocketpp::connection_hdl& hdl);
   static void on_close(const websocketpp::connection_hdl& hdl);
+  static void on_http(const websocketpp::connection_hdl& hdl);
 };
 
 #endif  // ZILLIQA_SRC_LIBSERVER_WEBSOCKETSERVER_H_

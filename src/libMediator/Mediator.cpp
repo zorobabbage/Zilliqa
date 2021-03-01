@@ -28,6 +28,9 @@
 
 using namespace std;
 
+std::atomic<bool> Mediator::m_disableTxns(false);
+std::atomic<bool> Mediator::m_disableGetSmartContractState(false);
+
 Mediator::Mediator(const PairOfKey& key, const Peer& peer)
     : m_selfKey(key),
       m_selfPeer(peer),
@@ -46,7 +49,12 @@ Mediator::Mediator(const PairOfKey& key, const Peer& peer)
       m_isRetrievedHistory(false),
       m_isVacuousEpoch(false),
       m_curSWInfo(),
-      m_disablePoW(false) {
+      m_disablePoW(false),
+      m_validateState(ValidateState::IDLE),
+      m_aveBlockTimeInSeconds(
+          static_cast<double>(TX_DISTRIBUTE_TIME_IN_MS +
+                              (ANNOUNCEMENT_DELAY_IN_MS * 2)) /
+          1000) {
   SetupLogLevel();
 }
 
@@ -140,9 +148,10 @@ void Mediator::IncreaseEpochNum() {
 
     num_block = num_block % NUM_FINAL_BLOCK_PER_POW;
     auto now = std::chrono::system_clock::now();
+
+    // block time = average over last
     auto wait_seconds = chrono::seconds(
-        ((TX_DISTRIBUTE_TIME_IN_MS + ANNOUNCEMENT_DELAY_IN_MS) / 1000) *
-        num_block);
+        static_cast<unsigned int>(m_aveBlockTimeInSeconds) * num_block);
 
     GetWorkServer::GetInstance().SetNextPoWTime(now + wait_seconds);
   }

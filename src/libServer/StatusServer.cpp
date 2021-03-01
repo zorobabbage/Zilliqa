@@ -18,6 +18,7 @@
 #include "StatusServer.h"
 #include "JSONConversion.h"
 #include "libNetwork/Blacklist.h"
+#include "libRemoteStorageDB/RemoteStorageDB.h"
 
 using namespace jsonrpc;
 using namespace std;
@@ -62,6 +63,40 @@ StatusServer::StatusServer(Mediator& mediator,
                          "param01", jsonrpc::JSON_STRING, NULL),
       &StatusServer::RemoveFromBlacklistExclusionI);
   this->bindAndAddMethod(
+      jsonrpc::Procedure("AddToExtSeedWhitelist", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_BOOLEAN, "param01", jsonrpc::JSON_STRING,
+                         NULL),
+      &StatusServer::AddToExtSeedWhitelistI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("RemoveFromExtSeedWhitelist",
+                         jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN,
+                         "param01", jsonrpc::JSON_STRING, NULL),
+      &StatusServer::RemoveFromExtSeedWhitelistI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("GetWhitelistedExtSeed", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_STRING, NULL),
+      &StatusServer::GetWhitelistedExtSeedI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("AddToSeedsWhitelist", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_BOOLEAN, "param01", jsonrpc::JSON_STRING,
+                         NULL),
+      &StatusServer::AddToSeedsWhitelistI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("RemoveFromSeedsWhitelist",
+                         jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN,
+                         "param01", jsonrpc::JSON_STRING, NULL),
+      &StatusServer::RemoveFromSeedsWhitelistI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("IsIPInBlacklist", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_BOOLEAN, "param01", jsonrpc::JSON_STRING,
+                         NULL),
+      &StatusServer::IsIPInBlacklistI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("RemoveIPFromBlacklist", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_BOOLEAN, "param01", jsonrpc::JSON_STRING,
+                         NULL),
+      &StatusServer::RemoveIPFromBlacklistI);
+  this->bindAndAddMethod(
       jsonrpc::Procedure("GetDSCommittee", jsonrpc::PARAMS_BY_POSITION,
                          jsonrpc::JSON_OBJECT, NULL),
       &StatusServer::GetDSCommitteeI);
@@ -91,9 +126,58 @@ StatusServer::StatusServer(Mediator& mediator,
                          jsonrpc::JSON_STRING, NULL),
       &StatusServer::GetSendSCCallsToDSI);
   this->bindAndAddMethod(
+      jsonrpc::Procedure("ToggleSendAllToDS", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_STRING, NULL),
+      &StatusServer::ToggleSendAllToDSI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("GetSendAllToDS", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_STRING, NULL),
+      &StatusServer::GetSendAllToDSI);
+  this->bindAndAddMethod(
       jsonrpc::Procedure("DisablePoW", jsonrpc::PARAMS_BY_POSITION,
                          jsonrpc::JSON_OBJECT, NULL),
       &StatusServer::DisablePoWI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("ToggleDisableTxns", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, NULL),
+      &StatusServer::ToggleDisableTxnsI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("SetValidateDB", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_STRING, NULL),
+      &StatusServer::SetValidateDBI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("GetValidateDB", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_STRING, NULL),
+      &StatusServer::GetValidateDBI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("SetVoteInPow", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_BOOLEAN, NULL),
+      &StatusServer::SetVoteInPowI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("ToggleRemoteStorage", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, NULL),
+      &StatusServer::ToggleRemoteStorageI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("GetRemoteStorage", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, NULL),
+      &StatusServer::GetRemoteStorageI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("InitRemoteStorage", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, NULL),
+      &StatusServer::InitRemoteStorageI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("GetAverageBlockTime", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_STRING, NULL),
+      &StatusServer::GetAverageBlockTimeI);
+  this->bindAndAddMethod(jsonrpc::Procedure("ToggleGetSmartContractState",
+                                            jsonrpc::PARAMS_BY_POSITION,
+                                            jsonrpc::JSON_OBJECT, NULL),
+                         &StatusServer::ToggleGetSmartContractStateI);
+  this->bindAndAddMethod(
+      jsonrpc::Procedure("AuditShard", jsonrpc::PARAMS_BY_POSITION,
+                         jsonrpc::JSON_OBJECT, "param01", jsonrpc::JSON_STRING,
+                         NULL),
+      &StatusServer::AuditShardI);
 }
 
 string StatusServer::GetLatestEpochStatesUpdated() {
@@ -151,6 +235,161 @@ bool StatusServer::AddToBlacklistExclusion(const string& ipAddr) {
   }
 }
 
+bool StatusServer::AddToExtSeedWhitelist(const string& pubKeyStr) {
+  try {
+    PubKey pubKey = PubKey::GetPubKeyFromString(pubKeyStr);
+
+    if (!m_mediator.m_lookup->AddToWhitelistExtSeed(pubKey)) {
+      throw JsonRpcException(
+          RPC_INVALID_PARAMETER,
+          "Could not add pub key in extseed whitelist, already present");
+    }
+
+    return true;
+
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
+bool StatusServer::RemoveFromExtSeedWhitelist(const string& pubKeyStr) {
+  try {
+    PubKey pubKey = PubKey::GetPubKeyFromString(pubKeyStr);
+
+    if (!m_mediator.m_lookup->RemoveFromWhitelistExtSeed(pubKey)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "Could not remove pub key in extseed whitelist, "
+                             "already not present");
+    }
+    return true;
+
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
+string StatusServer::GetWhitelistedExtSeed() {
+  try {
+    std::unordered_set<PubKey> extSeedsWhitelisted;
+    if (!BlockStorage::GetBlockStorage().GetAllExtSeedPubKeys(
+            extSeedsWhitelisted)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "Could not get pub key in extseed whitelist");
+    }
+    string result;
+    for (const auto& pubk : extSeedsWhitelisted) {
+      result += string(pubk);
+      result += ", ";
+    }
+    result.erase(result.find_last_of(','));
+    return result;
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
+bool StatusServer::AddToSeedsWhitelist(const string& ipAddr) {
+  try {
+    uint128_t numIP;
+
+    if (!IPConverter::ToNumericalIPFromStr(ipAddr, numIP)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "IP Address provided not valid");
+    }
+
+    if (!Blacklist::GetInstance().IsEnabled()) {
+      throw JsonRpcException(
+          RPC_INVALID_PARAMETER,
+          "Whitelisting is disabled. Node might not be synced yet!");
+    }
+
+    if (!Blacklist::GetInstance().WhitelistSeed(numIP)) {
+      throw JsonRpcException(
+          RPC_INVALID_PARAMETER,
+          "Could not add IP Address in whitelisted seed list, already present");
+    }
+
+    return true;
+
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
+bool StatusServer::RemoveFromSeedsWhitelist(const string& ipAddr) {
+  try {
+    uint128_t numIP;
+
+    if (!IPConverter::ToNumericalIPFromStr(ipAddr, numIP)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "IP Address provided not valid");
+    }
+
+    if (!Blacklist::GetInstance().RemoveFromWhitelistedSeeds(numIP)) {
+      throw JsonRpcException(
+          RPC_INVALID_PARAMETER,
+          "Could not remove IP Address from whitelisted seed list");
+    }
+
+    return true;
+
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
+bool StatusServer::IsIPInBlacklist(const string& ipAddr) {
+  try {
+    uint128_t numIP;
+
+    if (!IPConverter::ToNumericalIPFromStr(ipAddr, numIP)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "IP Address provided not valid");
+    }
+
+    return Blacklist::GetInstance().Exist(numIP);
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
+bool StatusServer::RemoveIPFromBlacklist(const string& ipAddr) {
+  try {
+    uint128_t numIP;
+
+    if (!IPConverter::ToNumericalIPFromStr(ipAddr, numIP)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "IP Address provided not valid");
+    }
+
+    Blacklist::GetInstance().Remove(numIP);
+    return true;
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+}
+
 bool StatusServer::RemoveFromBlacklistExclusion(const string& ipAddr) {
   try {
     uint128_t numIP;
@@ -199,26 +438,37 @@ Json::Value StatusServer::IsTxnInMemPool(const string& tranID) {
     TxnHash tranHash(tranID);
     Json::Value _json;
 
-    switch (m_mediator.m_node->IsTxnInMemPool(tranHash)) {
-      case PoolTxnStatus::NOT_PRESENT:
-        _json["present"] = false;
-        _json["code"] = PoolTxnStatus::NOT_PRESENT;
-        return _json;
-      case PoolTxnStatus::PRESENT_NONCE_HIGH:
-        _json["present"] = true;
-        _json["code"] = PoolTxnStatus::PRESENT_NONCE_HIGH;
-        _json["info"] = "Nonce too high";
-        return _json;
-      case PoolTxnStatus::PRESENT_GAS_EXCEEDED:
-        _json["present"] = true;
-        _json["code"] = PoolTxnStatus::PRESENT_GAS_EXCEEDED;
-        _json["info"] = "Could not fit in as microblock gas limit reached";
-        return _json;
-      case PoolTxnStatus::ERROR:
-        throw JsonRpcException(RPC_INTERNAL_ERROR, "Processing transactions");
-      default:
-        throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+    const auto& code = m_mediator.m_node->IsTxnInMemPool(tranHash);
+
+    if (!IsTxnDropped(code)) {
+      switch (code) {
+        case TxnStatus::NOT_PRESENT:
+          _json["present"] = false;
+          _json["pending"] = false;
+          _json["code"] = TxnStatus::NOT_PRESENT;
+          return _json;
+        case TxnStatus::PRESENT_NONCE_HIGH:
+          _json["present"] = true;
+          _json["pending"] = true;
+          _json["code"] = TxnStatus::PRESENT_NONCE_HIGH;
+          return _json;
+        case TxnStatus::PRESENT_GAS_EXCEEDED:
+          _json["present"] = true;
+          _json["pending"] = true;
+          _json["code"] = TxnStatus::PRESENT_GAS_EXCEEDED;
+          return _json;
+        case TxnStatus::ERROR:
+          throw JsonRpcException(RPC_INTERNAL_ERROR, "Processing transactions");
+        default:
+          throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+      }
+    } else {
+      _json["present"] = true;
+      _json["pending"] = false;
+      _json["code"] = code;
+      return _json;
     }
+
   } catch (const JsonRpcException& je) {
     throw je;
   } catch (exception& e) {
@@ -229,9 +479,9 @@ Json::Value StatusServer::IsTxnInMemPool(const string& tranID) {
 }
 
 bool StatusServer::ToggleSendSCCallsToDS() {
-  if (!LOOKUP_NODE_MODE || ARCHIVAL_LOOKUP) {
+  if (!LOOKUP_NODE_MODE) {
     throw JsonRpcException(RPC_INVALID_REQUEST,
-                           "Not to be queried on non-lookup or seed");
+                           "Not to be queried on non-lookup");
   }
   m_mediator.m_lookup->m_sendSCCallsToDS =
       !(m_mediator.m_lookup->m_sendSCCallsToDS);
@@ -239,11 +489,28 @@ bool StatusServer::ToggleSendSCCallsToDS() {
 }
 
 bool StatusServer::GetSendSCCallsToDS() {
-  if (!LOOKUP_NODE_MODE || ARCHIVAL_LOOKUP) {
+  if (!LOOKUP_NODE_MODE) {
     throw JsonRpcException(RPC_INVALID_REQUEST,
-                           "Not to be queried on non-lookup or seed");
+                           "Not to be queried on non-lookup");
   }
   return m_mediator.m_lookup->m_sendSCCallsToDS;
+}
+
+bool StatusServer::ToggleSendAllToDS() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  m_mediator.m_lookup->m_sendAllToDS = !(m_mediator.m_lookup->m_sendAllToDS);
+  return m_mediator.m_lookup->m_sendAllToDS;
+}
+
+bool StatusServer::GetSendAllToDS() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  return m_mediator.m_lookup->m_sendAllToDS;
 }
 
 bool StatusServer::DisablePoW() {
@@ -251,5 +518,186 @@ bool StatusServer::DisablePoW() {
     throw JsonRpcException(RPC_INVALID_REQUEST, "Not to be queried on lookup");
   }
   m_mediator.m_disablePoW = true;
+  return true;
+}
+
+bool StatusServer::ToggleDisableTxns() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  m_mediator.m_disableTxns = !m_mediator.m_disableTxns;
+  return m_mediator.m_disableTxns;
+}
+
+bool StatusServer::ToggleRemoteStorage() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  REMOTESTORAGE_DB_ENABLE = !REMOTESTORAGE_DB_ENABLE;
+
+  return REMOTESTORAGE_DB_ENABLE;
+}
+
+bool StatusServer::GetRemoteStorage() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+
+  return REMOTESTORAGE_DB_ENABLE;
+}
+
+string StatusServer::SetValidateDB() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  string result = "";
+  try {
+    switch (m_mediator.m_validateState) {
+      case ValidateState::IDLE:
+      case ValidateState::DONE:
+      case ValidateState::ERROR:
+        if (m_mediator.m_lookup->GetSyncType() != SyncType::NO_SYNC) {
+          result = "Validation aborted - node not synced";
+        } else {
+          m_mediator.m_node->ValidateDB();
+          result = "Validation started";
+        }
+        break;
+      case ValidateState::INPROGRESS:
+      default:
+        result = "Validation in progress";
+        break;
+    }
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+
+  return result;
+}
+
+string StatusServer::GetValidateDB() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+  string result = "";
+  try {
+    switch (m_mediator.m_validateState) {
+      case ValidateState::IDLE:
+        result = "Validation idle";
+        break;
+      case ValidateState::INPROGRESS:
+        result = "Validation in progress";
+        break;
+      case ValidateState::DONE:
+        result = "Validation completed successfully";
+        break;
+      case ValidateState::ERROR:
+      default:
+        result = "Validation completed with errors";
+        break;
+    }
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+
+  return result;
+}
+
+bool StatusServer::SetVoteInPow(const std::string& proposalId,
+                                const std::string& voteValue,
+                                const std::string& remainingVoteCount,
+                                const std::string& startDSEpoch,
+                                const std::string& endDSEpoch) {
+  if (LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST, "Not to be queried on lookup");
+  }
+  if (proposalId.empty() || voteValue.empty() || remainingVoteCount.empty() ||
+      startDSEpoch.empty() || endDSEpoch.empty()) {
+    return false;
+  }
+  try {
+    if (!m_mediator.m_node->StoreVoteUntilPow(proposalId, voteValue,
+                                              remainingVoteCount, startDSEpoch,
+                                              endDSEpoch)) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER,
+                             "Invalid request parameters");
+    }
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error]: " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+  return true;
+}
+bool StatusServer::InitRemoteStorage() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+
+  RemoteStorageDB::GetInstance().Init(true);
+
+  if (!RemoteStorageDB::GetInstance().IsInitialized()) {
+    throw JsonRpcException(RPC_MISC_ERROR, "Failed to initialize");
+  }
+
+  return true;
+}
+
+string StatusServer::AverageBlockTime() {
+  return to_string(
+      static_cast<unsigned int>(m_mediator.m_aveBlockTimeInSeconds));
+}
+
+bool StatusServer::ToggleGetSmartContractState() {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+
+  m_mediator.m_disableGetSmartContractState =
+      !m_mediator.m_disableGetSmartContractState;
+  return m_mediator.m_disableGetSmartContractState;
+}
+
+bool StatusServer::AuditShard(const std::string& shardIDStr) {
+  if (!LOOKUP_NODE_MODE) {
+    throw JsonRpcException(RPC_INVALID_REQUEST,
+                           "Not to be queried on non-lookup");
+  }
+
+  const uint32_t shardID = stoul(shardIDStr);
+  LOG_GENERAL(INFO, "Auditing shard " << shardID);
+
+  try {
+    const auto shards = m_mediator.m_lookup->GetShardPeers();
+    if (shards.size() <= shardID) {
+      throw JsonRpcException(RPC_INVALID_PARAMETER, "Invalid shardID");
+    }
+
+    const auto& shard = shards.at(shardID);
+    vector<Peer> peersVec;
+    for (const auto& peer : shard) {
+      LOG_GENERAL(INFO,
+                  "Checking " << std::get<1>(peer).GetPrintableIPAddress());
+      peersVec.emplace_back(std::get<1>(peer));
+    }
+
+    m_mediator.m_node->CheckPeers(peersVec);
+  } catch (const JsonRpcException& je) {
+    throw je;
+  } catch (const exception& e) {
+    LOG_GENERAL(WARNING, "[Error] " << e.what());
+    throw JsonRpcException(RPC_MISC_ERROR, "Unable to process");
+  }
+
   return true;
 }

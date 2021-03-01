@@ -50,10 +50,19 @@ void test_transaction(const map<uint32_t, vector<Transaction>>& mp,
   lk.RectifyTxnShardMap(oldNumShard, newShardNum);
 
   for (uint k = 0; k <= newShardNum; k++) {
-    const auto txns = lk.GetTxnFromShardMap(k);
-    for (const auto& tx : txns) {
-      const auto& shard = tx.GetShardIndex(newShardNum);
-      auto index = shard;
+    const auto& txns = lk.GetTxnFromShardMap(k);
+    for (const auto& tx_and_count : txns) {
+      const auto& fromShard = tx_and_count.first.GetShardIndex(newShardNum);
+      auto index = fromShard;
+      if (Transaction::GetTransactionType(tx_and_count.first) ==
+          Transaction::CONTRACT_CALL) {
+        const auto& toShard = Transaction::GetShardIndex(
+            tx_and_count.first.GetToAddr(), newShardNum);
+        if (toShard != fromShard) {
+          LOG_GENERAL(INFO, "Sent to ds");
+          index = newShardNum;
+        }
+      }
 
       BOOST_CHECK_MESSAGE(k == index, "The index in map "
                                           << k << " and actual index " << index

@@ -17,6 +17,8 @@
 
 #include "RumorManager.h"
 
+#include <boost/bimap/support/lambda.hpp>
+
 #include <chrono>
 #include <string>
 #include <thread>
@@ -176,6 +178,24 @@ bool RumorManager::Initialize(const VectorOfNode& peers, const Peer& myself,
                                      (ROUND_TIME_IN_MS);  // milliseconds
 
   return true;
+}
+
+void RumorManager::UpdatePeerInfo(const Peer& newPeerInfo,
+                                  const PubKey& pubKey) {
+  std::lock_guard<std::mutex> guard(m_mutex);  // critical section
+  auto it = m_pubKeyPeerBiMap.left.find(pubKey);
+  if (it != m_pubKeyPeerBiMap.left.end()) {
+    Peer oldPeerInfo = it->second;
+    m_pubKeyPeerBiMap.left.modify_data(it, boost::bimaps::_data = newPeerInfo);
+    auto it2 = m_peerIdPeerBimap.right.find(oldPeerInfo);
+    if (it2 != m_peerIdPeerBimap.right.end()) {
+      m_peerIdPeerBimap.right.modify_key(it2,
+                                         boost::bimaps::_key = newPeerInfo);
+      LOG_GENERAL(INFO, "Updated peer info successfully!");
+      return;
+    }
+  }
+  LOG_GENERAL(WARNING, "Failed to updated peer info!");
 }
 
 void RumorManager::SpreadBufferedRumors() {
@@ -456,6 +476,10 @@ std::pair<bool, RumorManager::RawBytes> RumorManager::RumorReceived(
                            << RRS::Message::s_enumKeyToString[t]);
   } else if (RRS::Message::Type::LAZY_PUSH == t ||
              RRS::Message::Type::LAZY_PULL == t) {
+    if (message_wo_keysig.size() != COMMON_HASH_SIZE) {
+      LOG_CHECK_FAIL("Hash Size", message_wo_keysig.size(), COMMON_HASH_SIZE);
+      return {false, {}};
+    }
     auto it = m_rumorIdHashBimap.right.find(message_wo_keysig);
     if (it == m_rumorIdHashBimap.right.end()) {
       recvdRumorId = ++m_rumorIdGenerator;

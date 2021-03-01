@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.16.1)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -43,6 +43,11 @@ endif()
 include(InstallG3log)
 find_package(g3logger CONFIG REQUIRED)
 
+include(InstallCryptoUtils)
+
+include(InstallMongo)
+find_package(mongocxx CONFIG REQUIRED)
+ 
 include(InstallWebsocketpp)
 find_package(websocketpp CONFIG REQUIRED)
 
@@ -56,7 +61,35 @@ list(GET PY_VERSION_LIST 0 PY_VERSION_MAJOR)
 list(GET PY_VERSION_LIST 1 PY_VERSION_MINOR)
 list(GET PY_VERSION_LIST 2 PY_VERSION_PATCH)
 
-set(PY_COMP_SUFFIX "python-py${PY_VERSION_MAJOR}${PY_VERSION_MINOR}")
+set(PY_VERSION "${PY_VERSION_MAJOR}${PY_VERSION_MINOR}")
+
+
+find_package(Boost COMPONENTS python-py${PY_VERSION} QUIET)
+find_package(Boost COMPONENTS python${PY_VERSION} QUIET)
+find_package(Boost COMPONENTS python3-py${PY_VERSION} QUIET)
+
+
+
+if(Boost_PYTHON-PY${PY_VERSION}_FOUND)
+
+set(PY_COMP_SUFFIX "python-py${PY_VERSION}")
+
+elseif(Boost_PYTHON${PY_VERSION}_FOUND)
+
+set(PY_COMP_SUFFIX "python${PY_VERSION}")
+
+elseif(Boost_PYTHON3-PY${PY_VERSION}_FOUND)
+
+set(PY_COMP_SUFFIX "python3-py${PY_VERSION}")
+
+else()
+
+message(FATAL_ERROR "Could not find boost python")
+
+endif()
+
+message(STATUS "Python suffix: ${PY_COMP_SUFFIX}")
+
 
 message(STATUS "Python Version: ${PY_VERSION_MAJOR}.${PY_VERSION_MINOR}")
 
@@ -100,42 +133,43 @@ if(CUDA_MINE)
     add_definitions(-DCUDA_MINE)
 endif()
 
-if(FALLBACKTEST)
-	add_definitions(-DFALLBACK_TEST)
-endif()
-
 # VC related test scenario
 # For DS Block Consensus
 if(VC_TEST_DS_SUSPEND_1)
     message(STATUS "VC 1 test enabled")
-	add_definitions(-DVC_TEST_DS_SUSPEND_1)
+    add_definitions(-DVC_TEST_DS_SUSPEND_1)
 endif()
 
 if(VC_TEST_DS_SUSPEND_3)
     message(STATUS "VC 2 test enabled")
-	add_definitions(-DVC_TEST_DS_SUSPEND_3)
+    add_definitions(-DVC_TEST_DS_SUSPEND_3)
+endif()
+
+if(GOVVC_TEST_DS_SUSPEND_3)
+    message(STATUS "GOVVC 2 test enabled")
+    add_definitions(-DGOVVC_TEST_DS_SUSPEND_3)
 endif()
 
 # For Final Block Consensus
 if(VC_TEST_FB_SUSPEND_1)
     message(STATUS "VC 3 test enabled")
-	add_definitions(-DVC_TEST_FB_SUSPEND_1)
+    add_definitions(-DVC_TEST_FB_SUSPEND_1)
 endif()
 
 if(VC_TEST_FB_SUSPEND_3)
     message(STATUS "VC 4 test enabled")
-	add_definitions(-DVC_TEST_FB_SUSPEND_3)
+    add_definitions(-DVC_TEST_FB_SUSPEND_3)
 endif()
 
 # For View change Block Consensus
 if(VC_TEST_VC_SUSPEND_1)
     message(STATUS "VC 5 test enabled")
-	add_definitions(-DVC_TEST_VC_SUSPEND_1)
+    add_definitions(-DVC_TEST_VC_SUSPEND_1)
 endif()
 
 if(VC_TEST_VC_SUSPEND_3)
     message(STATUS "VC 6 test enabled")
-	add_definitions(-DVC_TEST_VC_SUSPEND_3)
+    add_definitions(-DVC_TEST_VC_SUSPEND_3)
 endif()
 
 if(VC_TEST_VC_PRECHECK_1)
@@ -209,7 +243,7 @@ set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)
 include_directories(${PROTOBUF_INSTALL_DIR}/include)
 
-include_directories(${CMAKE_SOURCE_DIR}/src/depends/libethash/include/)
+include_directories(${CMAKE_SOURCE_DIR}/src/depends/cryptoutils/include/)
 
 include_directories(${G3LOG_INCLUDE_DIR})
 
@@ -275,7 +309,7 @@ if (LIBFUZZER_SANITIZER)
     message(STATUS "Libfuzzer with address and undefined behavior sanitizer enabled")
 endif()
 
-
+set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 if (ENABLE_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
     if (NOT TESTS)
         message(FATAL_ERROR "TESTS is not ON")
@@ -298,10 +332,10 @@ endif()
 
 # installation
 
-set_target_properties(zilliqa sendcmd genkeypair getpub getaddr gentxn signmultisig verifymultisig zilliqad gensigninitialds grepperf getnetworkhistory getrewardhistory validateDB restore genTxnBodiesFromS3 isolatedServer
+set_target_properties(zilliqa sendcmd genaccounts genkeypair getpub getaddr gentxn signmultisig verifymultisig zilliqad gensigninitialds grepperf getnetworkhistory getrewardhistory validateDB restore genTxnBodiesFromS3 isolatedServer
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set_target_properties(Common Trie ethash NAT
+set_target_properties(Common Trie CryptoUtils NAT
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 if(OPENCL_MINE)

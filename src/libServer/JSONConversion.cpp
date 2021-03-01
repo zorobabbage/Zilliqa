@@ -27,6 +27,7 @@
 #include "libData/AccountData/Transaction.h"
 #include "libData/AccountData/TransactionReceipt.h"
 #include "libData/BlockData/Block.h"
+#include "libMediator/Mediator.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/Logger.h"
 
@@ -48,17 +49,32 @@ const Json::Value JSONConversion::convertMicroBlockInfoArraytoJson(
   return mbInfosJson;
 }
 
-const Json::Value JSONConversion::convertTxBlocktoJson(const TxBlock& txblock) {
+const Json::Value JSONConversion::convertBooleanVectorToJson(
+    const vector<bool>& B) {
+  Json::Value _json = Json::arrayValue;
+
+  for (const auto& i : B) {
+    _json.append(i);
+  }
+  return _json;
+}
+
+const Json::Value JSONConversion::convertTxBlocktoJson(const TxBlock& txblock,
+                                                       bool verbose) {
   Json::Value ret;
   Json::Value ret_head;
   Json::Value ret_body;
 
   const TxBlockHeader& txheader = txblock.GetHeader();
 
+  bool isVacuous =
+      Mediator::GetIsVacuousEpoch(txblock.GetHeader().GetBlockNum());
+
   ret_head["Version"] = txheader.GetVersion();
   ret_head["GasLimit"] = to_string(txheader.GetGasLimit());
   ret_head["GasUsed"] = to_string(txheader.GetGasUsed());
-  ret_head["Rewards"] = txheader.GetRewards().str();
+  ret_head["Rewards"] = (isVacuous ? txheader.GetRewards().str() : "0");
+  ret_head["TxnFees"] = (isVacuous ? "0" : txheader.GetRewards().str());
   ret_head["PrevBlockHash"] = txheader.GetPrevHash().hex();
   ret_head["BlockNum"] = to_string(txheader.GetBlockNum());
   ret_head["Timestamp"] = to_string(txblock.GetTimestamp());
@@ -67,6 +83,8 @@ const Json::Value JSONConversion::convertTxBlocktoJson(const TxBlock& txblock) {
   ret_head["StateRootHash"] = txheader.GetStateRootHash().hex();
   ret_head["StateDeltaHash"] = txheader.GetStateDeltaHash().hex();
   ret_head["NumTxns"] = txheader.GetNumTxs();
+  ret_head["NumPages"] = (txheader.GetNumTxs() / NUM_TXNS_PER_PAGE) +
+                         ((txheader.GetNumTxs() % NUM_TXNS_PER_PAGE) ? 1 : 0);
   ret_head["NumMicroBlocks"] =
       static_cast<uint32_t>(txblock.GetMicroBlockInfos().size());
 
@@ -79,6 +97,18 @@ const Json::Value JSONConversion::convertTxBlocktoJson(const TxBlock& txblock) {
   }
   ret_body["HeaderSign"] = HeaderSignStr;
   ret_body["BlockHash"] = txblock.GetBlockHash().hex();
+
+  if (verbose) {
+    ret_body["B2"] = convertBooleanVectorToJson(txblock.GetB2());
+    ret_body["B1"] = convertBooleanVectorToJson(txblock.GetB1());
+    string CS1string;
+    if (!DataConversion::SerializableToHexStr(txblock.GetCS1(), CS1string)) {
+      LOG_GENERAL(WARNING, "Failed to convert txblock.GetCS1()");
+      CS1string = "";
+    }
+    ret_body["CS1"] = CS1string;
+    ret_head["CommitteeHash"] = txheader.GetCommitteeHash().hex();
+  }
 
   ret_body["MicroBlockInfos"] =
       convertMicroBlockInfoArraytoJson(txblock.GetMicroBlockInfos());
@@ -109,7 +139,8 @@ const Json::Value JSONConversion::convertRawTxBlocktoJson(
   return ret;
 }
 
-const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
+const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock,
+                                                       bool verbose) {
   Json::Value ret;
   Json::Value ret_header;
   Json::Value ret_sign;
@@ -129,16 +160,100 @@ const Json::Value JSONConversion::convertDSblocktoJson(const DSBlock& dsblock) {
   ret_header["DifficultyDS"] = dshead.GetDSDifficulty();
   ret_header["GasPrice"] = dshead.GetGasPrice().str();
   ret_header["PoWWinners"] = Json::Value(Json::arrayValue);
+  if (verbose) {
+    ret_header["PoWWinnersIP"] = Json::Value(Json::arrayValue);
+  }
 
   for (const auto& dswinner : dshead.GetDSPoWWinners()) {
     ret_header["PoWWinners"].append(static_cast<string>(dswinner.first));
+    if (verbose) {
+      Json::Value peer_json;
+      peer_json["IP"] = dswinner.second.GetPrintableIPAddress();
+      peer_json["port"] = dswinner.second.GetListenPortHost();
+      ret_header["PoWWinnersIP"].append(peer_json);
+    }
   }
+
+  if (verbose) {
+    ret_header["MembersEjected"] = Json::Value(Json::arrayValue);
+    for (const auto& memEjected : dshead.GetDSRemovePubKeys()) {
+      ret_header["MembersEjected"].append(static_cast<string>(memEjected));
+    }
+    ret["B2"] = convertBooleanVectorToJson(dsblock.GetB2());
+    ret["B1"] = convertBooleanVectorToJson(dsblock.GetB1());
+
+    string retCS1;
+    if (!DataConversion::SerializableToHexStr(dsblock.GetCS1(), retCS1)) {
+      LOG_GENERAL(WARNING, "Failed to convert dsblock.GetCS1()");
+      retCS1 = "";
+    }
+
+    ret["CS1"] = retCS1;
+    ret_header["EpochNum"] = to_string(dshead.GetEpochNum());
+
+    ret_header["SWInfo"] = convertSWInfotoJson(dshead.GetSWInfo());
+    ret_header["Version"] = dshead.GetVersion();
+    ret_header["ShardingHash"] = dshead.GetShardingHash().hex();
+    const auto& reservedField = dshead.GetHashSetReservedField();
+    if (!reservedField.empty()) {
+      string reservedFieldStr;
+      if (!DataConversion::charArrToHexStr(reservedField, reservedFieldStr)) {
+        LOG_GENERAL(WARNING, "Failed to convert reservedField");
+        reservedFieldStr = "";
+      }
+      ret_header["ReservedField"] = reservedFieldStr;
+    }
+    ret_header["CommitteeHash"] = dshead.GetCommitteeHash().hex();
+  }
+
   ret_header["Timestamp"] = to_string(dsblock.GetTimestamp());
+
+  for (const auto& govProposal : dshead.GetGovProposalMap()) {
+    Json::Value _tempGovProposal;
+    Json::Value _dsvotes;
+    Json::Value _shardvotes;
+    _tempGovProposal["ProposalId"] = govProposal.first;
+    for (const auto& votes : govProposal.second.first) {
+      _dsvotes["VoteValue"] = votes.first;
+      _dsvotes["VoteCount"] = votes.second;
+      _tempGovProposal["DSVotes"].append(_dsvotes);
+    }
+    for (const auto& votes : govProposal.second.second) {
+      _shardvotes["VoteValue"] = votes.first;
+      _shardvotes["VoteCount"] = votes.second;
+      _tempGovProposal["ShardVotes"].append(_shardvotes);
+    }
+    ret_header["Governance"].append(_tempGovProposal);
+  }
   ret["header"] = ret_header;
 
   ret["signature"] = ret_sign;
 
   return ret;
+}
+
+const Json::Value JSONConversion::convertSWInfotoJson(const SWInfo& swInfo) {
+  Json::Value _json;
+  Json::Value zil_json = Json::Value(Json::arrayValue);
+  Json::Value scilla_json = Json::Value(Json::arrayValue);
+
+  zil_json.append(swInfo.GetZilliqaMajorVersion());
+  zil_json.append(swInfo.GetZilliqaMinorVersion());
+  zil_json.append(swInfo.GetZilliqaFixVersion());
+  zil_json.append(to_string(swInfo.GetZilliqaUpgradeDS()));
+  zil_json.append(swInfo.GetZilliqaCommit());
+
+  _json["Zilliqa"] = zil_json;
+
+  scilla_json.append(swInfo.GetScillaMajorVersion());
+  scilla_json.append(swInfo.GetScillaMinorVersion());
+  scilla_json.append(swInfo.GetScillaFixVersion());
+  scilla_json.append(to_string(swInfo.GetScillaUpgradeDS()));
+  scilla_json.append(swInfo.GetScillaCommit());
+
+  _json["Scilla"] = scilla_json;
+
+  return _json;
 }
 
 const Json::Value JSONConversion::convertRawDSBlocktoJson(
@@ -217,6 +332,11 @@ const Transaction JSONConversion::convertJsontoTx(const Json::Value& _json) {
   LOG_GENERAL(INFO, "Tx converted");
 
   return tx1;
+}
+
+bool JSONConversion::checkStringAddress(const std::string& address) {
+  return ((address.size() == ACC_ADDR_SIZE * 2 + 2) &&
+          (address.substr(0, 2) == "0x"));
 }
 
 bool JSONConversion::checkJsonTx(const Json::Value& _json) {
@@ -316,8 +436,31 @@ const vector<string> JSONConversion::convertJsonArrayToVector(
   return vec;
 }
 
+const Json::Value JSONConversion::convertTxtoJson(const Transaction& txn) {
+  Json::Value _json;
+  _json["ID"] = txn.GetTranID().hex();
+  _json["version"] = to_string(txn.GetVersion());
+  _json["nonce"] = to_string(txn.GetNonce());
+  _json["toAddr"] = txn.GetToAddr().hex();
+  _json["senderAddr"] = txn.GetSenderAddr().hex();
+  _json["amount"] = txn.GetAmount().str();
+  _json["signature"] = static_cast<string>(txn.GetSignature());
+
+  _json["gasPrice"] = txn.GetGasPrice().str();
+  _json["gasLimit"] = to_string(txn.GetGasLimit());
+
+  if (!txn.GetCode().empty()) {
+    _json["code"] = DataConversion::CharArrayToString(txn.GetCode());
+  }
+  if (!txn.GetData().empty()) {
+    _json["data"] = DataConversion::CharArrayToString(txn.GetData());
+  }
+
+  return _json;
+}
+
 const Json::Value JSONConversion::convertTxtoJson(
-    const TransactionWithReceipt& twr) {
+    const TransactionWithReceipt& twr, bool isSoftConfirmed) {
   Json::Value _json;
 
   _json["ID"] = twr.GetTransaction().GetTranID().hex();
@@ -339,6 +482,10 @@ const Json::Value JSONConversion::convertTxtoJson(
   if (!twr.GetTransaction().GetData().empty()) {
     _json["data"] =
         DataConversion::CharArrayToString(twr.GetTransaction().GetData());
+  }
+
+  if (isSoftConfirmed) {
+    _json["softconfirm"] = true;
   }
 
   return _json;

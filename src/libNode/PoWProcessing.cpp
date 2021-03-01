@@ -55,7 +55,6 @@ bool Node::GetLatestDSBlock() {
     m_synchronizer.FetchLatestDSBlocksSeed(
         m_mediator.m_lookup,
         m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() + 1);
-
     {
       unique_lock<mutex> lock(
           m_mediator.m_lookup->m_mutexLatestDSBlockUpdation);
@@ -227,38 +226,44 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
                                  winning_result.result, winning_result.mix_hash,
                                  lookupId, m_proposedGasPrice)) {
         return false;
-      } else {
-        DetachedFunction(1, checkerThread);
       }
 
-      LOG_GENERAL(INFO, "Mining again for DS diff");
-      auto currentTime = std::chrono::high_resolution_clock::now();
-      auto shardPoWTime = std::chrono::duration_cast<std::chrono::seconds>(
-                              currentTime - startTime)
-                              .count();
-      powTimeWindow -= shardPoWTime;
+      DetachedFunction(1, checkerThread);
 
-      if (powTimeWindow > 1) {
-        EthashMiningResult ds_pow_winning_result = POW::GetInstance().PoWMine(
-            block_num, ds_difficulty, m_mediator.m_selfKey, headerHash,
-            FULL_DATASET_MINE, winning_result.winning_nonce, powTimeWindow);
+      if (SKIP_POW_REATTEMPT_FOR_DS_DIFF) {
+        LOG_GENERAL(INFO, "Skipping PoW reattempt for DS difficulty");
+      } else {
+        LOG_GENERAL(INFO, "Mining again for DS diff");
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        auto shardPoWTime = std::chrono::duration_cast<std::chrono::seconds>(
+                                currentTime - startTime)
+                                .count();
+        powTimeWindow -= shardPoWTime;
 
-        if (ds_pow_winning_result.success) {
-          LOG_GENERAL(INFO, "DS diff soln = " << ds_pow_winning_result.result);
+        if (powTimeWindow > 1) {
+          EthashMiningResult ds_pow_winning_result = POW::GetInstance().PoWMine(
+              block_num, ds_difficulty, m_mediator.m_selfKey, headerHash,
+              FULL_DATASET_MINE, winning_result.winning_nonce, powTimeWindow);
 
-          // Submission of PoW for ds commitee
-          if (!SendPoWResultToDSComm(
-                  block_num, ds_difficulty, ds_pow_winning_result.winning_nonce,
-                  ds_pow_winning_result.result, ds_pow_winning_result.mix_hash,
-                  lookupId, m_proposedGasPrice)) {
-            return false;
+          if (ds_pow_winning_result.success) {
+            LOG_GENERAL(INFO,
+                        "DS diff soln = " << ds_pow_winning_result.result);
+
+            // Submission of PoW for ds commitee
+            if (!SendPoWResultToDSComm(block_num, ds_difficulty,
+                                       ds_pow_winning_result.winning_nonce,
+                                       ds_pow_winning_result.result,
+                                       ds_pow_winning_result.mix_hash, lookupId,
+                                       m_proposedGasPrice)) {
+              return false;
+            }
+          } else {
+            LOG_GENERAL(INFO, "Failed to find soln for DS diff");
           }
         } else {
-          LOG_GENERAL(INFO, "Failed to find soln for DS diff");
+          LOG_GENERAL(
+              INFO, "Time window for DS diff is too short, skip DS diff mine");
         }
-      } else {
-        LOG_GENERAL(INFO,
-                    "Time window for DS diff is too short, skip DS diff mine");
       }
     }
   } else {
@@ -275,6 +280,40 @@ bool Node::StartPoW(const uint64_t& block_num, uint8_t ds_difficulty,
   return true;
 }
 
+bool Node::CheckIfGovProposalActive() {
+  LOG_MARKER();
+
+#ifdef GOVVC_TEST_DS_SUSPEND_3
+  srand(time(0));
+  m_govProposalInfo.startDSEpoch = 1;
+  m_govProposalInfo.endDSEpoch = 5;
+  m_govProposalInfo.remainingVoteCount = 3;
+  m_govProposalInfo.proposal.first = rand() % 100;
+  m_govProposalInfo.proposal.second = rand() % 10;
+  LOG_GENERAL(
+      INFO,
+      "[GOVVCTEST] m_govProposalInfo startDSEpoch="
+          << m_govProposalInfo.startDSEpoch
+          << " endDSEpoch=" << m_govProposalInfo.endDSEpoch
+          << " isGovProposalActive=" << m_govProposalInfo.isGovProposalActive
+          << " remainingVoteCount=" << m_govProposalInfo.remainingVoteCount
+          << " proposalId=" << m_govProposalInfo.proposal.first
+          << " voteValue=" << m_govProposalInfo.proposal.second);
+#endif
+
+  uint64_t curDSEpochNo =
+      m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+  curDSEpochNo++;
+  if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
+      curDSEpochNo <= m_govProposalInfo.endDSEpoch) {
+    m_govProposalInfo.isGovProposalActive = true;
+    return true;
+  } else {
+    m_govProposalInfo.isGovProposalActive = false;
+  }
+  return false;
+}
+
 bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
                                  const uint8_t& difficultyLevel,
                                  const uint64_t winningNonce,
@@ -284,12 +323,25 @@ bool Node::SendPoWResultToDSComm(const uint64_t& block_num,
                                  const uint128_t& gasPrice) {
   LOG_MARKER();
 
+  // If governance proposal is active, send vote in DS epoch range POW
+  GovProposalIdVotePair govProposal{0, 0};
+  {
+    lock_guard<mutex> g(m_mutexGovProposal);
+    if (CheckIfGovProposalActive()) {
+      govProposal = m_govProposalInfo.proposal;
+      LOG_GENERAL(INFO, "[Gov] proposalId=" << govProposal.first
+                                            << " vote=" << govProposal.second);
+    }
+  }
+
   bytes powmessage = {MessageType::DIRECTORY, DSInstructionType::POWSUBMISSION};
 
   if (!Messenger::SetDSPoWSubmission(
           powmessage, MessageOffset::BODY, block_num, difficultyLevel,
           m_mediator.m_selfPeer, m_mediator.m_selfKey, winningNonce,
-          powResultHash, powMixhash, lookupId, gasPrice)) {
+          powResultHash, powMixhash, lookupId, gasPrice, govProposal,
+          POW_SUBMISSION_VERSION_TAG == "" ? VERSION_TAG
+                                           : POW_SUBMISSION_VERSION_TAG)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetDSPoWSubmission failed.");
     return false;
@@ -430,7 +482,8 @@ LOG_EPOCH(INFO,m_mediator.m_currentEpochNum,
 }
 
 bool Node::ProcessStartPoW(const bytes& message, unsigned int offset,
-                           [[gnu::unused]] const Peer& from) {
+                           [[gnu::unused]] const Peer& from,
+                           [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Node::ProcessStartPoW not expected to be called from "

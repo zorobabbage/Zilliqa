@@ -24,6 +24,9 @@
 
 #include "Account.h"
 #include "Transaction.h"
+#include "common/TxnStatus.h"
+
+using MempoolInsertionStatus = std::pair<TxnStatus, TxnHash>;
 
 struct TxnPool {
   struct PubKeyNonceHash {
@@ -63,40 +66,55 @@ struct TxnPool {
     return true;
   }
 
-  bool insert(const Transaction& t) {
+  bool insert(const Transaction& t, MempoolInsertionStatus& status) {
     if (exist(t.GetTranID())) {
+      status = {TxnStatus::MEMPOOL_ALREADY_PRESENT, t.GetTranID()};
       return false;
     }
 
     auto searchNonce = NonceIndex.find({t.GetSenderPubKey(), t.GetNonce()});
     if (searchNonce != NonceIndex.end()) {
-      auto tx = HashIndex.at(searchNonce->second);
 
-      if ((t.GetGasPrice() > tx.GetGasPrice()) ||
-          (t.GetGasPrice() == tx.GetGasPrice() &&
-           t.GetTranID() < tx.GetTranID())) {
+      if ((t.GetGasPrice() > searchNonce->second.GetGasPrice()) ||
+          (t.GetGasPrice() == searchNonce->second.GetGasPrice() &&
+           t.GetTranID() < searchNonce->second.GetTranID())) {
         // erase from HashIdxTxns
-        auto searchHash = HashIndex.find(tx.GetTranID());
+        TxnHash hashToBeRemoved = searchNonce->second.GetTranID();
+        auto searchHash = HashIndex.find(searchNonce->second.GetTranID());
         if (searchHash != HashIndex.end()) {
           HashIndex.erase(searchHash);
         }
         // erase from GasIdxTxns
-        auto searchGas = GasIndex.find(tx.GetGasPrice());
+        auto smallerGasPrice = searchNonce->second.GetGasPrice();
+        auto searchGas = GasIndex.find(searchNonce->second.GetGasPrice());
         if (searchGas != GasIndex.end()) {
-          auto searchGasHash = searchGas->second.find(tx.GetTranID());
+          auto searchGasHash = 
+              searchGas->second.find(searchNonce->second.GetTranID());
           if (searchGasHash != searchGas->second.end()) {
             searchGas->second.erase(searchGasHash);
           }
+          if (GasIndex[smallerGasPrice].empty()) {
+            GasIndex.erase(smallerGasPrice);
+          }
         }
         HashIndex[t.GetTranID()] = t;
-        GasIndex[t.GetGasPrice()].insert(t.GetTranID());
-        searchNonce->second = t.GetTranID();
+        GasIndex[t.GetGasPrice()][t.GetTranID()] = t;
+        searchNonce->second = t;
+
+        status = {TxnStatus::MEMPOOL_SAME_NONCE_LOWER_GAS, hashToBeRemoved};
+        return true;
+      } else {
+        // GasPrice is higher but of same nonce
+        // or same gas price and nonce but higher tranID
+        status = {TxnStatus::MEMPOOL_SAME_NONCE_LOWER_GAS, t.GetTranID()};
+        return false;
       }
     } else {
       HashIndex[t.GetTranID()] = t;
       GasIndex[t.GetGasPrice()].insert(t.GetTranID());
       NonceIndex[{t.GetSenderPubKey(), t.GetNonce()}] = t.GetTranID();
     }
+    status = {TxnStatus::NOT_PRESENT, t.GetTranID()};
     return true;
   }
 

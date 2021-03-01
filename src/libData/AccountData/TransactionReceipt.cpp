@@ -58,6 +58,28 @@ bool TransactionReceipt::Deserialize(const bytes& src, unsigned int offset) {
   return true;
 }
 
+bool TransactionReceipt::Deserialize(const string& src, unsigned int offset) {
+  if (!Messenger::GetTransactionReceipt(src, offset, *this)) {
+    LOG_GENERAL(WARNING, "Messenger::GetTransactionReceipt failed.");
+    return false;
+  }
+
+  if (!JSONUtils::GetInstance().convertStrtoJson(m_tranReceiptStr,
+                                                 m_tranReceiptObj)) {
+    LOG_GENERAL(WARNING, "Error with convert receipt string to json object");
+    return false;
+  }
+
+  try {
+    update();
+  } catch (const std::exception& e) {
+    LOG_GENERAL(WARNING, "Error with TransactionReceipt::Deserialize."
+                             << ' ' << e.what());
+    return false;
+  }
+  return true;
+}
+
 void TransactionReceipt::SetResult(const bool& result) {
   if (result) {
     m_tranReceiptObj["success"] = true;
@@ -75,6 +97,15 @@ void TransactionReceipt::AddEdge() {
 void TransactionReceipt::AddError(const unsigned int& errCode) {
   LOG_GENERAL(INFO, "AddError: " << errCode);
   m_errorObj[to_string(m_edge)].append(errCode);
+}
+
+void TransactionReceipt::AddException(const Json::Value& jsonException) {
+  for (const auto& _e : jsonException) {
+    Json::Value obj;
+    obj["message"] = _e["error_message"];
+    obj["line"] = _e["start_location"]["line"];
+    m_tranReceiptObj["exceptions"].append(obj);
+  }
 }
 
 void TransactionReceipt::SetCumGas(const uint64_t& cumGas) {
@@ -172,6 +203,16 @@ bool TransactionWithReceipt::Serialize(bytes& dst, unsigned int offset) const {
 
 /// Implements the Deserialize function inherited from Serializable.
 bool TransactionWithReceipt::Deserialize(const bytes& src,
+                                         unsigned int offset) {
+  if (!Messenger::GetTransactionWithReceipt(src, offset, *this)) {
+    LOG_GENERAL(WARNING, "Messenger::GetTransactionWithReceipt failed.");
+    return false;
+  }
+  return true;
+}
+
+/// Implements the Deserialize function inherited from Serializable.
+bool TransactionWithReceipt::Deserialize(const string& src,
                                          unsigned int offset) {
   if (!Messenger::GetTransactionWithReceipt(src, offset, *this)) {
     LOG_GENERAL(WARNING, "Messenger::GetTransactionWithReceipt failed.");

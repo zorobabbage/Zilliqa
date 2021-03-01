@@ -42,13 +42,6 @@ using namespace boost::multiprecision;
 
 bool DirectoryService::VerifyMicroBlockCoSignature(const MicroBlock& microBlock,
                                                    uint32_t shardId) {
-  if (LOOKUP_NODE_MODE) {
-    LOG_GENERAL(WARNING,
-                "DirectoryService::VerifyMicroBlockCoSignature not "
-                "expected to be called from LookUp node.");
-    return true;
-  }
-
   LOG_MARKER();
 
   const vector<bool>& B2 = microBlock.GetB2();
@@ -71,7 +64,7 @@ bool DirectoryService::VerifyMicroBlockCoSignature(const MicroBlock& microBlock,
       }
       index++;
     }
-  } else {
+  } else if (shardId < m_shards.size()) {
     const auto& shard = m_shards.at(shardId);
 
     if (shard.size() != B2.size()) {
@@ -89,6 +82,9 @@ bool DirectoryService::VerifyMicroBlockCoSignature(const MicroBlock& microBlock,
       }
       index++;
     }
+  } else {
+    LOG_GENERAL(WARNING, "Invalid shardId " << shardId);
+    return false;
   }
 
   if (count != ConsensusCommon::NumForConsensus(B2.size())) {
@@ -246,7 +242,7 @@ bool DirectoryService::ProcessMicroblockSubmissionFromShardCore(
           microBlock.GetHeader().GetDSBlockNum() + 1,
           microBlock.GetHeader().GetEpochNum())) {
     LOG_GENERAL(WARNING,
-                "ProcessMicroblockSubmissionFromShardCore "
+                "ProcessMicroblockSubmissionFromShardCore::"
                 "CheckWhetherBlockIsLatest failed");
     return false;
   }
@@ -318,8 +314,9 @@ bool DirectoryService::ProcessMicroblockSubmissionFromShardCore(
 
   bytes body;
   microBlock.Serialize(body, 0);
-  if (!BlockStorage::GetBlockStorage().PutMicroBlock(microBlock.GetBlockHash(),
-                                                     body)) {
+  if (!BlockStorage::GetBlockStorage().PutMicroBlock(
+          microBlock.GetBlockHash(), microBlock.GetHeader().GetEpochNum(),
+          microBlock.GetHeader().GetShardId(), body)) {
     LOG_GENERAL(WARNING, "Failed to put microblock in persistence");
     return false;
   }
@@ -475,7 +472,8 @@ bool DirectoryService::ProcessMicroblockSubmissionFromShard(
 
 bool DirectoryService::ProcessMicroblockSubmission(
     [[gnu::unused]] const bytes& message, [[gnu::unused]] unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (LOOKUP_NODE_MODE) {
@@ -671,7 +669,9 @@ bool DirectoryService::ProcessMissingMicroblockSubmission(
       bytes body;
       microBlocks[i].Serialize(body, 0);
       if (!BlockStorage::GetBlockStorage().PutMicroBlock(
-              microBlocks[i].GetBlockHash(), body)) {
+              microBlocks[i].GetBlockHash(),
+              microBlocks[i].GetHeader().GetEpochNum(),
+              microBlocks[i].GetHeader().GetShardId(), body)) {
         LOG_GENERAL(WARNING, "Failed to put microblock in persistence");
         return false;
       }

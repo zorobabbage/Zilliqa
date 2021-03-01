@@ -26,6 +26,7 @@ from subprocess import Popen, PIPE
 import xml.etree.cElementTree as ET
 
 NODE_LISTEN_PORT = 5001
+STATUS_SERVER_LISTEN_PORT = 4301
 LOCAL_RUN_FOLDER = './local_run/'
 REJOIN_DS_GUARD_RUN_FOLDER = './dsguard_rejoin_local_run/'
 
@@ -127,7 +128,9 @@ def run_setup(numnodes, printnodes):
 		testfolders_list = get_immediate_subdirectories(LOCAL_RUN_FOLDER)
 		count = len(testfolders_list)
 		for x in range(0, count):
-			print ('[Node ' + str(x + 1).ljust(3) + '] [Port ' + str(NODE_LISTEN_PORT + x) + '] ' + LOCAL_RUN_FOLDER + testfolders_list[x])
+			print ('[Node ' + str(x + 1).ljust(3) + '] [Port ' + str(NODE_LISTEN_PORT + x)
+			+ ']  [Status Server Port '+ str(STATUS_SERVER_LISTEN_PORT + x)
+			+ '] '  + LOCAL_RUN_FOLDER + testfolders_list[x])
 
 def run_setup_dsguard(numnodes, printnodes):
 	if (os.path.exists(REJOIN_DS_GUARD_RUN_FOLDER)):

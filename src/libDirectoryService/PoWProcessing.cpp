@@ -84,8 +84,8 @@ bool DirectoryService::SendPoWPacketSubmissionToOtherDSComm() {
 }
 
 bool DirectoryService::ProcessPoWPacketSubmission(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(
@@ -128,10 +128,15 @@ bool DirectoryService::ProcessPoWPacketSubmission(
   return true;
 }
 
-bool DirectoryService::ProcessPoWSubmission(const bytes& message,
-                                            unsigned int offset,
-                                            const Peer& from) {
+bool DirectoryService::ProcessPoWSubmission(
+    const bytes& message, unsigned int offset, const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
+
+  static const string EXPECTED_VERSION =
+      (POW_SUBMISSION_VERSION_TAG == "" ? VERSION_TAG
+                                        : POW_SUBMISSION_VERSION_TAG);
+
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::ProcessPoWSubmission not expected to be "
@@ -146,6 +151,12 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
     return true;
   }
 
+  if (m_powSubmissionWindowExpired) {
+    LOG_GENERAL(INFO, "Submission recvd too late from "
+                          << from.GetPrintableIPAddress());
+    return true;
+  }
+
   uint64_t blockNumber;
   uint8_t difficultyLevel;
   Peer submitterPeer;
@@ -156,12 +167,20 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
   uint32_t lookupId;
   uint128_t gasPrice;
   Signature signature;
-  if (!Messenger::GetDSPoWSubmission(message, offset, blockNumber,
-                                     difficultyLevel, submitterPeer,
-                                     submitterKey, nonce, resultingHash,
-                                     mixHash, signature, lookupId, gasPrice)) {
+  uint32_t govProposalId;
+  uint32_t govVoteValue;
+  string version;
+  if (!Messenger::GetDSPoWSubmission(
+          message, offset, blockNumber, difficultyLevel, submitterPeer,
+          submitterKey, nonce, resultingHash, mixHash, signature, lookupId,
+          gasPrice, govProposalId, govVoteValue, version)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "DirectoryService::ProcessPowSubmission failed.");
+    return false;
+  }
+
+  if (version != EXPECTED_VERSION) {
+    LOG_CHECK_FAIL("Version", version, EXPECTED_VERSION);
     return false;
   }
 
@@ -205,7 +224,8 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
 
   DSPowSolution powSoln(blockNumber, difficultyLevel, submitterPeer,
                         submitterKey, nonce, resultingHash, mixHash, lookupId,
-                        gasPrice, signature);
+                        gasPrice, std::make_pair(govProposalId, govVoteValue),
+                        signature);
 
   if (VerifyPoWSubmission(powSoln)) {
     std::unique_lock<std::mutex> lk(m_mutexPowSolution);
@@ -261,6 +281,8 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   const string& mixHash = sol.GetMixHash();
   uint32_t lookupId = sol.GetLookupId();
   const uint128_t& gasPrice = sol.GetGasPrice();
+  const uint32_t& govProposalId = sol.GetGovProposalId();
+  const uint32_t& govVoteValue = sol.GetGovVoteValue();
 
   // Check block number
   if (!CheckWhetherDSBlockIsFresh(blockNumber)) {
@@ -283,9 +305,11 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   }
 
   // Log all values
-  LOG_GENERAL(INFO, "Key   = " << submitterPubKey);
-  LOG_GENERAL(INFO, "Peer  = " << submitterPeer);
-  LOG_GENERAL(INFO, "Diff  = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "Key            = " << submitterPubKey);
+  LOG_GENERAL(INFO, "Peer           = " << submitterPeer);
+  LOG_GENERAL(INFO, "Diff           = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "GovProposalId  = " << to_string(govProposalId));
+  LOG_GENERAL(INFO, "GovVoteValue   = " << to_string(govVoteValue));
 
   if (CheckPoWSubmissionExceedsLimitsForNode(submitterPubKey)) {
     LOG_GENERAL(WARNING, "Max PoW sent");
@@ -362,19 +386,20 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
       array<uint8_t, 32> resultingHashArr{}, mixHashArr{};
       DataConversion::HexStrToStdArray(resultingHash, resultingHashArr);
       DataConversion::HexStrToStdArray(mixHash, mixHashArr);
-      PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice);
+      PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice,
+                       std::make_pair(govProposalId, govVoteValue));
 
       m_allPoWConns.emplace(submitterPubKey, submitterPeer);
       if (m_allPoWs.find(submitterPubKey) == m_allPoWs.end()) {
         m_allPoWs[submitterPubKey] = soln;
-      } else if (m_allPoWs[submitterPubKey].result > soln.result) {
+      } else if (m_allPoWs[submitterPubKey].m_result > soln.m_result) {
         // string harderSolnStr, oldSolnStr;
         // DataConversion::charArrToHexStr(soln.result, harderSolnStr);
         // DataConversion::charArrToHexStr(m_allPoWs[submitterPubKey].result,
         // oldSolnStr);
         LOG_GENERAL(INFO, "Replaced");
         m_allPoWs[submitterPubKey] = soln;
-      } else if (m_allPoWs[submitterPubKey].result == soln.result) {
+      } else if (m_allPoWs[submitterPubKey].m_result == soln.m_result) {
         LOG_GENERAL(INFO, "Duplicated");
         return true;
       }
@@ -476,7 +501,7 @@ std::array<unsigned char, 32> DirectoryService::GetDSPoWSoln(
     const PubKey& Pubk) {
   lock_guard<mutex> g(m_mutexAllDSPOWs);
   if (m_allDSPoWs.find(Pubk) != m_allDSPoWs.end()) {
-    return m_allDSPoWs[Pubk].result;
+    return m_allDSPoWs[Pubk].m_result;
   } else {
     LOG_GENERAL(WARNING, "No such element in m_allDSPoWs");
     return array<unsigned char, 32>();

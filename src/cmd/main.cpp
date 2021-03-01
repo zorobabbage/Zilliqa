@@ -40,6 +40,7 @@ using namespace boost::multiprecision;
 #define ERROR_IN_COMMAND_LINE -1
 #define ERROR_HARDWARE_SPEC_MISMATCH_EXCEPTION -2
 #define ERROR_UNHANDLED_EXCEPTION -3
+#define ERROR_IN_CONSTANTS -4
 
 namespace po = boost::program_options;
 
@@ -50,6 +51,9 @@ int main(int argc, const char* argv[]) {
     string pubK;
     PrivKey privkey;
     PubKey pubkey;
+    string extSeedPrivK;
+    PrivKey extSeedPrivKey;
+    PubKey extSeedPubKey;
     string address;
     string logpath(boost::filesystem::absolute("./").string());
     int port = -1;
@@ -66,6 +70,9 @@ int main(int argc, const char* argv[]) {
         "privk,i", po::value<string>(&privK)->required(),
         "32-byte private key")("pubk,u", po::value<string>(&pubK)->required(),
                                "33-byte public key")(
+        "l2lsyncmode,m", "Runs in new pull syncup mode if set")(
+        "extseedprivk,e", po::value<string>(&extSeedPrivK),
+        "32-byte extseed private key")(
         "address,a", po::value<string>(&address)->required(),
         "Listen IPv4/6 address formated as \"dotted decimal\" or optionally "
         "\"dotted decimal:portnumber\" format, otherwise \"NAT\"")(
@@ -74,6 +81,7 @@ int main(int argc, const char* argv[]) {
         "loadconfig,l", "Loads configuration if set (deprecated)")(
         "synctype,s", po::value<unsigned int>(&syncType), synctype_descr)(
         "recovery,r", "Runs in recovery mode if set")(
+        "stdoutlog,o", "Send application logs to stdout instead of file")(
         "logpath,g", po::value<string>(&logpath),
         "customized log path, could be relative path (e.g., \"./logs/\"), or "
         "absolute path (e.g., \"/usr/local/test/logs/\")")(
@@ -112,6 +120,20 @@ int main(int argc, const char* argv[]) {
         return ERROR_IN_COMMAND_LINE;
       }
 
+      try {
+        if (vm.count("l2lsyncmode") && extSeedPrivK.empty()) {
+          std::cerr << "extSeedPrivK **NOT** provided";
+          return ERROR_IN_COMMAND_LINE;
+        }
+        if (!extSeedPrivK.empty()) {
+          extSeedPrivKey = PrivKey::GetPrivKeyFromString(extSeedPrivK);
+          extSeedPubKey = PubKey(extSeedPrivKey);
+        }
+      } catch (std::invalid_argument& e) {
+        std::cerr << e.what() << endl;
+        return ERROR_IN_COMMAND_LINE;
+      }
+
       if (syncType > 8) {
         SWInfo::LogBrandBugReport();
         std::cerr << "Invalid synctype '" << syncType
@@ -145,7 +167,11 @@ int main(int argc, const char* argv[]) {
       return ERROR_IN_COMMAND_LINE;
     }
 
-    INIT_FILE_LOGGER("zilliqa", logpath.c_str());
+    if (vm.count("stdoutlog")) {
+      INIT_STDOUT_LOGGER();
+    } else {
+      INIT_FILE_LOGGER("zilliqa", logpath.c_str());
+    }
     INIT_STATE_LOGGER("state", logpath.c_str());
     INIT_EPOCHINFO_LOGGER("epochinfo", logpath.c_str());
 
@@ -195,15 +221,30 @@ int main(int argc, const char* argv[]) {
       return ERROR_HARDWARE_SPEC_MISMATCH_EXCEPTION;
     }
 
+    if (TOLERANCE_FRACTION > 1.0) {
+      LOG_GENERAL(WARNING, "TOLERANCE_FRACTION cannot exceed 1.0");
+      return ERROR_IN_CONSTANTS;
+    }
+
     Zilliqa zilliqa(make_pair(privkey, pubkey), my_network_info,
-                    (SyncType)syncType, vm.count("recovery"));
-    auto dispatcher = [&zilliqa](pair<bytes, Peer>* message) mutable -> void {
-      zilliqa.Dispatch(message);
-    };
+                    (SyncType)syncType, vm.count("recovery"),
+                    vm.count("l2lsyncmode") <= 0,
+                    make_pair(extSeedPrivKey, extSeedPubKey));
+    auto dispatcher =
+        [&zilliqa](
+            pair<bytes, std::pair<Peer, const unsigned char>>* message) mutable
+        -> void { zilliqa.Dispatch(message); };
+    // Only start the incoming message queue
+    P2PComm::GetInstance().StartMessagePump(dispatcher);
 
-    P2PComm::GetInstance().StartMessagePump(my_network_info.m_listenPortHost,
-                                            dispatcher);
-
+    if (ENABLE_SEED_TO_SEED_COMMUNICATION && !MULTIPLIER_SYNC_MODE) {
+      LOG_GENERAL(DEBUG, "P2PSeed Do not open listener");
+      // Do not open listener
+      P2PComm::GetInstance().EnableConnect();
+    } else {
+      P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
+                                            ENABLE_SEED_TO_SEED_COMMUNICATION);
+    }
   } catch (std::exception& e) {
     std::cerr << "Unhandled Exception reached the top of main: " << e.what()
               << ", application will now exit" << std::endl;
