@@ -644,8 +644,8 @@ void AccountDeltaToProtobuf(const Account* oldAccount,
 
 bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
                             const Address& addr, const uint32_t& shardId,
-                            const uint32_t& numShards,
-                            const bool fullCopy, bool temp, bool revertible = false) {
+                            const uint32_t& numShards, const bool fullCopy,
+                            bool temp, bool revertible = false) {
   if (!CheckRequiredFieldsProtoAccount(protoAccount)) {
     LOG_GENERAL(WARNING, "CheckRequiredFieldsProtoAccount failed");
     return false;
@@ -721,33 +721,33 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
 
     // GEORGE: this check might be true even if you have stuff to process
     // if (accbase.GetStorageRoot() != account.GetStorageRoot()) {
-      dev::h256 tmpHash;
+    dev::h256 tmpHash;
 
-      map<string, bytes> t_states;
-      vector<std::string> toDeleteIndices;
+    map<string, bytes> t_states;
+    vector<std::string> toDeleteIndices;
 
-      for (const auto& entry : protoAccount.storage2()) {
-        t_states.emplace(entry.key(),
-                         DataConversion::StringToCharArray(entry.data()));
-      }
-
-      for (const auto& entry : protoAccount.todelete()) {
-        toDeleteIndices.emplace_back(entry);
-      }
-
-      account.UpdateStates(addr, t_states, toDeleteIndices, temp, revertible,
-          shardId, numShards);
-
-      // GEORGE: this shouldn't be necessary
-      // if ((!t_states.empty() || !toDeleteIndices.empty()) &&
-      //     accbase.GetStorageRoot() != account.GetStorageRoot()) {
-      //   LOG_GENERAL(WARNING,
-      //               "Storage root mismatch. Expected: "
-      //                   << account.GetStorageRoot().hex()
-      //                   << " Actual: " << accbase.GetStorageRoot().hex());
-      //   return false;
-      // }
+    for (const auto& entry : protoAccount.storage2()) {
+      t_states.emplace(entry.key(),
+                       DataConversion::StringToCharArray(entry.data()));
     }
+
+    for (const auto& entry : protoAccount.todelete()) {
+      toDeleteIndices.emplace_back(entry);
+    }
+
+    account.UpdateStates(addr, t_states, toDeleteIndices, temp, revertible,
+                         shardId, numShards);
+
+    // GEORGE: this shouldn't be necessary
+    // if ((!t_states.empty() || !toDeleteIndices.empty()) &&
+    //     accbase.GetStorageRoot() != account.GetStorageRoot()) {
+    //   LOG_GENERAL(WARNING,
+    //               "Storage root mismatch. Expected: "
+    //                   << account.GetStorageRoot().hex()
+    //                   << " Actual: " << accbase.GetStorageRoot().hex());
+    //   return false;
+    // }
+  }
   // }
 
   return true;
@@ -2717,8 +2717,8 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
     t_account = *oriAccount;
     account = *oriAccount;
     if (!ProtobufToAccountDelta(entry.account(), account, address,
-                                UNKNOWN_SHARD_ID, UNKNOWN_SHARD_ID,
-                                fullCopy, temp, revertible)) {
+                                UNKNOWN_SHARD_ID, UNKNOWN_SHARD_ID, fullCopy,
+                                temp, revertible)) {
       LOG_GENERAL(WARNING,
                   "ProtobufToAccountDelta failed for account at address "
                       << address.hex());
@@ -2776,9 +2776,8 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
 
     account = *oriAccount;
 
-    if (!ProtobufToAccountDelta(entry.account(), account, address,
-                                shardId, numShards,
-                                fullCopy, temp)) {
+    if (!ProtobufToAccountDelta(entry.account(), account, address, shardId,
+                                numShards, fullCopy, temp)) {
       LOG_GENERAL(WARNING,
                   "ProtobufToAccountDelta failed for account at address "
                       << address.hex());

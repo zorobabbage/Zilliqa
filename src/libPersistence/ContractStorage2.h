@@ -139,7 +139,7 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
                                  Json::Value& sharding_info_json);
 
   bool FetchContractFieldsMapDepth(const dev::h160& address,
-                                    Json::Value& map_depth_json, bool temp);
+                                   Json::Value& map_depth_json, bool temp);
 
   bool FetchExternalStateValue(
       const dev::h160& caller, const dev::h160& target, const bytes& src,
@@ -176,8 +176,7 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   void UpdateStateDatasAndToDeletes(
       const dev::h160& addr, const std::map<std::string, bytes>& t_states,
       const std::vector<std::string>& toDeleteIndices, dev::h256& stateHash,
-      bool temp, bool revertible,
-      const uint32_t& shardId = UNKNOWN_SHARD_ID,
+      bool temp, bool revertible, const uint32_t& shardId = UNKNOWN_SHARD_ID,
       const uint32_t& numShards = UNKNOWN_SHARD_ID);
 
   /// Buffer the current t_map into p_map

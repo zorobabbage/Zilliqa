@@ -32,7 +32,7 @@ bool GenTxns(uint txnSize, map<uint32_t, vector<Transaction>>& mp,
   mp.clear();
   for (uint i = 0; i < txnSize; i++) {
     const auto tx = TestUtils::GenerateRandomTransaction(1, 1, type);
-    auto index = tx.GetShardIndex( numShards);
+    auto index = tx.GetShardIndex(numShards);
     mp[index].emplace_back(tx);
   }
 

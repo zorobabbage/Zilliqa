@@ -37,17 +37,17 @@
 #include "libMediator/Mediator.h"
 #include "libMessage/Messenger.h"
 #include "libPOW/pow.h"
+#include "libPersistence/ContractStorage2.h"
 #include "libUtils/BitVector.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/Logger.h"
 #include "libUtils/RootComputation.h"
 #include "libUtils/SanityChecks.h"
+#include "libUtils/ThreadPool.h"
 #include "libUtils/TimeLockedFunction.h"
 #include "libUtils/TimeUtils.h"
 #include "libUtils/TimestampVerifier.h"
-#include "libUtils/ThreadPool.h"
-#include "libPersistence/ContractStorage2.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -275,8 +275,11 @@ void Node::ProcessTransactionWhenShardLeader(
   }
   TxnPool t_createdTxns;
   {
-    LOG_GENERAL(INFO, "Waiting on " << m_txnPacketsInQueue.load() << " txnPackets to finish processing");
-    while (m_txnPacketsInQueue.load() != 0) {this_thread::sleep_for(chrono::milliseconds(100));}
+    LOG_GENERAL(INFO, "Waiting on " << m_txnPacketsInQueue.load()
+                                    << " txnPackets to finish processing");
+    while (m_txnPacketsInQueue.load() != 0) {
+      this_thread::sleep_for(chrono::milliseconds(100));
+    }
     lock_guard<mutex> g(m_mutexCreatedTransactions);
     t_createdTxns = m_createdTxns;
   }
@@ -284,7 +287,10 @@ void Node::ProcessTransactionWhenShardLeader(
   map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMapCon;
   t_processedTransactions.clear();
   m_TxnOrder.clear();
-  LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Leader of shard " << m_myshardId << ") Have " << t_createdTxns.size () << " transactions");
+  LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
+            "[TxPool](Leader of shard " << m_myshardId << ") Have "
+                                        << t_createdTxns.size()
+                                        << " transactions");
 
   if (LOG_PARAMETERS) {
     LOG_STATE("[TXNPROC-BEG][" << m_mediator.m_currentEpochNum
@@ -369,7 +375,8 @@ void Node::ProcessTransactionWhenShardLeader(
       // LOG_GENERAL(INFO, "findOneFromCreated");
 
       Address senderAddr = t.GetSenderAddr();
-      uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+      uint128_t expectedNonce =
+          AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
       auto& cs = Contract::ContractStorage2::GetContractStorage();
       Json::Value sh_info;
       const auto& toAddr = t.GetToAddr();
@@ -396,11 +403,13 @@ void Node::ProcessTransactionWhenShardLeader(
         }
 
         // get sharding info of transaction
-        if (toAccount != nullptr && toAccount->isContract()
-            && cs.FetchContractShardingInfo(toAddr, sh_info)) {
-          // based on sharding info, split contracts into concurrent/sequential maps
+        if (toAccount != nullptr && toAccount->isContract() &&
+            cs.FetchContractShardingInfo(toAddr, sh_info)) {
+          // based on sharding info, split contracts into concurrent/sequential
+          // maps
           if (LOG_SC) {
-            string sh_info_str = JSONUtils::GetInstance().convertJsontoStr(sh_info);
+            string sh_info_str =
+                JSONUtils::GetInstance().convertJsontoStr(sh_info);
             LOG_GENERAL(INFO, "Node got sharding info:\n" << sh_info_str);
           }
           auto& td = t.GetData();
@@ -412,15 +421,17 @@ void Node::ProcessTransactionWhenShardLeader(
           } else {
             bool containsContractAddr = false;
             std::string prepend = "0x";
-            for (const auto& param: tx_data["params"]) {
-              if (param.isMember("type") && param.isMember("value")
-                  && param.isMember("vname")
-                  && param["type"].asString() == "ByStr20" ) {
-                string addr_str = param["value"].asString().erase(0, prepend.length());
-                Address paddr (addr_str);
+            for (const auto& param : tx_data["params"]) {
+              if (param.isMember("type") && param.isMember("value") &&
+                  param.isMember("vname") &&
+                  param["type"].asString() == "ByStr20") {
+                string addr_str =
+                    param["value"].asString().erase(0, prepend.length());
+                Address paddr(addr_str);
                 Account* pacc = AccountStore::GetInstance().GetAccount(paddr);
                 if (pacc != nullptr && pacc->isContract()) {
-                  LOG_GENERAL(INFO, "Adding " << t.GetTranID() << " to sequential store")
+                  LOG_GENERAL(INFO, "Adding " << t.GetTranID()
+                                              << " to sequential store")
                   t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
                   containsContractAddr = true;
                   break;
@@ -428,12 +439,14 @@ void Node::ProcessTransactionWhenShardLeader(
               }
             }
             if (!containsContractAddr) {
-              LOG_GENERAL(INFO, "Adding " << t.GetTranID() << " to concurrent store")
+              LOG_GENERAL(INFO,
+                          "Adding " << t.GetTranID() << " to concurrent store")
               t_addrNonceTxnMapCon[senderAddr].insert({t.GetNonce(), t});
             }
           }
         } else {
-          LOG_GENERAL(INFO, "Adding " << t.GetTranID() << " to sequential store")
+          LOG_GENERAL(INFO,
+                      "Adding " << t.GetTranID() << " to sequential store")
           t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
         }
       }
@@ -443,14 +456,13 @@ void Node::ProcessTransactionWhenShardLeader(
         LOG_GENERAL(INFO,
                     "Nonce too small"
                         << " Expected "
-                        <<
-                        AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                        << AccountStore::GetInstance().GetNonceTemp(senderAddr)
                         << " Found " << t.GetNonce());
       }
     } else if (t_addrNonceTxnMapCon.size() > 0 && isConcurrentProcessing) {
       if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMapCon)) {
-        // check whether m_createdTransaction have transaction with same Addr and
-        // nonce if has and with larger gasPrice then replace with that one.
+        // check whether m_createdTransaction have transaction with same Addr
+        // and nonce if has and with larger gasPrice then replace with that one.
         // (*optional step)
 
         txnCount += 1;
@@ -478,14 +490,15 @@ void Node::ProcessTransactionWhenShardLeader(
         //     m_expectedTranOrdering.emplace_back(t.GetTranID());
         //     t_processedTransactions.insert(
         //       make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
-              
-        //     LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);
+
+        //     LOG_GENERAL(INFO, "Threadpool finished running transaction, got:
+        //     " << x);
         //   });
         TxnStatus error_code;
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                             error_code)) {
           if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                      m_gasUsedTotal)) {
+                                       m_gasUsedTotal)) {
             LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
             break;
           }
@@ -507,8 +520,8 @@ void Node::ProcessTransactionWhenShardLeader(
       }
     } else if (t_addrNonceTxnMap.size() > 0 && !isConcurrentProcessing) {
       if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
-        // check whether m_createdTransaction have transaction with same Addr and
-        // nonce if has and with larger gasPrice then replace with that one.
+        // check whether m_createdTransaction have transaction with same Addr
+        // and nonce if has and with larger gasPrice then replace with that one.
         // (*optional step)
 
         txnCount += 1;
@@ -529,7 +542,7 @@ void Node::ProcessTransactionWhenShardLeader(
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                             error_code)) {
           if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                      m_gasUsedTotal)) {
+                                       m_gasUsedTotal)) {
             LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
             break;
           }
@@ -549,8 +562,7 @@ void Node::ProcessTransactionWhenShardLeader(
           continue;
         }
       }
-    }
-    else {
+    } else {
       break;
     }
   }
@@ -580,7 +592,8 @@ void Node::ProcessTransactionWhenShardLeader(
                                << " Time=" << elaspedTimeMs);
   }
   // Put txns in map back into pool
-  // ReinstateMemPool(t_addrNonceTxnMap, gasLimitExceededTxnBuffer, droppedTxns);
+  // ReinstateMemPool(t_addrNonceTxnMap, gasLimitExceededTxnBuffer,
+  // droppedTxns);
 }
 
 bool Node::VerifyTxnsOrdering(const vector<TxnHash>& tranHashes,
@@ -640,21 +653,22 @@ void Node::UpdateProcessedTransactions() {
     if (m_mediator.m_node->m_microblock != nullptr) {
       t_createdTxns = m_createdTxns;
       m_createdTxns.clear();
-        dev::h256s mbTxHashes = m_mediator.m_node->m_microblock->GetTranHashes();
-        for (const auto& kv : t_createdTxns.HashIndex) {
-          auto tx = kv.second;
-          Address senderAddr = tx.GetSenderAddr();
-          auto senderNonce = AccountStore::GetInstance().GetNonce(senderAddr);
+      dev::h256s mbTxHashes = m_mediator.m_node->m_microblock->GetTranHashes();
+      for (const auto& kv : t_createdTxns.HashIndex) {
+        auto tx = kv.second;
+        Address senderAddr = tx.GetSenderAddr();
+        auto senderNonce = AccountStore::GetInstance().GetNonce(senderAddr);
 
-          bool transactionNotCommitted =
-            std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) == mbTxHashes.end();
-          bool hasHigherNonce = tx.GetNonce() >= senderNonce;
+        bool transactionNotCommitted =
+            std::find(mbTxHashes.begin(), mbTxHashes.end(), kv.first) ==
+            mbTxHashes.end();
+        bool hasHigherNonce = tx.GetNonce() >= senderNonce;
 
-          if (transactionNotCommitted && hasHigherNonce) {
-                MempoolInsertionStatus status;
-                m_createdTxns.insert(kv.second, status);
-          }
+        if (transactionNotCommitted && hasHigherNonce) {
+          MempoolInsertionStatus status;
+          m_createdTxns.insert(kv.second, status);
         }
+      }
     }
 
     t_createdTxns.clear();
@@ -685,8 +699,11 @@ void Node::ProcessTransactionWhenShardBackup(
 
   TxnPool t_createdTxns;
   {
-    LOG_GENERAL(INFO, "Waiting on " << m_txnPacketsInQueue.load() << " txnPackets to finish processing");
-    while (m_txnPacketsInQueue.load() != 0) {this_thread::sleep_for(chrono::milliseconds(100));}
+    LOG_GENERAL(INFO, "Waiting on " << m_txnPacketsInQueue.load()
+                                    << " txnPackets to finish processing");
+    while (m_txnPacketsInQueue.load() != 0) {
+      this_thread::sleep_for(chrono::milliseconds(100));
+    }
     lock_guard<mutex> g(m_mutexCreatedTransactions);
     t_createdTxns = m_createdTxns;
   }
@@ -694,7 +711,10 @@ void Node::ProcessTransactionWhenShardBackup(
   map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMap;
   map<Address, map<uint64_t, Transaction>> t_addrNonceTxnMapCon;
   t_processedTransactions.clear();
-  LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool](Backup in shard " << m_myshardId << ") Have " << t_createdTxns.size () << " transactions");
+  LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
+            "[TxPool](Backup in shard " << m_myshardId << ") Have "
+                                        << t_createdTxns.size()
+                                        << " transactions");
 
   if (LOG_PARAMETERS) {
     LOG_STATE("[TXNPROC-BEG][" << m_mediator.m_currentEpochNum
@@ -779,7 +799,8 @@ void Node::ProcessTransactionWhenShardBackup(
     // first add transactions into t_addrNonceTxnMap
     if (t_createdTxns.findOne(t)) {
       Address senderAddr = t.GetSenderAddr();
-      uint128_t expectedNonce = AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+      uint128_t expectedNonce =
+          AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
       auto& cs = Contract::ContractStorage2::GetContractStorage();
       Json::Value sh_info;
       const auto& toAddr = t.GetToAddr();
@@ -798,13 +819,15 @@ void Node::ProcessTransactionWhenShardBackup(
             continue;
           }
         }
-        
+
         // get sharding info of transaction
-        if (toAccount != nullptr && toAccount->isContract()
-            && cs.FetchContractShardingInfo(toAddr, sh_info)) {
-          // based on sharding info, split contracts into concurrent/sequential maps
+        if (toAccount != nullptr && toAccount->isContract() &&
+            cs.FetchContractShardingInfo(toAddr, sh_info)) {
+          // based on sharding info, split contracts into concurrent/sequential
+          // maps
           if (LOG_SC) {
-            string sh_info_str = JSONUtils::GetInstance().convertJsontoStr(sh_info);
+            string sh_info_str =
+                JSONUtils::GetInstance().convertJsontoStr(sh_info);
             LOG_GENERAL(INFO, "Node got sharding info:\n" << sh_info_str);
           }
           auto& td = t.GetData();
@@ -816,15 +839,17 @@ void Node::ProcessTransactionWhenShardBackup(
           } else {
             bool containsContractAddr = false;
             std::string prepend = "0x";
-            for (const auto& param: tx_data["params"]) {
-              if (param.isMember("type") && param.isMember("value")
-                  && param.isMember("vname")
-                  && param["type"].asString() == "ByStr20" ) {
-                string addr_str = param["value"].asString().erase(0, prepend.length());
-                Address paddr (addr_str);
+            for (const auto& param : tx_data["params"]) {
+              if (param.isMember("type") && param.isMember("value") &&
+                  param.isMember("vname") &&
+                  param["type"].asString() == "ByStr20") {
+                string addr_str =
+                    param["value"].asString().erase(0, prepend.length());
+                Address paddr(addr_str);
                 Account* pacc = AccountStore::GetInstance().GetAccount(paddr);
                 if (pacc != nullptr && pacc->isContract()) {
-                  LOG_GENERAL(INFO, "Adding " << t.GetTranID() << " to sequential store")
+                  LOG_GENERAL(INFO, "Adding " << t.GetTranID()
+                                              << " to sequential store")
                   t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
                   containsContractAddr = true;
                   break;
@@ -832,12 +857,14 @@ void Node::ProcessTransactionWhenShardBackup(
               }
             }
             if (!containsContractAddr) {
-              LOG_GENERAL(INFO, "Adding " << t.GetTranID() << " to concurrent store")
+              LOG_GENERAL(INFO,
+                          "Adding " << t.GetTranID() << " to concurrent store")
               t_addrNonceTxnMapCon[senderAddr].insert({t.GetNonce(), t});
             }
           }
         } else {
-          LOG_GENERAL(INFO, "Adding " << t.GetTranID() << " to sequential store")
+          LOG_GENERAL(INFO,
+                      "Adding " << t.GetTranID() << " to sequential store")
           t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
         }
       }
@@ -847,8 +874,7 @@ void Node::ProcessTransactionWhenShardBackup(
         LOG_GENERAL(INFO,
                     "Nonce too small"
                         << " Expected "
-                        <<
-                        AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                        << AccountStore::GetInstance().GetNonceTemp(senderAddr)
                         << " Found " << t.GetNonce());
       }
     }
@@ -856,8 +882,8 @@ void Node::ProcessTransactionWhenShardBackup(
     // if contains, process it
     else if (t_addrNonceTxnMapCon.size() > 0 && isConcurrentProcessing) {
       if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMapCon)) {
-        // check whether m_createdTransaction have transaction with same Addr and
-        // nonce if has and with larger gasPrice then replace with that one.
+        // check whether m_createdTransaction have transaction with same Addr
+        // and nonce if has and with larger gasPrice then replace with that one.
         // (*optional step)
         txnCount += 1;
         if (txnCount == maxTxnPerBatch) {
@@ -884,14 +910,15 @@ void Node::ProcessTransactionWhenShardBackup(
         //   m_expectedTranOrdering.emplace_back(t.GetTranID());
         //   t_processedTransactions.insert(
         //     make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
-            
-        //   LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);
+
+        //   LOG_GENERAL(INFO, "Threadpool finished running transaction, got: "
+        //   << x);
         // });
         TxnStatus error_code;
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                             error_code)) {
           if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                      m_gasUsedTotal)) {
+                                       m_gasUsedTotal)) {
             LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
             break;
           }
@@ -912,8 +939,8 @@ void Node::ProcessTransactionWhenShardBackup(
       }
     } else if (t_addrNonceTxnMap.size() > 0 && !isConcurrentProcessing) {
       if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
-        // check whether m_createdTransaction have transaction with same Addr and
-        // nonce if has and with larger gasPrice then replace with that one.
+        // check whether m_createdTransaction have transaction with same Addr
+        // and nonce if has and with larger gasPrice then replace with that one.
         // (*optional step)
 
         txnCount += 1;
@@ -934,7 +961,7 @@ void Node::ProcessTransactionWhenShardBackup(
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                             error_code)) {
           if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-                                      m_gasUsedTotal)) {
+                                       m_gasUsedTotal)) {
             LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
             break;
           }
@@ -953,8 +980,7 @@ void Node::ProcessTransactionWhenShardBackup(
           continue;
         }
       }
-    }
-    else {
+    } else {
       break;
     }
   }
@@ -982,7 +1008,8 @@ void Node::ProcessTransactionWhenShardBackup(
                                << " Time=" << elaspedTimeMs);
   }
 
-  // ReinstateMemPool(t_addrNonceTxnMap, gasLimitExceededTxnBuffer, droppedTxns);
+  // ReinstateMemPool(t_addrNonceTxnMap, gasLimitExceededTxnBuffer,
+  // droppedTxns);
 }
 
 void Node::PutTxnsInTempDataBase(
@@ -1472,7 +1499,8 @@ unsigned char Node::CheckLegitimacyOfTxnHashes(bytes& errorMsg) {
        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
            TXN_DS_TARGET_NUM)) {
     vector<TxnHash> missingTxnHashes;
-    // if (!VerifyTxnsOrdering(m_microblock->GetTranHashes(), missingTxnHashes)) {
+    // if (!VerifyTxnsOrdering(m_microblock->GetTranHashes(), missingTxnHashes))
+    // {
     //   LOG_GENERAL(WARNING, "The leader may have composed wrong order");
     //   return LEGITIMACYRESULT::WRONGORDER;
     // }

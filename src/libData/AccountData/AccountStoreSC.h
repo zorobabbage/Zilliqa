@@ -197,8 +197,7 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
   bool ParseContractCheckerOutput(const Address& addr,
                                   const std::string& checkerPrint,
                                   TransactionReceipt& receipt,
-                                  bytes& map_depth_data,
-                                  bytes& sharding_info,
+                                  bytes& map_depth_data, bytes& sharding_info,
                                   std::map<std::string, bytes>& metadata,
                                   uint64_t& gasRemained,
                                   bool is_library = false);

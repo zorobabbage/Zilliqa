@@ -5396,7 +5396,8 @@ void Lookup::RectifyTxnShardMap(const uint32_t oldNumShards,
       if (Transaction::GetTransactionType(tx_and_count.first) ==
           Transaction::CONTRACT_CALL) {
         // if shard do not match directly send to ds
-        unsigned int toShard = AddressShardIndex(tx_and_count.first.GetToAddr(), newNumShards);
+        unsigned int toShard =
+            AddressShardIndex(tx_and_count.first.GetToAddr(), newNumShards);
         if (toShard != fromShard) {
           // later would be placed in the new ds shard
           m_txnShardMap[oldNumShards].emplace_back(tx_and_count);
@@ -5450,7 +5451,7 @@ void Lookup::SendTxnPacketToNodes(const uint32_t oldNumShards,
   }
 
   if (oldNumShards != newNumShards) {
-      RectifyTxnShardMap(oldNumShards, newNumShards);
+    RectifyTxnShardMap(oldNumShards, newNumShards);
   }
 
   this_thread::sleep_for(

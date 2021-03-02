@@ -40,8 +40,7 @@ struct TxnPool {
   };
 
   std::unordered_map<TxnHash, Transaction> HashIndex;
-  std::map<uint128_t, std::set<TxnHash>, std::greater<uint128_t>>
-      GasIndex;
+  std::map<uint128_t, std::set<TxnHash>, std::greater<uint128_t>> GasIndex;
   std::unordered_map<std::pair<PubKey, uint64_t>, TxnHash, PubKeyNonceHash>
       NonceIndex;
 

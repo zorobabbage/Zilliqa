@@ -35,7 +35,7 @@ const Address NullAddress;
 inline bool IsNullAddress(const Address& address) { return !address; }
 
 inline unsigned int AddressShardIndex(const Address& addr,
-                                        unsigned int numShards) {
+                                      unsigned int numShards) {
   uint32_t x = 0;
 
   if (numShards == 0) {
@@ -50,6 +50,5 @@ inline unsigned int AddressShardIndex(const Address& addr,
 
   return x % numShards;
 }
-
 
 #endif  // ZILLIQA_SRC_LIBDATA_ACCOUNTDATA_ADDRESS_H_

@@ -174,7 +174,8 @@ class Messenger {
                          VCBlock& vcBlock);
 
   static bool SetTransactionCoreInfo(bytes& dst, const unsigned int offset,
-                                     const TransactionCoreInfo& transaction, bool skipNonce=false);
+                                     const TransactionCoreInfo& transaction,
+                                     bool skipNonce = false);
   static bool GetTransactionCoreInfo(const bytes& src,
                                      const unsigned int offset,
                                      TransactionCoreInfo& transaction);

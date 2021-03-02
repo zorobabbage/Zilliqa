@@ -51,11 +51,9 @@ Json::Value ScillaUtils::GetBlockStateJson(const uint64_t& BlockNum) {
   return root;
 }
 
-Json::Value ScillaUtils::GetContractCheckerJson(const string& root_w_version,
-                                                bool is_library,
-                                                const uint64_t& available_gas,
-                                                const Json::Value sharding_input) {
-
+Json::Value ScillaUtils::GetContractCheckerJson(
+    const string& root_w_version, bool is_library,
+    const uint64_t& available_gas, const Json::Value sharding_input) {
   Json::Value ret;
   ret["argv"].append("-init");
   ret["argv"].append(boost::filesystem::current_path().string() + '/' +

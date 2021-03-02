@@ -368,8 +368,7 @@ class DirectoryService : public Executable {
   void ExtractDataFromMicroblocks(std::vector<MicroBlockInfo>& mbInfos,
                                   uint64_t& allGasLimit, uint64_t& allGasUsed,
                                   uint128_t& allRewards, uint32_t& numTxs);
-  bool ProcessStateDelta(const bytes& stateDelta,
-                         const uint32_t& shardId,
+  bool ProcessStateDelta(const bytes& stateDelta, const uint32_t& shardId,
                          const uint32_t& numShards,
                          const StateHash& microBlockStateDeltaHash,
                          const BlockHash& microBlockHash);

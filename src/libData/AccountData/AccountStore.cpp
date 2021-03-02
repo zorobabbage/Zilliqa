@@ -214,7 +214,8 @@ bool AccountStore::DeserializeDelta(const bytes& src, unsigned int offset,
 }
 
 bool AccountStore::DeserializeDeltaTemp(const bytes& src, unsigned int offset,
-    const uint32_t& shardId, const uint32_t& numShards) {
+                                        const uint32_t& shardId,
+                                        const uint32_t& numShards) {
   lock_guard<mutex> g(m_mutexDelta);
   return m_accountStoreTemp->DeserializeDelta(src, offset, shardId, numShards);
 }
@@ -574,7 +575,8 @@ bool AccountStore::MigrateContractStates2(
       return false;
     }
 
-    // adding old values for ParseContractCheckerOutput to run, but otherwise unused
+    // adding old values for ParseContractCheckerOutput to run, but otherwise
+    // unused
     bytes map_depth_data;
     bytes sharding_info;
 
@@ -585,8 +587,9 @@ bool AccountStore::MigrateContractStates2(
         DataConversion::StringToCharArray(std::to_string(scilla_version)));
 
     // adding depth and type metadata
-    if (!ParseContractCheckerOutput(address, checkerPrint, receipt, map_depth_data,
-                                    sharding_info, t_metadata, gasRem)) {
+    if (!ParseContractCheckerOutput(address, checkerPrint, receipt,
+                                    map_depth_data, sharding_info, t_metadata,
+                                    gasRem)) {
       LOG_GENERAL(WARNING, "ParseContractCheckerOutput failed");
       if (ignoreCheckerFailure) {
         continue;

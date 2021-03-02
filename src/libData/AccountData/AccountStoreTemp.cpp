@@ -45,10 +45,12 @@ Account* AccountStoreTemp::GetAccount(const Address& address) {
 }
 
 bool AccountStoreTemp::DeserializeDelta(const bytes& src, unsigned int offset,
-    const uint32_t& shardId, const uint32_t& numShards) {
+                                        const uint32_t& shardId,
+                                        const uint32_t& numShards) {
   LOG_MARKER();
 
-  if (!Messenger::GetAccountStoreDelta(src, offset, *this, true, shardId, numShards)) {
+  if (!Messenger::GetAccountStoreDelta(src, offset, *this, true, shardId,
+                                       numShards)) {
     LOG_GENERAL(WARNING, "Messenger::GetAccountStoreDelta failed.");
     return false;
   }

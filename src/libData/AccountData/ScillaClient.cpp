@@ -77,12 +77,13 @@ bool ScillaClient::OpenServer(uint32_t version) {
 
   // If multiple servers running on the same PC, don't want to kill all of them
   // so we target according to executeStr
-  killStr = "ps --no-headers axk comm o pid,args | awk '$2 ~ \"" +
-            executeStr + "\"{print $1}' | xargs kill -9";
+  killStr = "ps --no-headers axk comm o pid,args | awk '$2 ~ \"" + executeStr +
+            "\"{print $1}' | xargs kill -9";
 
   cmdStr = killStr + "; " + executeStr;
 
-  // Important to make a copy of cmdStr rather than take a thread-local reference!
+  // Important to make a copy of cmdStr rather than take a thread-local
+  // reference!
   auto func = [cmdStr]() mutable -> void {
     LOG_GENERAL(INFO, "cmdStr: " << cmdStr);
 
@@ -168,7 +169,7 @@ bool ScillaClient::CallChecker(uint32_t version, const Json::Value& _json,
 }
 
 bool ScillaClient::CallSharding(uint32_t version, const Json::Value& _json,
-                               std::string& result, uint32_t counter) {
+                                std::string& result, uint32_t counter) {
   if (counter == 0) {
     return false;
   }
@@ -193,7 +194,6 @@ bool ScillaClient::CallSharding(uint32_t version, const Json::Value& _json,
 
   return true;
 }
-
 
 bool ScillaClient::CallRunner(uint32_t version, const Json::Value& _json,
                               std::string& result, uint32_t counter) {

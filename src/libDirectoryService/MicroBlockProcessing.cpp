@@ -119,8 +119,7 @@ bool DirectoryService::VerifyMicroBlockCoSignature(const MicroBlock& microBlock,
 }
 
 bool DirectoryService::ProcessStateDelta(
-    const bytes& stateDelta,
-    const uint32_t& shardId, const uint32_t& numShards,
+    const bytes& stateDelta, const uint32_t& shardId, const uint32_t& numShards,
     const StateHash& microBlockStateDeltaHash,
     const BlockHash& microBlockHash) {
   LOG_MARKER();
@@ -177,7 +176,8 @@ bool DirectoryService::ProcessStateDelta(
     return false;
   }
 
-  if (!AccountStore::GetInstance().DeserializeDeltaTemp(stateDelta, 0, shardId, numShards)) {
+  if (!AccountStore::GetInstance().DeserializeDeltaTemp(stateDelta, 0, shardId,
+                                                        numShards)) {
     LOG_GENERAL(WARNING, "AccountStore::DeserializeDeltaTemp failed.");
     return false;
   }
@@ -322,8 +322,7 @@ bool DirectoryService::ProcessMicroblockSubmissionFromShardCore(
   }
 
   if (!m_mediator.GetIsVacuousEpoch()) {
-    if (!ProcessStateDelta(stateDelta,
-                           microBlock.GetHeader().GetShardId(),
+    if (!ProcessStateDelta(stateDelta, microBlock.GetHeader().GetShardId(),
                            m_shards.size(),
                            microBlock.GetHeader().GetStateDeltaHash(),
                            microBlock.GetBlockHash())) {
@@ -654,8 +653,7 @@ bool DirectoryService::ProcessMissingMicroblockSubmission(
 
       if (!m_mediator.GetIsVacuousEpoch(epochNumber)) {
         if (!ProcessStateDelta(
-                stateDeltas.at(i),
-                microBlocks.at(i).GetHeader().GetShardId(),
+                stateDeltas.at(i), microBlocks.at(i).GetHeader().GetShardId(),
                 // GEORGE TODO: wait for clarification
                 m_shards.size(),
                 microBlocks.at(i).GetHeader().GetStateDeltaHash(),

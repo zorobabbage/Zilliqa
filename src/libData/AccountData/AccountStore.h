@@ -52,7 +52,7 @@ class AccountStoreTemp : public AccountStoreSC<std::map<Address, Account>> {
   AccountStoreTemp(AccountStore& parent);
 
   bool DeserializeDelta(const bytes& src, unsigned int offset,
-    const uint32_t& shardId, const uint32_t& numShards);
+                        const uint32_t& shardId, const uint32_t& numShards);
 
   /// Returns the Account associated with the specified address.
   Account* GetAccount(const Address& address) override;
@@ -122,8 +122,8 @@ class AccountStore
 
   /// update account states in AccountStoreTemp with the raw bytes of StateDelta
   bool DeserializeDeltaTemp(const bytes& src, unsigned int offset,
-    const uint32_t& shardId = UNKNOWN_SHARD_ID,
-    const uint32_t& numShards = UNKNOWN_SHARD_ID);
+                            const uint32_t& shardId = UNKNOWN_SHARD_ID,
+                            const uint32_t& numShards = UNKNOWN_SHARD_ID);
 
   /// empty everything including the persistent storage for account states
   void Init() override;
