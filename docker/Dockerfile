@@ -18,6 +18,7 @@ ARG BASE=zilliqa/scilla:ubuntu16-on-v0.9.1_885f339
 FROM ${BASE} AS scilla
 # run a copy -L to unfold the symlinkes, and strip all exes
 RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/0/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
+COPY requirements3.txt ./
 
 # start from a new ubuntu environment as builder for zilliqa, make sure the deps is consistent with those in the runner image
 FROM ubuntu:16.04 AS builder
