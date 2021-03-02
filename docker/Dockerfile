@@ -129,6 +129,7 @@ FROM ubuntu:16.04
 # install all necessary libraries
 RUN apt-get update \
     && apt-get install -y software-properties-common \
+    && add-apt-repository ppa:tah83/secp256k1 -y \
     && apt-get update && apt-get install -y --no-install-recommends \
     # libs
     ca-certificates \
