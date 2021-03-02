@@ -387,8 +387,6 @@ extern const std::string SHARDING_INFO_INDICATOR;
 extern const bool LOG_SC;
 extern const bool DISABLE_SCILLA_LIB;
 extern const unsigned int SCILLA_SERVER_PENDING_IN_MS;
-// TODO: Remove FIELDS_MAP_DEPTH_INDICATOR after data migration
-const std::string FIELDS_MAP_DEPTH_INDICATOR = "_fields_map_depth";
 const std::string MAP_DEPTH_INDICATOR = "_depth";
 const std::string SCILLA_VERSION_INDICATOR = "_version";
 const std::string TYPE_INDICATOR = "_type";

@@ -132,15 +132,14 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
 
   bool FetchStateValue(const dev::h160& addr, const bytes& src,
                        unsigned int s_offset, bytes& dst, unsigned int d_offset,
-                       bool& foundVal);
+                       bool& foundVal, bool getType = false,
+                       std::string& type = type_placeholder);
 
   bool FetchContractShardingInfo(const dev::h160& address,
                                  Json::Value& sharding_info_json);
 
   bool FetchContractFieldsMapDepth(const dev::h160& address,
-                                   Json::Value& map_depth_json, bool temp);
-                       bool& foundVal, bool getType = false,
-                       std::string& type = type_placeholder);
+                                    Json::Value& map_depth_json, bool temp);
 
   bool FetchExternalStateValue(
       const dev::h160& caller, const dev::h160& target, const bytes& src,

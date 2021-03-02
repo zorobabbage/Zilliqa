@@ -59,47 +59,48 @@ void ScillaClient::Init() {
 
 bool ScillaClient::OpenServer(uint32_t version) {
   LOG_MARKER();
-
   std::string cmdStr;
   std::string root_w_version;
   if (!ScillaUtils::PrepareRootPathWVersion(version, root_w_version)) {
     LOG_GENERAL(WARNING, "ScillaUtils::PrepareRootPathWVersion failed");
     return false;
   }
-
   std::string server_path = root_w_version + "/bin/" + SCILLA_SERVER_BINARY;
   std::string killStr, executeStr;
 
   if (ENABLE_SCILLA_MULTI_VERSION) {
-    cmdStr = "ps aux | awk '{print $2\"\\t\"$11}' | grep \"" + server_path +
-             "\" | awk '{print $1}' | xargs kill -SIGTERM ; " + server_path +
-             " -socket " + SCILLA_SERVER_SOCKET_PATH + "." +
-             std::to_string(version) + " >/dev/null &";
+    executeStr = server_path + " -socket " + SCILLA_SERVER_SOCKET_PATH + "." +
+                 std::to_string(version);
   } else {
-    cmdStr = "pkill " + SCILLA_SERVER_BINARY + " ; " + server_path +
-             " -socket " + SCILLA_SERVER_SOCKET_PATH + " >/dev/null &";
+    executeStr = server_path + " -socket " + SCILLA_SERVER_SOCKET_PATH;
   }
 
-  LOG_GENERAL(INFO, "cmdStr: " << cmdStr);
+  // If multiple servers running on the same PC, don't want to kill all of them
+  // so we target according to executeStr
+  killStr = "ps --no-headers axk comm o pid,args | awk '$2 ~ \"" +
+            executeStr + "\"{print $1}' | xargs kill -9";
 
-  try {
-    if (!SysCommand::ExecuteCmd(SysCommand::WITHOUT_OUTPUT, cmdStr)) {
-      LOG_GENERAL(WARNING, "ExecuteCmd failed: " << cmdStr);
-      return false;
+  cmdStr = killStr + "; " + executeStr;
+
+  // Important to make a copy of cmdStr rather than take a thread-local reference!
+  auto func = [cmdStr]() mutable -> void {
+    LOG_GENERAL(INFO, "cmdStr: " << cmdStr);
+
+    try {
+      if (!SysCommand::ExecuteCmd(SysCommand::WITHOUT_OUTPUT, cmdStr)) {
+        LOG_GENERAL(WARNING, "ExecuteCmd failed: " << cmdStr);
+      }
+    } catch (const std::exception& e) {
+      LOG_GENERAL(WARNING,
+                  "Exception caught in SysCommand::ExecuteCmd: " << e.what());
     }
-  } catch (const std::exception& e) {
-    LOG_GENERAL(WARNING,
-                "Exception caught in SysCommand::ExecuteCmd: " << e.what());
-    return false;
-  } catch (...) {
-    LOG_GENERAL(WARNING, "Unknown error encountered");
-    return false;
-  }
 
-  LOG_GENERAL(WARNING, "terminated: " << cmdStr);
+    LOG_GENERAL(WARNING, "terminated: " << cmdStr);
+  };
 
-  std::this_thread::sleep_for(
-      std::chrono::milliseconds(SCILLA_SERVER_PENDING_IN_MS));
+  DetachedFunction(1, func);
+
+  usleep(500 * 1000);
 
   return true;
 }

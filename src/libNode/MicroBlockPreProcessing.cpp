@@ -527,7 +527,7 @@ void Node::ProcessTransactionWhenShardLeader(
 
         TxnStatus error_code;
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
-                                                            error_code))) {
+                                                            error_code)) {
           if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
                                       m_gasUsedTotal)) {
             LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
@@ -651,7 +651,8 @@ void Node::UpdateProcessedTransactions() {
           bool hasHigherNonce = tx.GetNonce() >= senderNonce;
 
           if (transactionNotCommitted && hasHigherNonce) {
-                m_createdTxns.insert(kv.second);
+                MempoolInsertionStatus status;
+                m_createdTxns.insert(kv.second, status);
           }
         }
     }
@@ -929,6 +930,7 @@ void Node::ProcessTransactionWhenShardBackup(
           continue;
         }
 
+        TxnStatus error_code;
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                             error_code)) {
           if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
@@ -1070,9 +1072,6 @@ void Node::ReinstateMemPool(
                 "[DTXN]" << txnHashStatus.first << " " << txnHashStatus.second);
     m_unconfirmedTxns.emplace(txnHashStatus);
   }
-
-  LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "[TxPool] Put back " << count << " transactions into mempool");
-
 }
 
 void Node::PutProcessedInUnconfirmedTxns() {

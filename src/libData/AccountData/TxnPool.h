@@ -74,40 +74,27 @@ struct TxnPool {
 
     auto searchNonce = NonceIndex.find({t.GetSenderPubKey(), t.GetNonce()});
     if (searchNonce != NonceIndex.end()) {
+      auto tx = HashIndex.at(searchNonce->second);
 
-      if ((t.GetGasPrice() > searchNonce->second.GetGasPrice()) ||
-          (t.GetGasPrice() == searchNonce->second.GetGasPrice() &&
-           t.GetTranID() < searchNonce->second.GetTranID())) {
+      if ((t.GetGasPrice() > tx.GetGasPrice()) ||
+          (t.GetGasPrice() == tx.GetGasPrice() &&
+           t.GetTranID() < tx.GetTranID())) {
         // erase from HashIdxTxns
-        TxnHash hashToBeRemoved = searchNonce->second.GetTranID();
-        auto searchHash = HashIndex.find(searchNonce->second.GetTranID());
+        auto searchHash = HashIndex.find(tx.GetTranID());
         if (searchHash != HashIndex.end()) {
           HashIndex.erase(searchHash);
         }
         // erase from GasIdxTxns
-        auto smallerGasPrice = searchNonce->second.GetGasPrice();
-        auto searchGas = GasIndex.find(searchNonce->second.GetGasPrice());
+        auto searchGas = GasIndex.find(tx.GetGasPrice());
         if (searchGas != GasIndex.end()) {
-          auto searchGasHash = 
-              searchGas->second.find(searchNonce->second.GetTranID());
+          auto searchGasHash = searchGas->second.find(tx.GetTranID());
           if (searchGasHash != searchGas->second.end()) {
             searchGas->second.erase(searchGasHash);
           }
-          if (GasIndex[smallerGasPrice].empty()) {
-            GasIndex.erase(smallerGasPrice);
-          }
         }
         HashIndex[t.GetTranID()] = t;
-        GasIndex[t.GetGasPrice()][t.GetTranID()] = t;
-        searchNonce->second = t;
-
-        status = {TxnStatus::MEMPOOL_SAME_NONCE_LOWER_GAS, hashToBeRemoved};
-        return true;
-      } else {
-        // GasPrice is higher but of same nonce
-        // or same gas price and nonce but higher tranID
-        status = {TxnStatus::MEMPOOL_SAME_NONCE_LOWER_GAS, t.GetTranID()};
-        return false;
+        GasIndex[t.GetGasPrice()].insert(t.GetTranID());
+        searchNonce->second = t.GetTranID();
       }
     } else {
       HashIndex[t.GetTranID()] = t;

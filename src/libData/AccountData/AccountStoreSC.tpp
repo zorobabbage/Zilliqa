@@ -350,7 +350,7 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
           DataConversion::StringToCharArray(std::to_string(scilla_version)));
 
       if (ret_checker &&
-          !ParseContractCheckerOutput(checkerPrint, receipt, map_depth_data,
+          !ParseContractCheckerOutput(toAddr, checkerPrint, receipt, map_depth_data,
                                       sharding_info, t_metadata, gasRemained, is_library)) {
         ret_checker = false;
       }
@@ -1028,6 +1028,7 @@ bool AccountStoreSC<MAP>::ParseContractCheckerOutput(
         return false;
       }
 
+      Json::Value map_depth_json;
       bool hasMap = false;
 
       if (root["contract_info"].isMember("fields")) {

@@ -56,8 +56,7 @@ void test_transaction(const map<uint32_t, vector<Transaction>>& mp,
       auto index = fromShard;
       if (Transaction::GetTransactionType(tx_and_count.first) ==
           Transaction::CONTRACT_CALL) {
-        const auto& toShard = Transaction::GetShardIndex(
-            tx_and_count.first.GetToAddr(), newShardNum);
+        const auto& toShard = tx_and_count.first.GetShardIndex(newShardNum);
         if (toShard != fromShard) {
           LOG_GENERAL(INFO, "Sent to ds");
           index = newShardNum;

@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
       while (true) {
         PairOfKey keypair = Schnorr::GenKeyPair();
         Address addr = CryptoUtils::GetAddressFromPubKey(keypair.second);
-        if (Transaction::GetShardIndex(addr, numShards) != targetShard) {
+        if (AddressShardIndex(addr, numShards) != targetShard) {
           continue;
         }
         cout << "\t\t<account>" << endl;
