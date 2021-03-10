@@ -451,6 +451,8 @@ void AccountBaseToProtobuf(const AccountBase& accountbase,
 
 bool ProtobufToAccountBase(const ProtoAccountBase& protoAccountBase,
                            AccountBase& accountBase) {
+  LOG_MARKER();
+
   if (!CheckRequiredFieldsProtoAccountBase(protoAccountBase)) {
     LOG_GENERAL(WARNING, "CheckRequiredFieldsProtoAccountBase failed");
     return false;
@@ -644,6 +646,8 @@ void AccountDeltaToProtobuf(const Account* oldAccount,
 bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
                             const Address& addr, const bool fullCopy, bool temp,
                             bool revertible = false) {
+  LOG_MARKER();
+
   if (!CheckRequiredFieldsProtoAccount(protoAccount)) {
     LOG_GENERAL(WARNING, "CheckRequiredFieldsProtoAccount failed");
     return false;
@@ -685,6 +689,7 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
 
   if ((protoAccount.code().size() > 0) || account.isContract()) {
     if (fullCopy) {
+      LOG_GENERAL(INFO, "Full copy");
       bytes codeBytes, initDataBytes;
 
       if (protoAccount.code().size() > MAX_CODE_SIZE_IN_BYTES) {
@@ -717,6 +722,7 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
     }
 
     if (accbase.GetStorageRoot() != account.GetStorageRoot()) {
+      LOG_GENERAL(INFO, "Need to update states");
       dev::h256 tmpHash;
 
       map<string, bytes> t_states;
@@ -2687,9 +2693,12 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                                        (unsigned int)address.size),
          address.asArray().begin());
 
+    LOG_GENERAL(INFO, "Address = " << address);
+
     const Account* oriAccount = accountStore.GetAccount(address);
     bool fullCopy = false;
     if (oriAccount == nullptr) {
+      LOG_GENERAL(INFO, "New account");
       Account acc(0, 0);
       accountStore.AddAccount(address, acc);
       oriAccount = accountStore.GetAccount(address);

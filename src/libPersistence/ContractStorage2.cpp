@@ -879,9 +879,7 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
     const dev::h160& addr, const std::map<std::string, bytes>& t_states,
     const std::vector<std::string>& toDeleteIndices, dev::h256& stateHash,
     bool temp, bool revertible) {
-  if (LOG_SC) {
-    LOG_MARKER();
-  }
+  LOG_MARKER();
 
   lock_guard<mutex> g(m_stateDataMutex);
 

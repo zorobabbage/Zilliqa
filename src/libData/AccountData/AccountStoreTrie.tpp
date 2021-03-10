@@ -103,8 +103,6 @@ bool AccountStoreTrie<DB, MAP>::UpdateStateTrie(const Address& address,
   }
 
   std::lock_guard<std::mutex> g(m_mutexTrie);
-  LOG_GENERAL(INFO, "Address  = " << address);
-  LOG_GENERAL(INFO, "RawBytes = " << rawBytes.size());
   m_state.insert(address, rawBytes);
 
   return true;
