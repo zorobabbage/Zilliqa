@@ -2663,8 +2663,12 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                                      const unsigned int offset,
                                      AccountStore& accountStore,
                                      const bool revertible, bool temp) {
+  LOG_MARKER();
+
   ProtoAccountStore result;
   result.ParseFromArray(src.data() + offset, src.size() - offset);
+
+  LOG_GENERAL(INFO, "Delta bytes size = " << src.size());
 
   if (!result.IsInitialized()) {
     LOG_GENERAL(WARNING, "ProtoAccountStore initialization failed");

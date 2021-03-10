@@ -57,6 +57,8 @@ RUN apt-get update \
     python3-setuptools \
     python3.6 \
     libsecp256k1-dev \
+    less \
+    logrotate \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10 \
     && update-alternatives --set python /usr/bin/python3.6 \

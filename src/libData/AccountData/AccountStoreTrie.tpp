@@ -94,7 +94,8 @@ Account* AccountStoreTrie<DB, MAP>::GetAccount(const Address& address) {
 template <class DB, class MAP>
 bool AccountStoreTrie<DB, MAP>::UpdateStateTrie(const Address& address,
                                                 const Account& account) {
-  // LOG_MARKER();
+  LOG_MARKER();
+
   bytes rawBytes;
   if (!account.SerializeBase(rawBytes, 0)) {
     LOG_GENERAL(WARNING, "Messenger::SetAccountBase failed");
@@ -102,6 +103,8 @@ bool AccountStoreTrie<DB, MAP>::UpdateStateTrie(const Address& address,
   }
 
   std::lock_guard<std::mutex> g(m_mutexTrie);
+  LOG_GENERAL(INFO, "Address  = " << address);
+  LOG_GENERAL(INFO, "RawBytes = " << rawBytes.size());
   m_state.insert(address, rawBytes);
 
   return true;
