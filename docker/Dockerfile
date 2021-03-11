@@ -17,7 +17,7 @@
 ARG BASE=zilliqa/scilla:sharding_experiments_1
 FROM ${BASE} AS scilla
 # run a copy -L to unfold the symlinkes, and strip all exes
-RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/0/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
+RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
 
 # start from a new ubuntu environment as builder for zilliqa, make sure the deps is consistent with those in the runner image
 FROM ubuntu:18.04 AS builder
@@ -167,16 +167,16 @@ RUN pip3 install wheel \
 
 # make dirs fro scilla and zilliqa
 RUN mkdir -p \
-    /scilla/0/bin /scilla/0/src/stdlib \
+    /scilla/bin /scilla/src/stdlib \
     /zilliqa/scripts
 
 ARG INSTALL_DIR=/usr/local
 ARG MONGO_INSTALL_DIR=/build/mongo
 
 # pour in scilla binaries
-COPY --from=scilla  /scilla/0/bin2            /scilla/0/bin
+COPY --from=scilla  /scilla/0/bin2            /scilla/bin
 # pour in scilla conntract stdlibs
-COPY --from=scilla  /scilla/0/src/stdlib     /scilla/0/src/stdlib
+COPY --from=scilla  /scilla/0/src/stdlib     /scilla/src/stdlib
 # pour in zilliqa scripts
 COPY --from=builder /zilliqa/scripts         /zilliqa/scripts
 # pour in zilliqa binaries and dynnamic libs
