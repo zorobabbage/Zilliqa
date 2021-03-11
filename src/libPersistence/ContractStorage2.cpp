@@ -1029,10 +1029,13 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
 
   std::map<std::string, bytes> states;
   FetchStateDataForContract(states, address, "", {}, temp);
+  LOG_GENERAL(INFO, "Fetched states for contract successfully!");
 
   // iterate the raw protobuf string and hash
   SHA2<HashType::HASH_VARIANT_256> sha2;
+  uint64_t count = 0;
   for (const auto& state : states) {
+    count++;
     if (LOG_SC) {
       LOG_GENERAL(INFO, "state key: "
                             << state.first << " value: "
@@ -1042,7 +1045,11 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
     if (!state.second.empty()) {
       sha2.Update(state.second);
     }
+    if (count % 10 == 0) {
+      LOG_GENERAL(INFO, "HashedCount = " << count++);
+    }
   }
+  LOG_GENERAL(INFO, "SHA update of all states done!");
   // return dev::h256(sha2.Finalize());
   dev::h256 ret(sha2.Finalize());
   return ret;
