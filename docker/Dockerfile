@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-ARG BASE=zilliqa/scilla:sharding_testv1
+ARG BASE=zilliqa/scilla:sharding_experiments_1
 FROM ${BASE} AS scilla
 # run a copy -L to unfold the symlinkes, and strip all exes
 RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/0/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
@@ -167,16 +167,16 @@ RUN pip3 install wheel \
 
 # make dirs fro scilla and zilliqa
 RUN mkdir -p \
-    /scilla/bin /scilla/src/stdlib \
+    /scilla/0/bin /scilla/0/src/stdlib \
     /zilliqa/scripts
 
 ARG INSTALL_DIR=/usr/local
 ARG MONGO_INSTALL_DIR=/build/mongo
 
 # pour in scilla binaries
-COPY --from=scilla  /scilla/0/bin2            /scilla/bin
+COPY --from=scilla  /scilla/0/bin2            /scilla/0/bin
 # pour in scilla conntract stdlibs
-COPY --from=scilla  /scilla/0/src/stdlib     /scilla/src/stdlib
+COPY --from=scilla  /scilla/0/src/stdlib     /scilla/0/src/stdlib
 # pour in zilliqa scripts
 COPY --from=builder /zilliqa/scripts         /zilliqa/scripts
 # pour in zilliqa binaries and dynnamic libs
