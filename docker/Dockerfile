@@ -17,7 +17,7 @@
 ARG BASE=zilliqa/scilla:sharding_experiments_1
 FROM ${BASE} AS scilla
 # run a copy -L to unfold the symlinkes, and strip all exes
-RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
+RUN mkdir -p /scilla/0/bin2/ && cp -L /scilla/0/bin/* /scilla/0/bin2/ && strip /scilla/0/bin2/*
 
 # start from a new ubuntu environment as builder for zilliqa, make sure the deps is consistent with those in the runner image
 FROM ubuntu:18.04 AS builder
