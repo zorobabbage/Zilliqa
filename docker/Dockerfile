@@ -51,6 +51,7 @@ RUN apt-get update \
     libminiupnpc-dev \
     libsnappy-dev \
     libssl-dev \
+    libssl1.0.0 \
     libtool \
     ocl-icd-opencl-dev \
     pkg-config \
