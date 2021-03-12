@@ -494,6 +494,8 @@ void Node::ProcessTransactionWhenShardLeader(
         //     LOG_GENERAL(INFO, "Threadpool finished running transaction, got:
         //     " << x);
         //   });
+
+        // figure out concurrent stuff here
         TxnStatus error_code;
         if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                             error_code)) {

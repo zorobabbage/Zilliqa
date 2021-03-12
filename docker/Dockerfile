@@ -175,7 +175,7 @@ ARG INSTALL_DIR=/usr/local
 ARG MONGO_INSTALL_DIR=/build/mongo
 
 # pour in scilla binaries
-COPY --from=scilla  /scilla/0/bin2            /scilla/bin
+COPY --from=scilla  /scilla/0/bin2           /scilla/bin
 # pour in scilla conntract stdlibs
 COPY --from=scilla  /scilla/0/src/stdlib     /scilla/src/stdlib
 # pour in zilliqa scripts
