@@ -1081,14 +1081,12 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
       if (!it->second.empty()) {
         sha2.Update(it->second);
       }
-      continue;
     } else {
       auto it = m_stateDataMap.find(key);
       if (it != m_stateDataMap.end()) {
         if (!it->second.empty()) {
           sha2.Update(it->second);
         }
-        continue;
       } else {
         if (m_stateDataDB.Exists(key)) {
           sha2.Update(m_stateDataDB.Lookup(key));
