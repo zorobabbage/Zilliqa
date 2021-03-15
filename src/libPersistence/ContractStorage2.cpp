@@ -1026,31 +1026,79 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
     LOG_GENERAL(WARNING, "Null address rejected");
     return dev::h256();
   }
+  string key = GenerateStorageKey(address, "", {});
 
-  std::map<std::string, bytes> states;
-  FetchStateDataForContract(states, address, "", {}, temp);
-  LOG_GENERAL(INFO, "Fetched states for contract successfully!");
-
-  // iterate the raw protobuf string and hash
   SHA2<HashType::HASH_VARIANT_256> sha2;
-  uint64_t count = 0;
-  for (const auto& state : states) {
-    count++;
-    if (LOG_SC) {
-      LOG_GENERAL(INFO, "state key: "
-                            << state.first << " value: "
-                            << DataConversion::CharArrayToString(state.second));
-    }
-    sha2.Update(state.first);
-    if (!state.second.empty()) {
-      sha2.Update(state.second);
-    }
-    if (count % 1000 == 0) {
-      LOG_GENERAL(INFO, "HashedCount = " << count++);
+  std::map<std::string, bytes>::iterator p;
+  std::set<std::string> stateKeys;
+
+  if (temp) {
+    p = t_stateDataMap.lower_bound(key);
+    while (p != t_stateDataMap.end() &&
+           p->first.compare(0, key.size(), key) == 0) {
+      if (t_indexToBeDeleted.find(p->first) == t_indexToBeDeleted.cend() &&
+          m_indexToBeDeleted.find(p->first) == m_indexToBeDeleted.cend()) {
+        stateKeys.emplace(p->first);
+      }
+      ++p;
     }
   }
-  LOG_GENERAL(INFO, "SHA update of all states done!");
-  // return dev::h256(sha2.Finalize());
+
+  p = m_stateDataMap.lower_bound(key);
+  while (p != m_stateDataMap.end() &&
+         p->first.compare(0, key.size(), key) == 0) {
+    if (m_indexToBeDeleted.find(p->first) == t_indexToBeDeleted.cend() &&
+        (!temp || (temp && t_indexToBeDeleted.find(p->first) ==
+                               t_indexToBeDeleted.cend())) &&
+        stateKeys.find(p->first) == stateKeys.end()) {
+      stateKeys.emplace(p->first);
+    }
+    ++p;
+  }
+
+  std::unique_ptr<leveldb::Iterator> it(
+      m_stateDataDB.GetDB()->NewIterator(leveldb::ReadOptions()));
+
+  it->Seek({key});
+  if (!it->Valid() || it->key().ToString().compare(0, key.size(), key) != 0) {
+    // no entry
+  } else {
+    for (; it->Valid() && it->key().ToString().compare(0, key.size(), key) == 0;
+         it->Next()) {
+      if (m_indexToBeDeleted.find(p->first) == t_indexToBeDeleted.cend() &&
+          (!temp || (temp && t_indexToBeDeleted.find(p->first) ==
+                                 t_indexToBeDeleted.cend())) &&
+          stateKeys.find(it->key().ToString()) == stateKeys.end()) {
+        stateKeys.emplace(it->key().ToString());
+      }
+    }
+  }
+
+  for (const auto& key : stateKeys) {
+    sha2.Update(key);
+    auto it = t_stateDataMap.find(key);
+    if (it != t_stateDataMap.end()) {
+      if (!it->second.empty()) {
+        sha2.Update(it->second);
+      }
+      continue;
+    } else {
+      auto it = m_stateDataMap.find(key);
+      if (it != m_stateDataMap.end()) {
+        if (!it->second.empty()) {
+          sha2.Update(it->second);
+        }
+        continue;
+      } else {
+        if (m_stateDataDB.Exists(key)) {
+          sha2.Update(m_stateDataDB.Lookup(key));
+        } else {
+          LOG_GENERAL(WARNING, "Unable to find state for key = " << key);
+        }
+      }
+    }
+  }
+
   dev::h256 ret(sha2.Finalize());
   return ret;
 }
