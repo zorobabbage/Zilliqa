@@ -1036,10 +1036,7 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
     p = t_stateDataMap.lower_bound(key);
     while (p != t_stateDataMap.end() &&
            p->first.compare(0, key.size(), key) == 0) {
-      if (t_indexToBeDeleted.find(p->first) == t_indexToBeDeleted.cend() &&
-          m_indexToBeDeleted.find(p->first) == m_indexToBeDeleted.cend()) {
-        stateKeys.emplace(p->first);
-      }
+      stateKeys.emplace(p->first);
       ++p;
     }
   }
@@ -1047,11 +1044,7 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   p = m_stateDataMap.lower_bound(key);
   while (p != m_stateDataMap.end() &&
          p->first.compare(0, key.size(), key) == 0) {
-    if (m_indexToBeDeleted.find(p->first) == m_indexToBeDeleted.cend() &&
-        (!temp || (temp && t_indexToBeDeleted.find(p->first) ==
-                               t_indexToBeDeleted.cend()))) {
-      stateKeys.emplace(p->first);
-    }
+    stateKeys.emplace(p->first);
     ++p;
   }
 
@@ -1064,11 +1057,27 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   } else {
     for (; it->Valid() && it->key().ToString().compare(0, key.size(), key) == 0;
          it->Next()) {
-      if (m_indexToBeDeleted.find(p->first) == m_indexToBeDeleted.cend() &&
-          (!temp || (temp && t_indexToBeDeleted.find(p->first) ==
-                                 t_indexToBeDeleted.cend()))) {
-        stateKeys.emplace(it->key().ToString());
+      stateKeys.emplace(it->key().ToString());
+    }
+  }
+
+  // perform deletions
+  if (temp) {
+    for (auto it = stateKeys.begin(); it != stateKeys.end();) {
+      if (t_indexToBeDeleted.find(*it) != t_indexToBeDeleted.cend()) {
+        it = stateKeys.erase(it);
+      } else {
+        it++;
       }
+    }
+  }
+
+  for (auto it = stateKeys.begin(); it != stateKeys.end();) {
+    if (m_indexToBeDeleted.find(*it) != m_indexToBeDeleted.cend() &&
+        ((temp && t_stateDataMap.find(*it) == t_stateDataMap.end()) || !temp)) {
+      it = stateKeys.erase(it);
+    } else {
+      it++;
     }
   }
 
