@@ -1047,10 +1047,9 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   p = m_stateDataMap.lower_bound(key);
   while (p != m_stateDataMap.end() &&
          p->first.compare(0, key.size(), key) == 0) {
-    if (m_indexToBeDeleted.find(p->first) == t_indexToBeDeleted.cend() &&
+    if (m_indexToBeDeleted.find(p->first) == m_indexToBeDeleted.cend() &&
         (!temp || (temp && t_indexToBeDeleted.find(p->first) ==
-                               t_indexToBeDeleted.cend())) &&
-        stateKeys.find(p->first) == stateKeys.end()) {
+                               t_indexToBeDeleted.cend()))) {
       stateKeys.emplace(p->first);
     }
     ++p;
@@ -1065,10 +1064,9 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   } else {
     for (; it->Valid() && it->key().ToString().compare(0, key.size(), key) == 0;
          it->Next()) {
-      if (m_indexToBeDeleted.find(p->first) == t_indexToBeDeleted.cend() &&
+      if (m_indexToBeDeleted.find(p->first) == m_indexToBeDeleted.cend() &&
           (!temp || (temp && t_indexToBeDeleted.find(p->first) ==
-                                 t_indexToBeDeleted.cend())) &&
-          stateKeys.find(it->key().ToString()) == stateKeys.end()) {
+                                 t_indexToBeDeleted.cend()))) {
         stateKeys.emplace(it->key().ToString());
       }
     }
