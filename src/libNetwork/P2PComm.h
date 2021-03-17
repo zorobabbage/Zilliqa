@@ -40,6 +40,10 @@ extern const unsigned char START_BYTE_GOSSIP;
 extern const unsigned char START_BYTE_SEED_TO_SEED_REQUEST;
 extern const unsigned char START_BYTE_SEED_TO_SEED_RESPONSE;
 
+struct BufferEventInfo {
+  struct bufferevent* bev;
+  std::chrono::time_point<std::chrono::system_clock> last_activity_time;
+};
 class SendJob {
  protected:
   static uint32_t writeMsg(const void* buf, int cli_sock, const Peer& from,
@@ -93,7 +97,8 @@ class P2PComm {
   void SendMsgToSeedNodeOnWire(const Peer& peer, const Peer& fromPeer,
                                const bytes& message,
                                const unsigned char& startByteType);
-  void WriteMsgOnBufferEvent(struct bufferevent* bev, const bytes& message,
+  void WriteMsgOnBufferEvent(struct BufferEventInfo& bevInfo,
+                             const bytes& message,
                              const unsigned char& startByteType);
 
   P2PComm();
@@ -145,7 +150,7 @@ class P2PComm {
 
  public:
   static std::mutex m_mutexBufferEvent;
-  static std::map<std::string, struct bufferevent*> m_bufferEventMap;
+  static std::map<std::string, struct BufferEventInfo> m_bufferEventMap;
   /// Returns the singleton P2PComm instance.
   static P2PComm& GetInstance();
 
@@ -166,6 +171,7 @@ class P2PComm {
   static void RemoveBevFromMap(const Peer& peer);
   static void RemoveBevAndCloseP2PConnServer(const Peer& peer,
                                              const unsigned& startByteType);
+  static void MonitorActivityOnBevSeedServer();
 
  private:
   using SocketCloser = std::unique_ptr<int, void (*)(int*)>;

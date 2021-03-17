@@ -66,7 +66,7 @@ P2PComm::Dispatcher P2PComm::m_dispatcher;
 std::mutex P2PComm::m_mutexPeerConnectionCount;
 std::map<uint128_t, uint16_t> P2PComm::m_peerConnectionCount;
 std::mutex P2PComm::m_mutexBufferEvent;
-std::map<std::string, struct bufferevent*> P2PComm::m_bufferEventMap;
+std::map<std::string, struct BufferEventInfo> P2PComm::m_bufferEventMap;
 
 /// Comparison operator for ordering the list of message hashes.
 struct HashCompare {
@@ -938,7 +938,7 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
     // Add bufferevent to map
     {
       lock_guard<mutex> g(m_mutexBufferEvent);
-      m_bufferEventMap[bufKey] = bev;
+      m_bufferEventMap[bufKey].bev = bev;
     }
     // Queue the message
     m_dispatcher(raw_message);
@@ -1019,10 +1019,10 @@ void P2PComm::RemoveBevFromMap(const Peer& peer) {
     // TODO Remove this log
     if (DEBUG_LEVEL == 4) {
       LOG_GENERAL(DEBUG, "P2PSeed clearing bufferevent for bufKey="
-                             << it->first << " bev=" << it->second);
+                             << it->first << " bev=" << it->second.bev);
       for (const auto& it : m_bufferEventMap) {
         LOG_GENERAL(DEBUG, " P2PSeed m_bufferEventMap key = "
-                               << it.first << " bev = " << it.second);
+                               << it.first << " bev = " << it.second.bev);
       }
     }
     m_bufferEventMap.erase(it);
@@ -1045,13 +1045,13 @@ void P2PComm::RemoveBevAndCloseP2PConnServer(const Peer& peer,
       // TODO Remove this log
       if (DEBUG_LEVEL == 4) {
         LOG_GENERAL(DEBUG, "P2PSeed clearing bufferevent for bufKey="
-                               << it->first << " bev=" << it->second);
-        for (const auto& it : m_bufferEventMap) {
+                               << it->first << " bev=" << it->second.bev);
+        for (const auto& it1 : m_bufferEventMap) {
           LOG_GENERAL(DEBUG, " P2PSeed m_bufferEventMap key = "
-                                 << it.first << " bev = " << it.second);
+                                 << it1.first << " bev = " << it1.second.bev);
         }
       }
-      bufferevent* bufev = it->second;
+      bufferevent* bufev = it->second.bev;
       int fd = bufferevent_getfd(bufev);
       struct sockaddr_in cli_addr {};
       socklen_t addr_size = sizeof(struct sockaddr_in);
@@ -1231,7 +1231,7 @@ void P2PComm ::ReadCbClientSeed(struct bufferevent* bev, void* ctx) {
     // Unexpected start byte. Drop this message
     LOG_CHECK_FAIL("Start byte", startByte, START_BYTE_SEED_TO_SEED_RESPONSE);
   }
-  CloseAndFreeBevP2PSeedConnClient(bev, ctx);
+  //CloseAndFreeBevP2PSeedConnClient(bev, ctx);
 }
 
 // timeout event every 2 secs
@@ -1284,6 +1284,9 @@ void P2PComm::AcceptCbServerSeed([[gnu::unused]] evconnlistener* listener,
 
     return;
   }
+  // Establish conn but sends nothing
+  struct timeval tv = {SEED_SYNC_LARGE_PULL_INTERVAL + 10, 0};
+  bufferevent_set_timeouts(bev, &tv, NULL);
 
   bufferevent_setwatermark(bev, EV_READ, MIN_READ_WATERMARK_IN_BYTES,
                            MAX_READ_WATERMARK_IN_BYTES);
@@ -1315,6 +1318,26 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
   DetachedFunction(1, funcCheckSendQueue);
 
   m_dispatcher = move(dispatcher);
+}
+
+void P2PComm ::MonitorActivityOnBevSeedServer() {
+  LOG_MARKER();
+  lock_guard<mutex> g(m_mutexBufferEvent);
+  while (true) {
+    for (const auto& it : m_bufferEventMap) {
+      LOG_GENERAL(INFO, "P2PSeed mon");
+      auto now = std::chrono::high_resolution_clock::now();
+      auto timePassedInSeconds =
+          std::chrono::duration_cast<std::chrono::seconds>(
+              now - it.second.last_activity_time)
+              .count();
+      LOG_GENERAL(INFO, "timePassedInSeconds=" << timePassedInSeconds);
+      if (timePassedInSeconds > P2P_SEED_SERVER_CONNECTION_TIMEOUT) {
+        CloseAndFreeBevP2PSeedConnServer(it.second.bev);
+      }
+      this_thread::sleep_for(chrono::seconds(30));
+    }
+  }
 }
 
 void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
@@ -1360,6 +1383,10 @@ void P2PComm::EnableListener(uint32_t listenPort, bool startSeedNodeListener) {
         m_base, AcceptCbServerSeed, nullptr,
         LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
         (struct sockaddr*)&serv_addr, sizeof(struct sockaddr_in));
+    // Client does not close connection , so server will
+    auto func = [this]() -> void { MonitorActivityOnBevSeedServer(); };
+
+    DetachedFunction(1, func);
 
     if (listener2 == NULL) {
       LOG_GENERAL(WARNING, "evconnlistener_new_bind failure.");
@@ -1396,7 +1423,7 @@ void P2PComm::EnableConnect() {
   event_base_dispatch(m_base);
 }
 
-void P2PComm::WriteMsgOnBufferEvent(struct bufferevent* bev,
+void P2PComm::WriteMsgOnBufferEvent(struct BufferEventInfo& bevInfo,
                                     const bytes& message,
                                     const unsigned char& startByte) {
   LOG_MARKER();
@@ -1411,12 +1438,14 @@ void P2PComm::WriteMsgOnBufferEvent(struct bufferevent* bev,
                                 (unsigned char)(length & 0xFF)};
   bytes destMsg(std::begin(buf), std::end(buf));
   destMsg.insert(destMsg.end(), message.begin(), message.end());
-  LOG_GENERAL(DEBUG, "P2PSeed msg len=" << length + HDR_LEN << " bev=" << bev
+  LOG_GENERAL(DEBUG, "P2PSeed msg len=" << length + HDR_LEN
+                                        << " bev=" << bevInfo.bev
                                         << " destMsg size=" << destMsg.size());
-  if (bufferevent_write(bev, &destMsg.at(0), HDR_LEN + length) < 0) {
+  if (bufferevent_write(bevInfo.bev, &destMsg.at(0), HDR_LEN + length) < 0) {
     LOG_GENERAL(WARNING, "Error: P2PSeed bufferevent_write failed !!!");
     return;
   }
+  bevInfo.last_activity_time = std::chrono::high_resolution_clock::now();
 }
 
 void P2PComm::SendMsgToSeedNodeOnWire(const Peer& peer, const Peer& fromPeer,
@@ -1483,7 +1512,7 @@ void P2PComm::SendMsgToSeedNodeOnWire(const Peer& peer, const Peer& fromPeer,
         if (DEBUG_LEVEL == 4) {
           for (const auto& it : m_bufferEventMap) {
             LOG_GENERAL(DEBUG, "P2PSeed m_bufferEventMap key="
-                                   << it.first << " bev=" << it.second);
+                                   << it.first << " bev=" << it.second.bev);
           }
         }
         m_bufferEventMap.erase(it);

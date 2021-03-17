@@ -139,6 +139,8 @@ const bool ENABLE_SEED_TO_SEED_COMMUNICATION{
     "true"};
 const unsigned int P2P_SEED_CONNECT_PORT{
     ReadConstantNumeric("P2P_SEED_CONNECT_PORT", "node.seed.")};
+const unsigned int P2P_SEED_SERVER_CONNECTION_TIMEOUT{
+    ReadConstantNumeric("P2P_SEED_SERVER_CONNECTION_TIMEOUT", "node.seed.")};
 
 // RemotestorageDB constants
 const string REMOTESTORAGE_DB_HOST{
