@@ -32,9 +32,6 @@ struct Peer : public Serializable {
   /// Peer listen port (host-encoded)
   uint32_t m_listenPortHost;  // host-encoded
 
-  /// Peer hostname
-  std::string m_hostname;  // optional
-
   /// Default constructor.
   Peer();
 
@@ -68,13 +65,9 @@ struct Peer : public Serializable {
   /// Implements the Deserialize function inherited from Serializable.
   int Deserialize(const bytes& src, unsigned int offset);
 
-  /// Setter
-  void SetHostname(const std::string& hostname);
-
   /// Getters.
   const uint128_t& GetIpAddress() const;
   const uint32_t& GetListenPortHost() const;
-  const std::string GetHostname() const;
 };
 namespace IPCHECK {
 static inline bool IsPortValid(const uint32_t listenPort) {
