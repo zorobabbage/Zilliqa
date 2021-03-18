@@ -156,6 +156,9 @@ class Node : public Executable {
   uint64_t m_gasUsedTotal = 0;
   uint128_t m_txnFees = 0;
 
+  // commiting to txn ordering
+  std::mutex m_mutexTxnOrdering;
+
   // std::mutex m_mutexCommittedTransactions;
   // std::unordered_map<uint64_t, std::list<TransactionWithReceipt>>
   //     m_committedTransactions;
