@@ -487,10 +487,12 @@ void Node::ProcessTransactionWhenShardLeader(
               TxnStatus error_code;
               bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr, error_code);
 
-              std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
-              m_expectedTranOrdering.emplace_back(t.GetTranID());
-              t_processedTransactions.insert(
-                make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+              if (x) {
+                std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
+                t_processedTransactions.insert(
+                  make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+                m_TxnOrder.push_back(t.GetTranID());
+              }
 
               LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);
             });
@@ -908,11 +910,12 @@ void Node::ProcessTransactionWhenShardBackup(
             LOG_GENERAL(INFO, "Threadpool going to run transaction");
             TxnStatus error_code;
             bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr, error_code);
-
-            std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
-            m_expectedTranOrdering.emplace_back(t.GetTranID());
-            t_processedTransactions.insert(
-              make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+            if (x) {
+              std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
+              m_expectedTranOrdering.emplace_back(t.GetTranID());
+              t_processedTransactions.insert(
+                make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+            }
 
             LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);;
           });
