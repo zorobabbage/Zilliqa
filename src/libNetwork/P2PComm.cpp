@@ -1331,22 +1331,24 @@ void P2PComm::StartMessagePump(Dispatcher dispatcher) {
 
 void P2PComm ::MonitorActivityOnBevSeedServer() {
   LOG_MARKER();
-  lock_guard<mutex> g(m_mutexBufferEvent);
   while (true) {
-    for (const auto& it : m_bufferEventMap) {
-      LOG_GENERAL(INFO, "P2PSeed MonitorActivityOnBevSeedServer()");
-      LOG_GENERAL(INFO, "KEY=" << it.first << " BEV=" << it.second.bev);
-      auto now = std::chrono::high_resolution_clock::now();
-      auto timePassedInSeconds =
-          std::chrono::duration_cast<std::chrono::seconds>(
-              now - it.second.last_activity_time)
-              .count();
-      LOG_GENERAL(
-          INFO, "timePassedInSeconds=" << timePassedInSeconds
-                                       << " P2P_SEED_SERVER_CONNECTION_TIMEOUT="
-                                       << P2P_SEED_SERVER_CONNECTION_TIMEOUT);
-      if (timePassedInSeconds > P2P_SEED_SERVER_CONNECTION_TIMEOUT) {
-        CloseAndFreeBevP2PSeedConnServer(it.second.bev);
+    {
+      lock_guard<mutex> g(m_mutexBufferEvent);
+      for (const auto& it : m_bufferEventMap) {
+        LOG_GENERAL(INFO, "P2PSeed MonitorActivityOnBevSeedServer()");
+        LOG_GENERAL(INFO, "KEY=" << it.first << " BEV=" << it.second.bev);
+        auto now = std::chrono::high_resolution_clock::now();
+        auto timePassedInSeconds =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                now - it.second.last_activity_time)
+                .count();
+        LOG_GENERAL(INFO, "timePassedInSeconds="
+                              << timePassedInSeconds
+                              << " P2P_SEED_SERVER_CONNECTION_TIMEOUT="
+                              << P2P_SEED_SERVER_CONNECTION_TIMEOUT);
+        if (timePassedInSeconds > P2P_SEED_SERVER_CONNECTION_TIMEOUT) {
+          CloseAndFreeBevP2PSeedConnServer(it.second.bev);
+        }
       }
     }
     this_thread::sleep_for(chrono::seconds(30));
