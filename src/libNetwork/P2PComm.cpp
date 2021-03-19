@@ -939,6 +939,13 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
     {
       lock_guard<mutex> g(m_mutexBufferEvent);
       m_bufferEventMap[bufKey].bev = bev;
+      m_bufferEventMap[bufKey].last_activity_time =
+          std::chrono::system_clock::now();
+      time_t tt = std::chrono::system_clock::to_time_t(
+          m_bufferEventMap[bufKey].last_activity_time);
+      LOG_GENERAL(INFO, "key=" << bufKey
+                               << " bev=" << m_bufferEventMap[bufKey].bev
+                               << " last_activity_time=" << std::ctime(&tt));
     }
     // Queue the message
     m_dispatcher(raw_message);
@@ -1231,7 +1238,7 @@ void P2PComm ::ReadCbClientSeed(struct bufferevent* bev, void* ctx) {
     // Unexpected start byte. Drop this message
     LOG_CHECK_FAIL("Start byte", startByte, START_BYTE_SEED_TO_SEED_RESPONSE);
   }
-  //CloseAndFreeBevP2PSeedConnClient(bev, ctx);
+  // CloseAndFreeBevP2PSeedConnClient(bev, ctx);
 }
 
 // timeout event every 2 secs
@@ -1325,18 +1332,22 @@ void P2PComm ::MonitorActivityOnBevSeedServer() {
   lock_guard<mutex> g(m_mutexBufferEvent);
   while (true) {
     for (const auto& it : m_bufferEventMap) {
-      LOG_GENERAL(INFO, "P2PSeed mon");
+      LOG_GENERAL(INFO, "P2PSeed MonitorActivityOnBevSeedServer()");
+      LOG_GENERAL(INFO, "KEY=" << it.first << " BEV=" << it.second.bev);
       auto now = std::chrono::high_resolution_clock::now();
       auto timePassedInSeconds =
           std::chrono::duration_cast<std::chrono::seconds>(
               now - it.second.last_activity_time)
               .count();
-      LOG_GENERAL(INFO, "timePassedInSeconds=" << timePassedInSeconds);
+      LOG_GENERAL(
+          INFO, "timePassedInSeconds=" << timePassedInSeconds
+                                       << " P2P_SEED_SERVER_CONNECTION_TIMEOUT="
+                                       << P2P_SEED_SERVER_CONNECTION_TIMEOUT);
       if (timePassedInSeconds > P2P_SEED_SERVER_CONNECTION_TIMEOUT) {
         CloseAndFreeBevP2PSeedConnServer(it.second.bev);
       }
-      this_thread::sleep_for(chrono::seconds(30));
     }
+    this_thread::sleep_for(chrono::seconds(30));
   }
 }
 
@@ -1508,11 +1519,16 @@ void P2PComm::SendMsgToSeedNodeOnWire(const Peer& peer, const Peer& fromPeer,
       if (it != m_bufferEventMap.end()) {
         WriteMsgOnBufferEvent(it->second, message,
                               START_BYTE_SEED_TO_SEED_RESPONSE);
+        time_t tt =
+            std::chrono::system_clock::to_time_t(it->second.last_activity_time);
+        LOG_GENERAL(INFO,
+                    "sent key=" << it->first << " bev=" << it->second.bev
+                                << " last_activity_time=" << std::ctime(&tt));
         // TODO Remove log
         if (DEBUG_LEVEL == 4) {
-          for (const auto& it : m_bufferEventMap) {
+          for (const auto& it1 : m_bufferEventMap) {
             LOG_GENERAL(DEBUG, "P2PSeed m_bufferEventMap key="
-                                   << it.first << " bev=" << it.second.bev);
+                                   << it1.first << " bev=" << it1.second.bev);
           }
         }
         m_bufferEventMap.erase(it);
