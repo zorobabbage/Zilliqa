@@ -567,6 +567,7 @@ void Node::ProcessTransactionWhenShardLeader(
         break;
       }
     }
+  processPool.JoinAll();
   }
 
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
@@ -984,6 +985,7 @@ void Node::ProcessTransactionWhenShardBackup(
         break;
       }
     }
+  processPool.JoinAll();
   }
 
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
