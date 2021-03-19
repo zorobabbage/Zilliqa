@@ -938,9 +938,11 @@ void P2PComm::ReadCbServerSeed(struct bufferevent* bev,
     // Add bufferevent to map
     {
       lock_guard<mutex> g(m_mutexBufferEvent);
-      m_bufferEventMap[bufKey].bev = bev;
-      m_bufferEventMap[bufKey].last_activity_time =
-          std::chrono::system_clock::now();
+      // BufferEventInfo bufInfo;
+      // bufInfo.bev = bev;
+      // bufInfo.last_activity_time = std::chrono::system_clock::now();
+      m_bufferEventMap[bufKey] =
+          std::move(BufferEventInfo{bev, std::chrono::system_clock::now()});
       time_t tt = std::chrono::system_clock::to_time_t(
           m_bufferEventMap[bufKey].last_activity_time);
       LOG_GENERAL(INFO, "key=" << bufKey
