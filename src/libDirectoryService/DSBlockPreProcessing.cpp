@@ -800,6 +800,11 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
       // "PoWOrderSorter"
       uint32_t trimmedGuardCount = ceil(numNodesAfterTrim * SHARD_GUARD_TOL);
       uint32_t trimmedNonGuardCount = numNodesAfterTrim - trimmedGuardCount;
+      LOG_GENERAL(INFO, " trimmedGuardCount="
+                            << trimmedGuardCount
+                            << " trimmedNonGuardCount=" << trimmedNonGuardCount
+                            << " numNodesAfterTrim=" << numNodesAfterTrim
+                            << " SHARD_GUARD_TOL=" << SHARD_GUARD_TOL);
 
       if (trimmedGuardCount + trimmedNonGuardCount < numNodesAfterTrim) {
         LOG_GENERAL(WARNING,
@@ -820,6 +825,9 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
       std::map<array<unsigned char, 32>, PubKey> FilteredPoWOrderSorter;
       std::map<array<unsigned char, 32>, PubKey> ShadowPoWOrderSorter =
           PoWOrderSorter;
+      for (const auto& it : PoWOrderSorter) {
+        LOG_GENERAL(INFO, "POWOrderSorter=" << it.second);
+      }
 
       // Add shard guards to "FilteredPoWOrderSorter"
       // Remove it from "ShadowPoWOrderSorter"
@@ -838,15 +846,29 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
         }
       }
 
+      LOG_GENERAL(INFO, "sizeof FilteredPoWOrderSorter="
+                            << FilteredPoWOrderSorter.size());
+      for (const auto& it : FilteredPoWOrderSorter) {
+        LOG_GENERAL(INFO, "FillteredPoWOrderSorter=" << it.second);
+      }
+
+      LOG_GENERAL(
+          INFO, "sizeof ShadowPoWOrderSorter=" << ShadowPoWOrderSorter.size());
+      for (const auto& it : ShadowPoWOrderSorter) {
+        LOG_GENERAL(INFO, "FillteredPoWOrderSorter=" << it.second);
+      }
+
       // Assign non shard guards if there is any slots
       for (auto kv = ShadowPoWOrderSorter.begin();
            (kv != ShadowPoWOrderSorter.end()) && (count < numNodesAfterTrim);
            kv++) {
         if (!Guard::GetInstance().IsNodeInShardGuardList(kv->second)) {
+          LOG_GENERAL(INFO, "Filling with=" << kv->second);
           FilteredPoWOrderSorter.emplace(*kv);
           count++;
         }
       }
+      LOG_GENERAL(INFO, "Count=" << count);
 
       if (FilteredPoWOrderSorter.size() < EXPECTED_SHARD_NODE_NUM) {
         // If there is not enough shard nodes, need to fill up with shard guards
@@ -858,12 +880,25 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
              (kv != ShadowPoWOrderSorter.end()) && (count < numNodesAfterTrim);
              kv++) {
           if (Guard::GetInstance().IsNodeInShardGuardList(kv->second)) {
+            LOG_GENERAL(INFO, "Filling with=" << kv->second);
             FilteredPoWOrderSorter.emplace(*kv);
             --leftOverCount;
           }
           count++;
           if (leftOverCount == 0) break;
         }
+      }
+
+      LOG_GENERAL(INFO, "1 sizeof FilteredPoWOrderSorter="
+                            << FilteredPoWOrderSorter.size());
+      for (const auto& it : FilteredPoWOrderSorter) {
+        LOG_GENERAL(INFO, "1 FillteredPoWOrderSorter=" << it.second);
+      }
+
+      LOG_GENERAL(INFO, "1 sizeof ShadowPowOrderSorter="
+                            << ShadowPoWOrderSorter.size());
+      for (const auto& it : ShadowPoWOrderSorter) {
+        LOG_GENERAL(INFO, "1 FillteredPoWOrderSorter=" << it.second);
       }
 
       // Sort "FilteredPoWOrderSorter" and stored it in "sortedPoWSolns"
@@ -876,6 +911,9 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
     }
 
     LOG_GENERAL(INFO, "Num solns after trimming = " << sortedPoWSolns.size());
+    for (const auto& it : sortedPoWSolns) {
+      LOG_GENERAL(INFO, "1 sortedPowSolns=" << it.second);
+    }
 
   } else {
     for (const auto& kv : PoWOrderSorter) {
