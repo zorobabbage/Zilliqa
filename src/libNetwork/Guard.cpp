@@ -161,6 +161,12 @@ unsigned int Guard::GetNumOfShardGuard() {
   return m_ShardGuardList.size();
 }
 
+void Guard::PrintShardGuardlist() {
+  lock_guard<mutex> g(m_mutexShardGuardList);
+  for (const auto& gd : m_ShardGuardList) {
+    LOG_GENERAL(INFO, "ShardGuard=" << gd);
+  }
+}
 bool Guard::IsValidIP(const uint128_t& ip_addr) {
   struct sockaddr_in serv_addr {};
   serv_addr.sin_addr.s_addr = ip_addr.convert_to<unsigned long>();

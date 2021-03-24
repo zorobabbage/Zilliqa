@@ -828,6 +828,7 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
       for (const auto& it : PoWOrderSorter) {
         LOG_GENERAL(INFO, "POWOrderSorter=" << it.second);
       }
+      Guard::GetInstance().PrintShardGuardlist();
 
       // Add shard guards to "FilteredPoWOrderSorter"
       // Remove it from "ShadowPoWOrderSorter"
@@ -865,7 +866,6 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
         if (!Guard::GetInstance().IsNodeInShardGuardList(kv->second)) {
           LOG_GENERAL(INFO, "Filling with non shard=" << kv->second);
           FilteredPoWOrderSorter.emplace(*kv);
-          ShadowPoWOrderSorter.erase(kv->first);
           count++;
         }
       }
@@ -887,7 +887,7 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
              kv++) {
           LOG_GENERAL(INFO, "HERE");
           if (Guard::GetInstance().IsNodeInShardGuardList(kv->second)) {
-            LOG_GENERAL(INFO, "Filling with=" << kv->second);
+            LOG_GENERAL(INFO, "Filling with shard nodes=" << kv->second);
             FilteredPoWOrderSorter.emplace(*kv);
             --leftOverCount;
           }

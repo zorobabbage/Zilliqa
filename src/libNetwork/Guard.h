@@ -52,6 +52,7 @@ class Guard {
   static Guard& GetInstance();
   void UpdateDSGuardlist();
   void UpdateShardGuardlist();
+  void PrintShardGuardlist();
 
   void AddToDSGuardlist(const PubKey& dsGuardPubKey);
   void AddToShardGuardlist(const PubKey& shardGuardPubKey);
