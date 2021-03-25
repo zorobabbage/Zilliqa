@@ -168,6 +168,11 @@ class Node : public Executable {
   std::unordered_map<uint64_t, std::vector<MBnForwardedTxnEntry>>
       m_mbnForwardedTxnBuffer;
 
+  std::mutex m_mutexPendingTxnBuffer;
+  std::unordered_map<uint64_t,
+                     std::vector<std::tuple<HashCodeMap, PubKey, uint32_t>>>
+      m_pendingTxnBuffer;
+
   std::mutex m_mutexTxnPacketBuffer;
   std::map<bytes, bytes> m_txnPacketBuffer;
 
@@ -621,6 +626,8 @@ class Node : public Executable {
   void CleanMicroblockConsensusBuffer();
 
   void CallActOnFinalblock();
+
+  void CommitPendingTxnBuffer();
 
   // Used by leader before sending 'collective sig + newannouncement'
   bool WaitUntilCompleteMicroBlockIsReady();

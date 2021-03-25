@@ -1078,6 +1078,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     uint32_t numShards = m_mediator.m_ds->GetNumShards();
 
     CommitMBnForwardedTransactionBuffer();
+    CommitPendingTxnBuffer();
     if (!ARCHIVAL_LOOKUP && m_mediator.m_lookup->GetIsServer() &&
         !isVacuousEpoch && !m_mediator.GetIsVacuousEpoch() &&
         ((m_mediator.m_currentEpochNum + NUM_VACUOUS_EPOCHS) %
@@ -1551,6 +1552,16 @@ bool Node::ProcessPendingTxn(const bytes& message, unsigned int cur_offset,
     LOG_GENERAL(WARNING,
                 "PENDINGTXN sent of an two epoches older epoch " << epochNum);
     return false;
+  } else if (currentEpochNum < epochNum || /* Buffer for syncing seed node */
+             (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP &&
+              m_mediator.m_lookup->GetSyncType() ==
+                  SyncType::NEW_LOOKUP_SYNC) ||
+             (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP &&
+              m_mediator.m_lookup->GetSyncType() == SyncType::LOOKUP_SYNC)) {
+    lock_guard<mutex> g(m_mutexPendingTxnBuffer);
+    m_pendingTxnBuffer[epochNum].emplace_back(hashCodeMap, pubkey, shardId);
+    LOG_GENERAL(INFO, "Buffer PENDINGTXN for epoch " << epochNum);
+    return true;
   }
   LOG_GENERAL(INFO, "Received message for epoch " << epochNum << " and shard "
                                                   << shardId);
@@ -1688,4 +1699,24 @@ void Node::CommitMBnForwardedTransactionBuffer() {
     }
     it = m_mbnForwardedTxnBuffer.erase(it);
   }
+}
+
+void Node::CommitPendingTxnBuffer() {
+  // Clear Pending txn
+  lock_guard<mutex> g(m_mutexPendingTxnBuffer);
+
+  const auto& epochNum =
+      m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+
+  auto itr = m_pendingTxnBuffer.find(epochNum);
+
+  if (itr != m_pendingTxnBuffer.end()) {
+    for (const auto& entry : itr->second) {
+      AddPendingTxn(get<PendingData::HASH_CODE_MAP>(entry),
+                    get<PendingData::PUBKEY>(entry),
+                    get<PendingData::SHARD_ID>(entry));
+    }
+  }
+
+  m_pendingTxnBuffer.clear();
 }

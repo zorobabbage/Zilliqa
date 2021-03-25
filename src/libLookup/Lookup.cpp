@@ -3148,6 +3148,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP &&
        m_syncType == SyncType::LOOKUP_SYNC)) {
     m_mediator.m_node->CommitMBnForwardedTransactionBuffer();
+    m_mediator.m_node->CommitPendingTxnBuffer();
     // Additional safe-guard mechanism, if have not received the MBNdFWDTXNS at
     // all for last few txBlks.
     FindMissingMBsForLastNTxBlks(LAST_N_TXBLKS_TOCHECK_FOR_MISSINGMBS);
