@@ -347,7 +347,7 @@ void Node::ProcessTransactionWhenShardLeader(
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
-  if (SEMANTIC_SHARDING) {
+  if (CONCURRENT_PROCESSING) {
     const unsigned int NUMTHREADS = 2;
     ThreadPool processPool(NUMTHREADS, "ProcessPool");
     LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
@@ -496,30 +496,6 @@ void Node::ProcessTransactionWhenShardLeader(
 
               LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);
             });
-
-          // figure out concurrent stuff here
-          // if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
-          //                                                     error_code)) {
-          //   if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-          //                               m_gasUsedTotal)) {
-          //     LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
-          //     break;
-          //   }
-          //   uint128_t txnFee;
-          //   if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
-          //                                 txnFee)) {
-          //     LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
-          //     continue;
-          //   }
-          //   if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
-          //     LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
-          //     break;
-          //   }
-
-          //   appendOne(t, tr);
-          //   LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
-          //   continue;
-          // }
         }
       } else if (t_addrNonceTxnMap.size() > 0 && !isConcurrentProcessing) {
         if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
@@ -569,7 +545,226 @@ void Node::ProcessTransactionWhenShardLeader(
         break;
       }
     }
-  processPool.JoinAll();
+    processPool.JoinAll();
+  } else {
+    LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
+
+    while (m_gasUsedTotal < microblock_gas_limit) {
+      if (txnProcTimeout) {
+        LOG_GENERAL(INFO, "txnProcTimeout is set!");
+        break;
+      }
+
+      Transaction t;
+      TransactionReceipt tr;
+
+      if (t_createdTxns.size() == 0) {
+        if (t_addrNonceTxnMapCon.size() == 0) {
+          isConcurrentProcessing = false;
+          txnCount = 0;
+        } else if (t_addrNonceTxnMap.size() == 0) {
+          isConcurrentProcessing = true;
+          txnCount = 0;
+        }
+      }
+
+      if (t_createdTxns.findOne(t)) {
+        // LOG_GENERAL(INFO, "findOneFromCreated");
+
+        Address senderAddr = t.GetSenderAddr();
+        uint128_t expectedNonce =
+            AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+        auto& cs = Contract::ContractStorage2::GetContractStorage();
+        Json::Value sh_info;
+        const auto& toAddr = t.GetToAddr();
+        Account* toAccount = AccountStore::GetInstance().GetAccount(toAddr);
+
+        if (t.GetNonce() >= expectedNonce) {
+          // LOG_GENERAL(INFO, "High nonce: "
+          //                     << t.GetNonce() << " cur sender " <<
+          //                     senderAddr.hex()
+          //                     << " nonce: "
+          //                     <<
+          //                     AccountStore::GetInstance().GetNonceTemp(senderAddr));
+          auto it1 = t_addrNonceTxnMap.find(senderAddr);
+          if (it1 != t_addrNonceTxnMap.end()) {
+            auto it2 = it1->second.find(t.GetNonce());
+            if (it2 != it1->second.end()) {
+              // found the txn with same addr and same nonce
+              // then compare the gasprice and remains the higher one
+              if (t.GetGasPrice() > it2->second.GetGasPrice()) {
+                it2->second = t;
+              }
+              continue;
+            }
+          }
+
+          // get sharding info of transaction
+          if (toAccount != nullptr && toAccount->isContract() &&
+              cs.FetchContractShardingInfo(toAddr, sh_info)) {
+            // based on sharding info, split contracts into concurrent/sequential
+            // maps
+            if (LOG_SC) {
+              string sh_info_str =
+                  JSONUtils::GetInstance().convertJsontoStr(sh_info);
+              LOG_GENERAL(INFO, "Node got sharding info:\n" << sh_info_str);
+            }
+            auto& td = t.GetData();
+            std::string dataStr(td.begin(), td.end());
+            Json::Value tx_data;
+
+            if (!JSONUtils::GetInstance().convertStrtoJson(dataStr, tx_data)) {
+              t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+            } else {
+              bool containsContractAddr = false;
+              std::string prepend = "0x";
+              for (const auto& param : tx_data["params"]) {
+                if (param.isMember("type") && param.isMember("value") &&
+                    param.isMember("vname") &&
+                    param["type"].asString() == "ByStr20") {
+                  string addr_str =
+                      param["value"].asString().erase(0, prepend.length());
+                  Address paddr(addr_str);
+                  Account* pacc = AccountStore::GetInstance().GetAccount(paddr);
+                  if (pacc != nullptr && pacc->isContract()) {
+                    LOG_GENERAL(INFO, "Adding " << t.GetTranID()
+                                                << " to sequential store")
+                    t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+                    containsContractAddr = true;
+                    break;
+                  }
+                }
+              }
+              if (!containsContractAddr) {
+                LOG_GENERAL(INFO,
+                            "Adding " << t.GetTranID() << " to concurrent store")
+                t_addrNonceTxnMapCon[senderAddr].insert({t.GetNonce(), t});
+              }
+            }
+          } else {
+            LOG_GENERAL(INFO,
+                        "Adding " << t.GetTranID() << " to sequential store")
+            t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+          }
+        }
+        // if nonce too small, ignore it
+        // TODO: what if microblock gets lost!
+        else if (t.GetNonce() < expectedNonce) {
+          LOG_GENERAL(INFO,
+                      "Nonce too small"
+                          << " Expected "
+                          << AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                          << " Found " << t.GetNonce());
+        }
+      } else if (t_addrNonceTxnMapCon.size() > 0 && isConcurrentProcessing) {
+        if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMapCon)) {
+          // check whether m_createdTransaction have transaction with same Addr
+          // and nonce if has and with larger gasPrice then replace with that one.
+          // (*optional step)
+
+          txnCount += 1;
+          if (txnCount == maxTxnPerBatch) {
+            txnCount = 0;
+            isConcurrentProcessing = !isConcurrentProcessing;
+            LOG_GENERAL(INFO, "switching to sequential batch");
+          }
+
+          t_createdTxns.findSameNonceButHigherGas(t);
+
+          if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+            LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+            LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+            LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
+            gasLimitExceededTxnBuffer.emplace_back(t);
+            continue;
+          }
+
+          // processPool.AddJob([this, t, tr]() mutable -> void {
+          //     LOG_GENERAL(INFO, "Threadpool going to run transaction")
+          //     bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr);
+
+          //     std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
+          //     m_expectedTranOrdering.emplace_back(t.GetTranID());
+          //     t_processedTransactions.insert(
+          //       make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+
+          //     LOG_GENERAL(INFO, "Threadpool finished running transaction, got:
+          //     " << x);
+          //   });
+
+          // figure out concurrent stuff here
+          TxnStatus error_code;
+          if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
+                                                              error_code)) {
+            if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
+                                        m_gasUsedTotal)) {
+              LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
+              break;
+            }
+            uint128_t txnFee;
+            if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
+                                          txnFee)) {
+              LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
+              continue;
+            }
+            if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
+              LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
+              break;
+            }
+
+            appendOne(t, tr);
+            LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
+            continue;
+          }
+        }
+      } else if (t_addrNonceTxnMap.size() > 0 && !isConcurrentProcessing) {
+        if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+          // check whether m_createdTransaction have transaction with same Addr
+          // and nonce if has and with larger gasPrice then replace with that one.
+          // (*optional step)
+
+          txnCount += 1;
+          if (txnCount == maxTxnPerBatch) {
+            txnCount = 0;
+            isConcurrentProcessing = !isConcurrentProcessing;
+            LOG_GENERAL(INFO, "switching to concurrent batch");
+          }
+
+          t_createdTxns.findSameNonceButHigherGas(t);
+
+          if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+            gasLimitExceededTxnBuffer.emplace_back(t);
+            continue;
+          }
+
+          TxnStatus error_code;
+          if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
+                                                              error_code)) {
+            if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
+                                        m_gasUsedTotal)) {
+              LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
+              break;
+            }
+            uint128_t txnFee;
+            if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
+                                          txnFee)) {
+              LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
+              continue;
+            }
+            if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
+              LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
+              break;
+            }
+
+            appendOne(t, tr);
+            LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
+            continue;
+          }
+        }
+      } else {
+        break;
+      }
+    }
   }
 
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);
@@ -776,7 +971,7 @@ void Node::ProcessTransactionWhenShardBackup(
 
   AccountStore::GetInstance().CleanStorageRootUpdateBufferTemp();
 
-  if (SEMANTIC_SHARDING) {
+  if (CONCURRENT_PROCESSING) {
     const unsigned int NUMTHREADS = 2;
     ThreadPool processPool(NUMTHREADS, "ProcessPool");
     LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
@@ -919,27 +1114,6 @@ void Node::ProcessTransactionWhenShardBackup(
 
             LOG_GENERAL(INFO, "Threadpool finished running transaction, got: " << x);;
           });
-          // if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
-          //                                                     error_code)) {
-          //   if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
-          //                               m_gasUsedTotal)) {
-          //     LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
-          //     break;
-          //   }
-          //   uint128_t txnFee;
-          //   if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
-          //                                 txnFee)) {
-          //     LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
-          //     continue;
-          //   }
-          //   if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
-          //     LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
-          //     break;
-          //   }
-          //   appendOne(t, tr);
-          //   LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
-          //   continue;
-          // }
         }
       } else if (t_addrNonceTxnMap.size() > 0 && !isConcurrentProcessing) {
         if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
@@ -988,7 +1162,217 @@ void Node::ProcessTransactionWhenShardBackup(
         break;
       }
     }
-  processPool.JoinAll();
+    processPool.JoinAll();
+  } else {
+    LOG_GENERAL(INFO, "microblock_gas_limit = " << microblock_gas_limit);
+
+    while (m_gasUsedTotal < microblock_gas_limit) {
+      if (txnProcTimeout) {
+        LOG_GENERAL(INFO, "txnProcTimeout is set!");
+        break;
+      }
+
+      Transaction t;
+      TransactionReceipt tr;
+
+      if (t_createdTxns.size() == 0) {
+        if (t_addrNonceTxnMapCon.size() == 0) {
+          isConcurrentProcessing = false;
+          txnCount = 0;
+        } else if (t_addrNonceTxnMap.size() == 0) {
+          isConcurrentProcessing = true;
+          txnCount = 0;
+        }
+      }
+
+      // first add transactions into t_addrNonceTxnMap
+      if (t_createdTxns.findOne(t)) {
+        Address senderAddr = t.GetSenderAddr();
+        uint128_t expectedNonce =
+            AccountStore::GetInstance().GetNonceTemp(senderAddr) + 1;
+        auto& cs = Contract::ContractStorage2::GetContractStorage();
+        Json::Value sh_info;
+        const auto& toAddr = t.GetToAddr();
+        Account* toAccount = AccountStore::GetInstance().GetAccount(toAddr);
+
+        if (t.GetNonce() >= expectedNonce) {
+          auto it1 = t_addrNonceTxnMap.find(senderAddr);
+          if (it1 != t_addrNonceTxnMap.end()) {
+            auto it2 = it1->second.find(t.GetNonce());
+            if (it2 != it1->second.end()) {
+              // found the txn with same addr and same nonce
+              // then compare the gasprice and remains the higher one
+              if (t.GetGasPrice() > it2->second.GetGasPrice()) {
+                it2->second = t;
+              }
+              continue;
+            }
+          }
+
+          // get sharding info of transaction
+          if (toAccount != nullptr && toAccount->isContract() &&
+              cs.FetchContractShardingInfo(toAddr, sh_info)) {
+            // based on sharding info, split contracts into concurrent/sequential
+            // maps
+            if (LOG_SC) {
+              string sh_info_str =
+                  JSONUtils::GetInstance().convertJsontoStr(sh_info);
+              LOG_GENERAL(INFO, "Node got sharding info:\n" << sh_info_str);
+            }
+            auto& td = t.GetData();
+            std::string dataStr(td.begin(), td.end());
+            Json::Value tx_data;
+
+            if (!JSONUtils::GetInstance().convertStrtoJson(dataStr, tx_data)) {
+              t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+            } else {
+              bool containsContractAddr = false;
+              std::string prepend = "0x";
+              for (const auto& param : tx_data["params"]) {
+                if (param.isMember("type") && param.isMember("value") &&
+                    param.isMember("vname") &&
+                    param["type"].asString() == "ByStr20") {
+                  string addr_str =
+                      param["value"].asString().erase(0, prepend.length());
+                  Address paddr(addr_str);
+                  Account* pacc = AccountStore::GetInstance().GetAccount(paddr);
+                  if (pacc != nullptr && pacc->isContract()) {
+                    LOG_GENERAL(INFO, "Adding " << t.GetTranID()
+                                                << " to sequential store")
+                    t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+                    containsContractAddr = true;
+                    break;
+                  }
+                }
+              }
+              if (!containsContractAddr) {
+                LOG_GENERAL(INFO,
+                            "Adding " << t.GetTranID() << " to concurrent store")
+                t_addrNonceTxnMapCon[senderAddr].insert({t.GetNonce(), t});
+              }
+            }
+          } else {
+            LOG_GENERAL(INFO,
+                        "Adding " << t.GetTranID() << " to sequential store")
+            t_addrNonceTxnMap[senderAddr].insert({t.GetNonce(), t});
+          }
+        }
+        // if nonce too small, ignore it
+        // TODO: what if microblock gets lost!
+        else if (t.GetNonce() < expectedNonce) {
+          LOG_GENERAL(INFO,
+                      "Nonce too small"
+                          << " Expected "
+                          << AccountStore::GetInstance().GetNonceTemp(senderAddr)
+                          << " Found " << t.GetNonce());
+        }
+      }
+      // check t_addrNonceTxnMap contains any txn meets right nonce,
+      // if contains, process it
+      else if (t_addrNonceTxnMapCon.size() > 0 && isConcurrentProcessing) {
+        if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMapCon)) {
+          // check whether m_createdTransaction have transaction with same Addr
+          // and nonce if has and with larger gasPrice then replace with that one.
+          // (*optional step)
+          txnCount += 1;
+          if (txnCount == maxTxnPerBatch) {
+            txnCount = 0;
+            isConcurrentProcessing = !isConcurrentProcessing;
+            LOG_GENERAL(INFO, "switching to sequential batch");
+          }
+
+          t_createdTxns.findSameNonceButHigherGas(t);
+
+          if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+            LOG_GENERAL(WARNING, "Gas limit exceeded = " << t.GetTranID());
+            LOG_GENERAL(WARNING, "m_gasUsedTotal     = " << m_gasUsedTotal);
+            LOG_GENERAL(WARNING, "t.GetGasLimit      = " << t.GetGasLimit());
+            gasLimitExceededTxnBuffer.emplace_back(t);
+            continue;
+          }
+
+          // processPool.AddJob([this, t, tr]() mutable -> void {
+          //   LOG_GENERAL(INFO, "Threadpool going to run transaction")
+          //   bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr);
+
+          //   std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
+          //   m_expectedTranOrdering.emplace_back(t.GetTranID());
+          //   t_processedTransactions.insert(
+          //     make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
+
+          //   LOG_GENERAL(INFO, "Threadpool finished running transaction, got: "
+          //   << x);
+          // });
+          TxnStatus error_code;
+          if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
+                                                              error_code)) {
+            if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
+                                        m_gasUsedTotal)) {
+              LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
+              break;
+            }
+            uint128_t txnFee;
+            if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
+                                          txnFee)) {
+              LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
+              continue;
+            }
+            if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
+              LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
+              break;
+            }
+            appendOne(t, tr);
+            LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
+            continue;
+          }
+        }
+      } else if (t_addrNonceTxnMap.size() > 0 && !isConcurrentProcessing) {
+        if (findOneFromAddrNonceTxnMap(t, t_addrNonceTxnMap)) {
+          // check whether m_createdTransaction have transaction with same Addr
+          // and nonce if has and with larger gasPrice then replace with that one.
+          // (*optional step)
+
+          txnCount += 1;
+          if (txnCount == maxTxnPerBatch) {
+            txnCount = 0;
+            isConcurrentProcessing = !isConcurrentProcessing;
+            LOG_GENERAL(INFO, "switching to concurrent batch");
+          }
+
+          t_createdTxns.findSameNonceButHigherGas(t);
+
+          if (m_gasUsedTotal + t.GetGasLimit() > microblock_gas_limit) {
+            gasLimitExceededTxnBuffer.emplace_back(t);
+            continue;
+          }
+
+          TxnStatus error_code;
+          if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
+                                                              error_code)) {
+            if (!SafeMath<uint64_t>::add(m_gasUsedTotal, tr.GetCumGas(),
+                                        m_gasUsedTotal)) {
+              LOG_GENERAL(WARNING, "m_gasUsedTotal addition unsafe!");
+              break;
+            }
+            uint128_t txnFee;
+            if (!SafeMath<uint128_t>::mul(tr.GetCumGas(), t.GetGasPrice(),
+                                          txnFee)) {
+              LOG_GENERAL(WARNING, "txnFee multiplication unsafe!");
+              continue;
+            }
+            if (!SafeMath<uint128_t>::add(m_txnFees, txnFee, m_txnFees)) {
+              LOG_GENERAL(WARNING, "m_txnFees addition unsafe!");
+              break;
+            }
+            appendOne(t, tr);
+            LOG_GENERAL(INFO, "Executed tx with nonce " << t.GetNonce());
+            continue;
+          }
+        }
+      } else {
+        break;
+      }
+    }
   }
 
   LOG_GENERAL(INFO, "AddrNonceTxnMap # txns = " << count_addrNonceTxnMap);

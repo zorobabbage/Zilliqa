@@ -208,6 +208,7 @@ bool ScillaClient::CallRunner(uint32_t version, const Json::Value& _json,
     return false;
   }
 
+  // scilla server is ran, JSON-RPC is sent for the server to process
   try {
     std::lock_guard<std::mutex> g(m_mutexMain);
     result = m_clients.at(version)->CallMethod("run", _json).asString();

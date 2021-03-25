@@ -405,9 +405,12 @@ bool AccountStore::UpdateAccountsTemp(const uint64_t& blockNum,
                                       TxnStatus& error_code) {
   // LOG_MARKER();
 
-  unique_lock<shared_timed_mutex> g(m_mutexPrimary, defer_lock);
-  unique_lock<mutex> g2(m_mutexDelta, defer_lock);
-  lock(g, g2);
+  // need to remove store-wide lock so multiple threads can access
+  if (!CONCURRENT_PROCESSING) {
+    unique_lock<shared_timed_mutex> g(m_mutexPrimary, defer_lock);
+    unique_lock<mutex> g2(m_mutexDelta, defer_lock);
+    lock(g, g2);
+  }
 
   return m_accountStoreTemp->UpdateAccounts(blockNum, numShards, isDS,
                                             transaction, receipt, error_code);

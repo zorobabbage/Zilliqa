@@ -117,9 +117,11 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
                                          TxnStatus& error_code) {
   // LOG_MARKER();
   LOG_GENERAL(INFO, "Process txn: " << transaction.GetTranID());
-  std::lock_guard<std::mutex> g(
-      m_mutexUpdateAccounts);  // might need to remove lock so other threads can
-                               // update concurrently
+
+  // remove lock for concurrent processing
+  if (!CONCURRENT_PROCESSING) {
+    std::lock_guard<std::mutex> g(m_mutexUpdateAccounts);
+  }
 
   m_curIsDS = isDS;
   m_txnProcessTimeout = false;
@@ -618,13 +620,20 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
       }
 
       // prepare IPC with current contract address
+      // change setContractAddressVer to deal with multiple transactions
+      // by keeping one IPC server and modifying scilla to identify
+      // what transaction it is processing,
+      // or spawn multiple IPC servers - will be strictly in c++
       m_scillaIPCServer->setContractAddressVer(toAddr, scilla_version);
 
+      // creates snapshot of current state
       Contract::ContractStorage2::GetContractStorage().BufferCurrentState();
 
       std::string runnerPrint;
       bool ret = true;
 
+      // interpreter gives json output for ParseCallContract to check 
+      // if there was an error or passed
       InvokeInterpreter(RUNNER_CALL, runnerPrint, scilla_version, is_library,
                         gasRemained, this->GetBalance(toAddr), ret, receipt);
 
@@ -635,12 +644,16 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
 
       uint32_t tree_depth = 0;
 
+      // state is already changed, so checking the json is ensuring that
+      // we want to keep changes
+      // possible to keep changes in the runnerPrint, and revert when an error happens
       if (ret && !ParseCallContract(gasRemained, runnerPrint, receipt,
                                     tree_depth, scilla_version)) {
         receipt.RemoveAllTransitions();
         ret = false;
       }
       if (!ret) {
+        // revert changes based on runnerPrint output
         Contract::ContractStorage2::GetContractStorage().RevertPrevState();
         DiscardAtomics();
         gasRemained =
@@ -709,6 +722,10 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
   switch (Transaction::GetTransactionType(transaction)) {
     case Transaction::CONTRACT_CALL: {
       /// since txn succeeded, commit the atomic buffer
+      // updates storage root
+      // state identified in blockchain: hash of entire state
+      // this computes the new hash based on changes made
+      // probably would not need to change
       m_storageRootUpdateBuffer.insert(m_storageRootUpdateBufferAtomic.begin(),
                                        m_storageRootUpdateBufferAtomic.end());
       LOG_GENERAL(INFO, "Executing contract transaction finished (nonce = "
@@ -1581,6 +1598,9 @@ bool AccountStoreSC<MAP>::TransferBalanceAtomic(const Address& from,
   return m_accountStoreAtomic->TransferBalance(from, to, delta);
 }
 
+
+// m_accountStoreAtomic stores mapping of addresses -> accounts
+// worth asking zilliqa slack on what it does
 template <class MAP>
 void AccountStoreSC<MAP>::CommitAtomics() {
   LOG_MARKER();

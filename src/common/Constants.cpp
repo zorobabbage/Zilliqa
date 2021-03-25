@@ -566,6 +566,8 @@ const bool DISABLE_SCILLA_LIB{
     ReadConstantString("DISABLE_SCILLA_LIB", "node.smart_contract.") == "true"};
 const unsigned int SCILLA_SERVER_PENDING_IN_MS{
     ReadConstantNumeric("SCILLA_SERVER_PENDING_IN_MS", "node.smart_contract.")};
+const bool CONCURRENT_PROCESSING{
+    ReadConstantString("CONCURRENT_PROCESSING", "node.smart_contract.") == "true"};
 
 // Test constants
 const bool ENABLE_CHECK_PERFORMANCE_LOG{

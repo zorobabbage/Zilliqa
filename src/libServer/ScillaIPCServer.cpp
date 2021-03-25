@@ -19,6 +19,8 @@
 
 #include "libPersistence/ContractStorage2.h"
 #include "libUtils/DataConversion.h"
+#include "libUtils/Logger.h"
+#include "libUtils/JsonUtils.h"
 
 #include "ScillaIPCServer.h"
 
@@ -47,6 +49,8 @@ void ScillaIPCServer::setContractAddressVer(const Address &address,
   m_version = version;
 }
 
+// we can add to the signature to intercept the changes made
+// output here comes from the scilla checker
 void ScillaIPCServer::fetchStateValueI(const Json::Value &request,
                                        Json::Value &response) {
   std::string value;
@@ -63,6 +67,7 @@ void ScillaIPCServer::fetchStateValueI(const Json::Value &request,
 
 void ScillaIPCServer::fetchExternalStateValueI(const Json::Value &request,
                                                Json::Value &response) {
+  LOG_MARKER();
   std::string value, type;
   bool found;
   if (!fetchExternalStateValue(request["addr"].asString(),
@@ -76,6 +81,9 @@ void ScillaIPCServer::fetchExternalStateValueI(const Json::Value &request,
   response.append(Json::Value(found));
   response.append(Json::Value(value));
   response.append(Json::Value(type));
+  
+  string r = JSONUtils::GetInstance().convertJsontoStr(response);
+  LOG_GENERAL(INFO, "response: " << r);
 }
 
 void ScillaIPCServer::updateStateValueI(const Json::Value &request,

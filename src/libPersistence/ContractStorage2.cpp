@@ -453,7 +453,7 @@ void ContractStorage2::DeleteByPrefix(const string& prefix) {
     }
   }
 }
-
+// example of accessing data: t_stateDataMap.find("abcd/backers/nick")
 void ContractStorage2::DeleteByIndex(const string& index) {
   auto p = t_stateDataMap.find(index);
   if (p != t_stateDataMap.end()) {
