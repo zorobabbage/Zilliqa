@@ -53,6 +53,7 @@ void ScillaIPCServer::setContractAddressVer(const Address &address,
 // output here comes from the scilla checker
 void ScillaIPCServer::fetchStateValueI(const Json::Value &request,
                                        Json::Value &response) {
+  LOG_MARKER();
   std::string value;
   bool found;
   if (!fetchStateValue(request["query"].asString(), value, found)) {
@@ -63,11 +64,13 @@ void ScillaIPCServer::fetchStateValueI(const Json::Value &request,
   response.clear();
   response.append(Json::Value(found));
   response.append(Json::Value(value));
+  
+  string r = JSONUtils::GetInstance().convertJsontoStr(response);
+  LOG_GENERAL(INFO, "response: " << r);
 }
 
 void ScillaIPCServer::fetchExternalStateValueI(const Json::Value &request,
                                                Json::Value &response) {
-  LOG_MARKER();
   std::string value, type;
   bool found;
   if (!fetchExternalStateValue(request["addr"].asString(),
@@ -81,9 +84,6 @@ void ScillaIPCServer::fetchExternalStateValueI(const Json::Value &request,
   response.append(Json::Value(found));
   response.append(Json::Value(value));
   response.append(Json::Value(type));
-  
-  string r = JSONUtils::GetInstance().convertJsontoStr(response);
-  LOG_GENERAL(INFO, "response: " << r);
 }
 
 void ScillaIPCServer::updateStateValueI(const Json::Value &request,
