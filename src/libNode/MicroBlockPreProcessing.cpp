@@ -485,7 +485,7 @@ void Node::ProcessTransactionWhenShardLeader(
           processPool.AddJob([this, t, tr]() mutable -> void {
               LOG_GENERAL(INFO, "Threadpool going to run transaction");
               TxnStatus error_code;
-              bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr, error_code);
+              bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr, error_code, true);
 
               if (x) {
                 std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
@@ -679,20 +679,6 @@ void Node::ProcessTransactionWhenShardLeader(
             continue;
           }
 
-          // processPool.AddJob([this, t, tr]() mutable -> void {
-          //     LOG_GENERAL(INFO, "Threadpool going to run transaction")
-          //     bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr);
-
-          //     std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
-          //     m_expectedTranOrdering.emplace_back(t.GetTranID());
-          //     t_processedTransactions.insert(
-          //       make_pair(t.GetTranID(), TransactionWithReceipt(t, tr)));
-
-          //     LOG_GENERAL(INFO, "Threadpool finished running transaction, got:
-          //     " << x);
-          //   });
-
-          // figure out concurrent stuff here
           TxnStatus error_code;
           if (m_mediator.m_validator->CheckCreatedTransaction(t, tr,
                                                               error_code)) {
@@ -1104,7 +1090,7 @@ void Node::ProcessTransactionWhenShardBackup(
           processPool.AddJob([this, t, tr]() mutable -> void {
             LOG_GENERAL(INFO, "Threadpool going to run transaction");
             TxnStatus error_code;
-            bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr, error_code);
+            bool x = m_mediator.m_validator->CheckCreatedTransaction(t, tr, error_code, true);
             if (x) {
               std::lock_guard<std::mutex> g(m_mutexTxnOrdering);
               m_expectedTranOrdering.emplace_back(t.GetTranID());

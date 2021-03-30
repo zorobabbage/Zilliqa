@@ -114,12 +114,13 @@ bool AccountStoreSC<MAP>::UpdateAccounts(const uint64_t& blockNum,
                                          const bool& isDS,
                                          const Transaction& transaction,
                                          TransactionReceipt& receipt,
-                                         TxnStatus& error_code) {
+                                         TxnStatus& error_code,
+                                         bool isConcurrent) {
   // LOG_MARKER();
   LOG_GENERAL(INFO, "Process txn: " << transaction.GetTranID());
 
   // remove lock for concurrent processing
-  if (!CONCURRENT_PROCESSING) {
+  if (!CONCURRENT_PROCESSING || !isConcurrent) {
     std::lock_guard<std::mutex> g(m_mutexUpdateAccounts);
   }
 

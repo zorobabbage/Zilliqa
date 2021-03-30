@@ -39,7 +39,8 @@ class Validator {
 
   bool CheckCreatedTransaction(const Transaction& tx,
                                TransactionReceipt& receipt,
-                               TxnStatus& error_code) const;
+                               TxnStatus& error_code,
+                               bool isConcurrent = false) const;
 
   bool CheckCreatedTransactionFromLookup(const Transaction& tx,
                                          TxnStatus& error_code);

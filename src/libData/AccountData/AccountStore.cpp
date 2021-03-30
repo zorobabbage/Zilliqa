@@ -402,18 +402,20 @@ bool AccountStore::UpdateAccountsTemp(const uint64_t& blockNum,
                                       const bool& isDS,
                                       const Transaction& transaction,
                                       TransactionReceipt& receipt,
-                                      TxnStatus& error_code) {
+                                      TxnStatus& error_code,
+                                      bool isConcurrent) {
   // LOG_MARKER();
 
   // need to remove store-wide lock so multiple threads can access
-  if (!CONCURRENT_PROCESSING) {
+  if (!CONCURRENT_PROCESSING || !isConcurrent) {
     unique_lock<shared_timed_mutex> g(m_mutexPrimary, defer_lock);
     unique_lock<mutex> g2(m_mutexDelta, defer_lock);
     lock(g, g2);
   }
 
   return m_accountStoreTemp->UpdateAccounts(blockNum, numShards, isDS,
-                                            transaction, receipt, error_code);
+                                            transaction, receipt, error_code,
+                                            isConcurrent);
 }
 
 bool AccountStore::UpdateCoinbaseTemp(const Address& rewardee,

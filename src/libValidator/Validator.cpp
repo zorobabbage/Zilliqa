@@ -41,7 +41,8 @@ bool Validator::VerifyTransaction(const Transaction& tran) {
 
 bool Validator::CheckCreatedTransaction(const Transaction& tx,
                                         TransactionReceipt& receipt,
-                                        TxnStatus& error_code) const {
+                                        TxnStatus& error_code,
+                                        bool isConcurrent) const {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Validator::CheckCreatedTransaction not expected to be "
@@ -102,7 +103,7 @@ bool Validator::CheckCreatedTransaction(const Transaction& tx,
   return AccountStore::GetInstance().UpdateAccountsTemp(
       m_mediator.m_currentEpochNum, m_mediator.m_node->getNumShards(),
       m_mediator.m_ds->m_mode != DirectoryService::Mode::IDLE, tx, receipt,
-      error_code);
+      error_code, isConcurrent);
 }
 
 bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,

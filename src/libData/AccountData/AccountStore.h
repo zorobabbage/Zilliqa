@@ -154,7 +154,8 @@ class AccountStore
   bool UpdateAccountsTemp(const uint64_t& blockNum,
                           const unsigned int& numShards, const bool& isDS,
                           const Transaction& transaction,
-                          TransactionReceipt& receipt, TxnStatus& error_code);
+                          TransactionReceipt& receipt, TxnStatus& error_code,
+                          bool isConcurrent = false);
 
   /// add account in AccountStoreTemp
   void AddAccountTemp(const Address& address, const Account& account) {
