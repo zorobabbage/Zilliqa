@@ -202,7 +202,6 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   if (GUARD_MODE) {
     // Setting the guard upon process launch
     Guard::GetInstance().Init();
-
     if (Guard::GetInstance().IsNodeInDSGuardList(m_mediator.m_selfKey.second)) {
       LOG_GENERAL(INFO, "Current node is a DS guard");
     } else if (Guard::GetInstance().IsNodeInShardGuardList(
