@@ -34,6 +34,7 @@ RUN apt-get update \
     curl \
     git \
     golang \
+    valgrind \
     # rysnc bydefault gets installed with opam package of scilla.Better to explicitly
     # mention again as installation candidate
     rsync \

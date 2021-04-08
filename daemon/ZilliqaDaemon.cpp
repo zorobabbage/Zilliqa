@@ -309,11 +309,13 @@ void ZilliqaDaemon::StartNewProcess(bool cleanPersistence) {
           m_log,
           "\" " + Execute("cd " + m_curPath + "; rm -rf persistence") + " \"");
     }
-
-    string cmdToRun = string("zilliqa") + " --privk " + m_privKey + " --pubk " +
-                      m_pubKey + " --address " + m_ip + " --port " +
-                      to_string(m_port) + " --synctype " + strSyncType +
-                      " --logpath " + m_logPath;
+    string valgrind_command =
+        "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes "
+        "--verbose --log-file=valgrind-out.txt ";
+    string cmdToRun = valgrind_command + string("zilliqa") + " --privk " +
+                      m_privKey + " --pubk " + m_pubKey + " --address " + m_ip +
+                      " --port " + to_string(m_port) + " --synctype " +
+                      strSyncType + " --logpath " + m_logPath;
 
     if (1 == m_recovery) {
       cmdToRun += " --recovery";
