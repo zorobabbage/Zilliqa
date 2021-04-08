@@ -148,6 +148,7 @@ RUN apt-get update \
     libsecp256k1-dev \
     # tools
     curl \
+    valgrind \
     dnsutils \
     gdb \
     git \
