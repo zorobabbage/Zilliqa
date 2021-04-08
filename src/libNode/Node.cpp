@@ -1813,11 +1813,9 @@ bool Node::ProcessTxnPacketFromLookupCore(const bytes& message,
                 "be called from LookUp node.");
     return true;
   }
-
   SHA2<HashType::HASH_VARIANT_256> sha256;
   sha256.Update(message);  // message hash
   bytes msg_hash = sha256.Finalize();
-
   {
     lock_guard<mutex> g(m_mutexTxnPktInProcess);
     if (!m_txnPktInProcess.emplace(msg_hash).second) {
