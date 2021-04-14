@@ -3,6 +3,7 @@
 #include "sys/types.h"
 #include "sys/sysinfo.h"
 
+using namespace std;
 int parseLine(char* line) {
   // This assumes that a digit will be found and the line ends in " Kb".
   int i = strlen(line);
@@ -62,7 +63,7 @@ void DisplayVirtualMemoryStats() {
   LOG_GENERAL(INFO,"VM used by process  = "<<processVirtualMemUsed/1024<<" MB"<< " pid="<<Logger::GetPid());
 }
 
-void DisplayPhysicalMemoryStats() {
+void DisplayPhysicalMemoryStats(const string& str) {
   struct sysinfo memInfo;
   sysinfo(&memInfo);
   long long totalPhysMem = memInfo.totalram;
@@ -74,5 +75,5 @@ void DisplayPhysicalMemoryStats() {
   int processPhysMemUsed = GetProcessPhysicalMemoryStats();
   // LOG_GENERAL(INFO, "Total PM           = " << totalPhysMem/1048576<<" MB"<< " pid="<<Logger::GetPid());
   // LOG_GENERAL(INFO, "Total PM used      = " << physMemUsed/1048576<<" MB"<< " pid="<<Logger::GetPid());
-  LOG_GENERAL(INFO, "PM used  = " << processPhysMemUsed/1024<<" MB"<< " pid="<<Logger::GetPid());
+  LOG_GENERAL(INFO, ""<<str<<" pid = "<<Logger::GetPid()<<" PM used  = " << processPhysMemUsed/1024<<" MB");
 }
