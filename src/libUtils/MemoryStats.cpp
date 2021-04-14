@@ -72,7 +72,7 @@ void DisplayPhysicalMemoryStats() {
   // Multiply in next statement to avoid int overflow on right hand side...
   physMemUsed *= memInfo.mem_unit;
   int processPhysMemUsed = GetProcessPhysicalMemoryStats();
-  LOG_GENERAL(INFO, "Total PM           = " << totalPhysMem/1048576<<" MB"<< " pid="<<Logger::GetPid());
-  LOG_GENERAL(INFO, "Total PM used      = " << physMemUsed/1048576<<" MB"<< " pid="<<Logger::GetPid());
-  LOG_GENERAL(INFO, "PM used by process = " << processPhysMemUsed/1024<<" MB"<< " pid="<<Logger::GetPid());
+  // LOG_GENERAL(INFO, "Total PM           = " << totalPhysMem/1048576<<" MB"<< " pid="<<Logger::GetPid());
+  // LOG_GENERAL(INFO, "Total PM used      = " << physMemUsed/1048576<<" MB"<< " pid="<<Logger::GetPid());
+  LOG_GENERAL(INFO, "PM used  = " << processPhysMemUsed/1024<<" MB"<< " pid="<<Logger::GetPid());
 }

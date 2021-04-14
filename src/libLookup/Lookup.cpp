@@ -5256,15 +5256,17 @@ bool Lookup::Execute(const bytes& message, unsigned int offset,
   }
 
   if (ins_byte < ins_handlers_count) {
+    LOG_GENERAL(INFO, "Before pid="<<Logger::GetPid());
     DisplayPhysicalMemoryStats();
-    DisplayVirtualMemoryStats();
+    //DisplayVirtualMemoryStats();
     result =
         (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
     if (!result) {
       // To-do: Error recovery
     }
+    LOG_GENERAL(INFO, "After pid="<<Logger::GetPid());
     DisplayPhysicalMemoryStats();
-    DisplayVirtualMemoryStats();
+    //DisplayVirtualMemoryStats();
   } else {
     LOG_GENERAL(WARNING, "Unknown instruction byte "
                              << hex << (unsigned int)ins_byte << " from "
