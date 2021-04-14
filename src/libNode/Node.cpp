@@ -3021,12 +3021,10 @@ bool Node::Execute(const bytes& message, unsigned int offset, const Peer& from,
   }
 
   if (ins_byte < ins_handlers_count) {
-    LOG_GENERAL(INFO, "Before pid="<<Logger::GetPid());
     DisplayPhysicalMemoryStats("Before", m_mediator.m_currentEpochNum);
     // DisplayVirtualMemoryStats();
     result =
         (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
-    LOG_GENERAL(INFO, "After pid="<<Logger::GetPid());
     DisplayPhysicalMemoryStats("After", m_mediator.m_currentEpochNum);
     // DisplayVirtualMemoryStats();
     if (!result) {

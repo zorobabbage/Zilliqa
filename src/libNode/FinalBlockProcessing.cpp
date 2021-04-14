@@ -54,6 +54,7 @@
 #include "libUtils/TimeLockedFunction.h"
 #include "libUtils/TimeUtils.h"
 #include "libUtils/TimestampVerifier.h"
+#include "libUtils/MemoryStats.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -771,6 +772,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
               "Deserialized TxBlock" << endl
                                      << txBlock);
   }
+  DisplayPhysicalMemoryStats("Deserialization", m_mediator.m_currentEpochNum);
 
   LOG_STATE("[TXBOD][" << std::setw(15) << std::left
                        << m_mediator.m_selfPeer.GetPrintableIPAddress() << "]["
@@ -952,11 +954,13 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     return false;
   }
 
+  DisplayPhysicalMemoryStats("Before store", m_mediator.m_currentEpochNum);
   if (!isVacuousEpoch) {
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
+  DisplayPhysicalMemoryStats("After store", m_mediator.m_currentEpochNum);
 
     // if lookup and loaded microblocks, then skip
     lock_guard<mutex> g(m_mutexUnavailableMicroBlocks);
@@ -981,10 +985,12 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Remove because shard nodes will be shuffled in next epoch.
     CleanMicroblockConsensusBuffer();
 
+    DisplayPhysicalMemoryStats("Before store1", m_mediator.m_currentEpochNum);
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
+  DisplayPhysicalMemoryStats("After store1", m_mediator.m_currentEpochNum);
     auto writeStateToDisk = [this]() -> void {
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");
