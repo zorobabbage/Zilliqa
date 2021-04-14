@@ -3021,11 +3021,11 @@ bool Node::Execute(const bytes& message, unsigned int offset, const Peer& from,
   }
 
   if (ins_byte < ins_handlers_count) {
-    DisplayPhysicalMemoryStats("Before", m_mediator.m_currentEpochNum);
+    uint64_t startMem = DisplayPhysicalMemoryStats("BeforeExecute", m_mediator.m_currentEpochNum);
     // DisplayVirtualMemoryStats();
     result =
         (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
-    DisplayPhysicalMemoryStats("After", m_mediator.m_currentEpochNum);
+    DisplayPhysicalMemoryStats("AfterExecute", m_mediator.m_currentEpochNum, startMem);
     // DisplayVirtualMemoryStats();
     if (!result) {
       // To-do: Error recovery

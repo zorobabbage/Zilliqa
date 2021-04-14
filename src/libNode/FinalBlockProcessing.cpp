@@ -772,7 +772,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
               "Deserialized TxBlock" << endl
                                      << txBlock);
   }
-  DisplayPhysicalMemoryStats("Deserialization", m_mediator.m_currentEpochNum);
+  DisplayPhysicalMemoryStats("ProcessFinalBlockCore1", m_mediator.m_currentEpochNum);
 
   LOG_STATE("[TXBOD][" << std::setw(15) << std::left
                        << m_mediator.m_selfPeer.GetPrintableIPAddress() << "]["
@@ -800,6 +800,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
               "TxBlock co-sig verification failed");
     return false;
   }
+  DisplayPhysicalMemoryStats("ProcessFinalBlockCore2", m_mediator.m_currentEpochNum);
 
   // Check block number. Now put after verify co-sig to prevent malicious Tx
   // block message to make the node rejoin.
@@ -865,6 +866,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
                    mbInfoHash);
     return false;
   }
+  DisplayPhysicalMemoryStats("ProcessFinalBlockCore3", m_mediator.m_currentEpochNum);
 
   if (!LOOKUP_NODE_MODE) {
     if (m_lastMicroBlockCoSig.first != m_mediator.m_currentEpochNum) {
@@ -928,12 +930,14 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       }
     }
   }
+  DisplayPhysicalMemoryStats("ProcessFinalBlockCore4", m_mediator.m_currentEpochNum);
 
   if (!BlockStorage::GetBlockStorage().PutStateDelta(
           txBlock.GetHeader().GetBlockNum(), stateDelta)) {
     LOG_GENERAL(WARNING, "BlockStorage::PutStateDelta failed");
     return false;
   }
+  DisplayPhysicalMemoryStats("ProcessFinalBlockCore5", m_mediator.m_currentEpochNum);
 
   if (!LOOKUP_NODE_MODE &&
       (!CheckStateRoot(txBlock) || m_doRejoinAtStateRoot)) {
@@ -954,13 +958,13 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     return false;
   }
 
-  uint64_t startMem = DisplayPhysicalMemoryStats("Before store", m_mediator.m_currentEpochNum);
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before StoreFinalBlock1", m_mediator.m_currentEpochNum);
   if (!isVacuousEpoch) {
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
-  DisplayPhysicalMemoryStats("After store", m_mediator.m_currentEpochNum, startMem);
+  DisplayPhysicalMemoryStats("After StoreFinalBlock1", m_mediator.m_currentEpochNum, startMem);
 
     // if lookup and loaded microblocks, then skip
     lock_guard<mutex> g(m_mutexUnavailableMicroBlocks);
@@ -985,12 +989,12 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Remove because shard nodes will be shuffled in next epoch.
     CleanMicroblockConsensusBuffer();
 
-    uint64_t startMem = DisplayPhysicalMemoryStats("Before store1", m_mediator.m_currentEpochNum);
+    uint64_t startMem = DisplayPhysicalMemoryStats("Before StoreFinalBlock2", m_mediator.m_currentEpochNum);
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
-  DisplayPhysicalMemoryStats("After store1", m_mediator.m_currentEpochNum, startMem);
+  DisplayPhysicalMemoryStats("After StoreFinalBlock2", m_mediator.m_currentEpochNum, startMem);
     auto writeStateToDisk = [this]() -> void {
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");

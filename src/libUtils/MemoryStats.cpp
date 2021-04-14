@@ -78,7 +78,7 @@ uint64_t DisplayPhysicalMemoryStats(const string& str, const std::uint64_t& epoc
   // LOG_GENERAL(INFO, "Total PM used      = " << physMemUsed/1048576<<" MB"<< " pid="<<Logger::GetPid());
   LOG_GENERAL(INFO, "Epoch = "<<epochNo<<" "<<str<<" pid = "<<Logger::GetPid()<<" PM used  = " << processPhysMemUsedMB<<" MB");
   if (startMem != 0) {
-    LOG_GENERAL(INFO, "PM diff = " << processPhysMemUsedMB - startMem);
+    LOG_GENERAL(INFO, "PM diff = " << processPhysMemUsedMB - startMem<<" pid = "<<Logger::GetPid());
   }
   return processPhysMemUsedMB;
 }
