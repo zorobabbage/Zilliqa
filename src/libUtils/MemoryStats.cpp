@@ -63,7 +63,7 @@ void DisplayVirtualMemoryStats() {
   LOG_GENERAL(INFO,"VM used by process  = "<<processVirtualMemUsed/1024<<" MB"<< " pid="<<Logger::GetPid());
 }
 
-void DisplayPhysicalMemoryStats(const string& str) {
+void DisplayPhysicalMemoryStats(const string& str, const std::uint64_t& epochNo) {
   struct sysinfo memInfo;
   sysinfo(&memInfo);
   long long totalPhysMem = memInfo.totalram;
@@ -75,5 +75,5 @@ void DisplayPhysicalMemoryStats(const string& str) {
   int processPhysMemUsed = GetProcessPhysicalMemoryStats();
   // LOG_GENERAL(INFO, "Total PM           = " << totalPhysMem/1048576<<" MB"<< " pid="<<Logger::GetPid());
   // LOG_GENERAL(INFO, "Total PM used      = " << physMemUsed/1048576<<" MB"<< " pid="<<Logger::GetPid());
-  LOG_GENERAL(INFO, ""<<str<<" pid = "<<Logger::GetPid()<<" PM used  = " << processPhysMemUsed/1024<<" MB");
+  LOG_GENERAL(INFO, "Epoch = "<<epochNo<<" "<<str<<" pid = "<<Logger::GetPid()<<" PM used  = " << processPhysMemUsed/1024<<" MB");
 }
