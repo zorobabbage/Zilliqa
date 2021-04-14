@@ -52,6 +52,7 @@
 #include "libUtils/SanityChecks.h"
 #include "libUtils/TimeLockedFunction.h"
 #include "libUtils/TimeUtils.h"
+#include "libUtils/MemoryStats.h"
 #include "libValidator/Validator.h"
 
 using namespace std;
@@ -3020,8 +3021,12 @@ bool Node::Execute(const bytes& message, unsigned int offset, const Peer& from,
   }
 
   if (ins_byte < ins_handlers_count) {
+    DisplayPhysicalMemoryStats();
+    DisplayVirtualMemoryStats();
     result =
         (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
+    DisplayPhysicalMemoryStats();
+    DisplayVirtualMemoryStats();
     if (!result) {
       // To-do: Error recovery
     }
