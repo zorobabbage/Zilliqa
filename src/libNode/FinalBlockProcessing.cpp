@@ -902,12 +902,15 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
   bool isVacuousEpoch = m_mediator.GetIsVacuousEpoch();
   m_isVacuousEpochBuffer = isVacuousEpoch;
 
+  uint64_t startMem = DisplayPhysicalMemoryStats("ProcessFinalBlockCore6", m_mediator.m_currentEpochNum);
   if (!ProcessStateDeltaFromFinalBlock(
           stateDelta, txBlock.GetHeader().GetStateDeltaHash())) {
     return false;
   }
+  DisplayPhysicalMemoryStats("ProcessFinalBlockCore6", m_mediator.m_currentEpochNum, startMem);
 
   if (isVacuousEpoch) {
+    DisplayPhysicalMemoryStats("ProcessFinalBlockCore7", m_mediator.m_currentEpochNum);
     unordered_map<Address, int256_t> addressMap;
     if (!Messenger::StateDeltaToAddressMap(stateDelta, 0, addressMap)) {
       LOG_GENERAL(WARNING, "Messenger::StateDeltaToAccountMap failed");
@@ -929,6 +932,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
                       << "Got no reward this ds epoch");
       }
     }
+    DisplayPhysicalMemoryStats("ProcessFinalBlockCore8", m_mediator.m_currentEpochNum);
   }
   DisplayPhysicalMemoryStats("ProcessFinalBlockCore4", m_mediator.m_currentEpochNum);
 
@@ -958,7 +962,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     return false;
   }
 
-  uint64_t startMem = DisplayPhysicalMemoryStats("Before StoreFinalBlock1", m_mediator.m_currentEpochNum);
+  startMem = DisplayPhysicalMemoryStats("Before StoreFinalBlock1", m_mediator.m_currentEpochNum);
   if (!isVacuousEpoch) {
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
