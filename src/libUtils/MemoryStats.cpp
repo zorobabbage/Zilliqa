@@ -57,9 +57,9 @@ void DisplayVirtualMemoryStats() {
   virtualMemUsed += memInfo.totalswap - memInfo.freeswap;
   virtualMemUsed *= memInfo.mem_unit;
   int processVirtualMemUsed = GetProcessVirtualMemoryStats(); 
-  LOG_GENERAL(INFO,"Total virtual memory = "<<totalVirtualMem <<" bytes");
-  LOG_GENERAL(INFO,"Total virtual memory used = "<<virtualMemUsed<<" bytes");
-  LOG_GENERAL(INFO,"Total virtual memory used by process = "<<processVirtualMemUsed<<" kb's");
+  LOG_GENERAL(INFO,"Total virtual memory                    = "<<totalVirtualMem/1048576 <<" MB");
+  LOG_GENERAL(INFO,"Total virtual memory used               = "<<virtualMemUsed/1048576<<" MB");
+  LOG_GENERAL(INFO,"Total virtual memory used by process    = "<<processVirtualMemUsed / 1024<<" MB");
 }
 
 void DisplayPhysicalMemoryStats() {
@@ -72,8 +72,8 @@ void DisplayPhysicalMemoryStats() {
   // Multiply in next statement to avoid int overflow on right hand side...
   physMemUsed *= memInfo.mem_unit;
   int processPhysMemUsed = GetProcessPhysicalMemoryStats();
-  LOG_GENERAL(INFO, "Total physical memory = " << totalPhysMem<<" bytes");
-  LOG_GENERAL(INFO, "Total physical memory used = " << physMemUsed<<" bytes");
+  LOG_GENERAL(INFO, "Total physical memory              = " << totalPhysMem/1048576<<" MB");
+  LOG_GENERAL(INFO, "Total physical memory used         = " << physMemUsed/1048576<<" MB");
   LOG_GENERAL(
-      INFO, "Total physical  memory used by process = " << processPhysMemUsed<<" kb's");
+      INFO, "Total physical  memory used by process     = " << processPhysMemUsed<<" MB");
 }
