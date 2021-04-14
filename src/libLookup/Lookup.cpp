@@ -54,6 +54,7 @@
 #include "libUtils/RandomGenerator.h"
 #include "libUtils/SanityChecks.h"
 #include "libUtils/SysCommand.h"
+#include "libUtils/MemoryStats.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -5255,11 +5256,15 @@ bool Lookup::Execute(const bytes& message, unsigned int offset,
   }
 
   if (ins_byte < ins_handlers_count) {
+    DisplayPhysicalMemoryStats();
+    DisplayVirtualMemoryStats();
     result =
         (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
     if (!result) {
       // To-do: Error recovery
     }
+    DisplayPhysicalMemoryStats();
+    DisplayVirtualMemoryStats();
   } else {
     LOG_GENERAL(WARNING, "Unknown instruction byte "
                              << hex << (unsigned int)ins_byte << " from "
