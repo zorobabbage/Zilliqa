@@ -5256,14 +5256,14 @@ bool Lookup::Execute(const bytes& message, unsigned int offset,
   }
 
   if (ins_byte < ins_handlers_count) {
-    DisplayPhysicalMemoryStats("Before", m_mediator.m_currentEpochNum);
+    uint64_t startMem = DisplayPhysicalMemoryStats("Before", m_mediator.m_currentEpochNum, 0);
     //DisplayVirtualMemoryStats();
     result =
         (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
     if (!result) {
       // To-do: Error recovery
     }
-    DisplayPhysicalMemoryStats("After", m_mediator.m_currentEpochNum);
+    DisplayPhysicalMemoryStats("After", m_mediator.m_currentEpochNum, startMem);
     //DisplayVirtualMemoryStats();
   } else {
     LOG_GENERAL(WARNING, "Unknown instruction byte "

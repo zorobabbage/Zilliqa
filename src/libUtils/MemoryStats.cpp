@@ -63,7 +63,7 @@ void DisplayVirtualMemoryStats() {
   LOG_GENERAL(INFO,"VM used by process  = "<<processVirtualMemUsed/1024<<" MB"<< " pid="<<Logger::GetPid());
 }
 
-void DisplayPhysicalMemoryStats(const string& str, const std::uint64_t& epochNo) {
+uint64_t DisplayPhysicalMemoryStats(const string& str, const std::uint64_t& epochNo, uint64_t startMem) {
   struct sysinfo memInfo;
   sysinfo(&memInfo);
   long long totalPhysMem = memInfo.totalram;
@@ -72,8 +72,13 @@ void DisplayPhysicalMemoryStats(const string& str, const std::uint64_t& epochNo)
   long long physMemUsed = memInfo.totalram - memInfo.freeram;
   // Multiply in next statement to avoid int overflow on right hand side...
   physMemUsed *= memInfo.mem_unit;
-  int processPhysMemUsed = GetProcessPhysicalMemoryStats();
+  uint64_t processPhysMemUsed = GetProcessPhysicalMemoryStats();
+  uint64_t processPhysMemUsedMB = processPhysMemUsed/1024;
   // LOG_GENERAL(INFO, "Total PM           = " << totalPhysMem/1048576<<" MB"<< " pid="<<Logger::GetPid());
   // LOG_GENERAL(INFO, "Total PM used      = " << physMemUsed/1048576<<" MB"<< " pid="<<Logger::GetPid());
-  LOG_GENERAL(INFO, "Epoch = "<<epochNo<<" "<<str<<" pid = "<<Logger::GetPid()<<" PM used  = " << processPhysMemUsed/1024<<" MB");
+  LOG_GENERAL(INFO, "Epoch = "<<epochNo<<" "<<str<<" pid = "<<Logger::GetPid()<<" PM used  = " << processPhysMemUsedMB<<" MB");
+  if (startMem != 0) {
+    LOG_GENERAL(INFO, "PM diff = " << processPhysMemUsedMB - startMem);
+  }
+  return processPhysMemUsedMB;
 }

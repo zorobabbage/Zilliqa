@@ -954,13 +954,13 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     return false;
   }
 
-  DisplayPhysicalMemoryStats("Before store", m_mediator.m_currentEpochNum);
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before store", m_mediator.m_currentEpochNum);
   if (!isVacuousEpoch) {
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
-  DisplayPhysicalMemoryStats("After store", m_mediator.m_currentEpochNum);
+  DisplayPhysicalMemoryStats("After store", m_mediator.m_currentEpochNum, startMem);
 
     // if lookup and loaded microblocks, then skip
     lock_guard<mutex> g(m_mutexUnavailableMicroBlocks);
@@ -985,12 +985,12 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Remove because shard nodes will be shuffled in next epoch.
     CleanMicroblockConsensusBuffer();
 
-    DisplayPhysicalMemoryStats("Before store1", m_mediator.m_currentEpochNum);
+    uint64_t startMem = DisplayPhysicalMemoryStats("Before store1", m_mediator.m_currentEpochNum);
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
-  DisplayPhysicalMemoryStats("After store1", m_mediator.m_currentEpochNum);
+  DisplayPhysicalMemoryStats("After store1", m_mediator.m_currentEpochNum, startMem);
     auto writeStateToDisk = [this]() -> void {
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");
