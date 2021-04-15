@@ -307,7 +307,9 @@ bool AccountStore::MoveUpdatesToDisk() {
     return false;
   }
 
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before m_addressToAccount clear", 0, 0);
   m_addressToAccount->clear();
+  DisplayPhysicalMemoryStats("After m_addressToAccount clear", 0, startMem);
 
   return true;
 }
