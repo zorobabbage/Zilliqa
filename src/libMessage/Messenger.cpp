@@ -22,6 +22,7 @@
 #include "libDirectoryService/DirectoryService.h"
 #include "libMessage/ZilliqaMessage.pb.h"
 #include "libUtils/Logger.h"
+#include "libUtils/MemoryStats.h"
 
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
@@ -2674,7 +2675,9 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
   LOG_GENERAL(INFO,
               "Total Number of Accounts Delta: " << result.entries().size());
 
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before GetAccountStoreDelta",0,0);
   for (const auto& entry : result.entries()) {
+    uint64_t startMem1 = DisplayPhysicalMemoryStats("Before each loop", 0, 0);
     Address address;
     Account account, t_account;
 
@@ -2699,6 +2702,8 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
 
     t_account = *oriAccount;
     account = *oriAccount;
+    uint64_t startMem2 =
+        DisplayPhysicalMemoryStats("Before GetAccountStoreDelta2", 0, 0);
     if (!ProtobufToAccountDelta(entry.account(), account, address, fullCopy,
                                 temp, revertible)) {
       LOG_GENERAL(WARNING,
@@ -2706,10 +2711,13 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                       << address.hex());
       return false;
     }
+    DisplayPhysicalMemoryStats("After GetAccountStoreDelta2", 0, startMem2);
 
     accountStore.AddAccountDuringDeserialization(address, account, t_account,
                                                  fullCopy, revertible);
+    DisplayPhysicalMemoryStats("After each loop", 0, startMem1);
   }
+  DisplayPhysicalMemoryStats("After GetAccountStoreDelta",0,startMem);
 
   return true;
 }
