@@ -772,7 +772,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
               "Deserialized TxBlock" << endl
                                      << txBlock);
   }
-  DisplayPhysicalMemoryStats("ProcessFinalBlockCore1", m_mediator.m_currentEpochNum);
 
   LOG_STATE("[TXBOD][" << std::setw(15) << std::left
                        << m_mediator.m_selfPeer.GetPrintableIPAddress() << "]["
@@ -902,15 +901,14 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
   bool isVacuousEpoch = m_mediator.GetIsVacuousEpoch();
   m_isVacuousEpochBuffer = isVacuousEpoch;
 
-  uint64_t startMem = DisplayPhysicalMemoryStats("Before ProcessFinalBlockCore6", m_mediator.m_currentEpochNum);
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock", m_mediator.m_currentEpochNum);
   if (!ProcessStateDeltaFromFinalBlock(
           stateDelta, txBlock.GetHeader().GetStateDeltaHash())) {
     return false;
   }
-  DisplayPhysicalMemoryStats("After ProcessFinalBlockCore6", m_mediator.m_currentEpochNum, startMem);
+  startMem = DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock", m_mediator.m_currentEpochNum, startMem);
 
   if (isVacuousEpoch) {
-    DisplayPhysicalMemoryStats("ProcessFinalBlockCore7", m_mediator.m_currentEpochNum);
     unordered_map<Address, int256_t> addressMap;
     if (!Messenger::StateDeltaToAddressMap(stateDelta, 0, addressMap)) {
       LOG_GENERAL(WARNING, "Messenger::StateDeltaToAccountMap failed");
@@ -932,16 +930,13 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
                       << "Got no reward this ds epoch");
       }
     }
-    DisplayPhysicalMemoryStats("ProcessFinalBlockCore8", m_mediator.m_currentEpochNum);
   }
-  DisplayPhysicalMemoryStats("ProcessFinalBlockCore4", m_mediator.m_currentEpochNum);
 
   if (!BlockStorage::GetBlockStorage().PutStateDelta(
           txBlock.GetHeader().GetBlockNum(), stateDelta)) {
     LOG_GENERAL(WARNING, "BlockStorage::PutStateDelta failed");
     return false;
   }
-  DisplayPhysicalMemoryStats("ProcessFinalBlockCore5", m_mediator.m_currentEpochNum);
 
   if (!LOOKUP_NODE_MODE &&
       (!CheckStateRoot(txBlock) || m_doRejoinAtStateRoot)) {
@@ -962,13 +957,11 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     return false;
   }
 
-  startMem = DisplayPhysicalMemoryStats("Before StoreFinalBlock1", m_mediator.m_currentEpochNum);
   if (!isVacuousEpoch) {
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
-  DisplayPhysicalMemoryStats("After StoreFinalBlock1", m_mediator.m_currentEpochNum, startMem);
 
     // if lookup and loaded microblocks, then skip
     lock_guard<mutex> g(m_mutexUnavailableMicroBlocks);
@@ -993,12 +986,10 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Remove because shard nodes will be shuffled in next epoch.
     CleanMicroblockConsensusBuffer();
 
-    uint64_t startMem = DisplayPhysicalMemoryStats("Before StoreFinalBlock2", m_mediator.m_currentEpochNum);
     if (!StoreFinalBlock(txBlock)) {
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
-  DisplayPhysicalMemoryStats("After StoreFinalBlock2", m_mediator.m_currentEpochNum, startMem);
     auto writeStateToDisk = [this]() -> void {
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");
@@ -1112,9 +1103,7 @@ bool Node::ProcessStateDeltaFromFinalBlock(
   LOG_MARKER();
 
   // Init local AccountStoreTemp first
-  uint64_t startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock1", m_mediator.m_currentEpochNum, 0);
   AccountStore::GetInstance().InitTemp();
-  DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock1", m_mediator.m_currentEpochNum, startMem);
 
   LOG_GENERAL(INFO,
               "State delta root hash = " << finalBlockStateDeltaHash.hex());
@@ -1123,9 +1112,7 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     LOG_GENERAL(INFO,
                 "State Delta hash received from finalblock is null, "
                 "skip processing state delta");
-  startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock2", m_mediator.m_currentEpochNum, 0);
     AccountStore::GetInstance().CommitTemp();
-  DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock2", m_mediator.m_currentEpochNum, startMem);
     return true;
   }
 
@@ -1134,11 +1121,9 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     return false;
   }
 
-  startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock3", m_mediator.m_currentEpochNum, 0);
   SHA2<HashType::HASH_VARIANT_256> sha2;
   sha2.Update(stateDeltaBytes);
   StateHash stateDeltaHash(sha2.Finalize());
-  DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock3", m_mediator.m_currentEpochNum, startMem);
 
   if (stateDeltaHash != finalBlockStateDeltaHash) {
     LOG_CHECK_FAIL("State delta hash", finalBlockStateDeltaHash,
@@ -1158,7 +1143,6 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     LOG_GENERAL(WARNING, "AccountStore::GetInstance().DeserializeDelta failed");
     return false;
   }
-  DisplayPhysicalMemoryStats("End ProcessStateDeltaFromFinalBlock4", m_mediator.m_currentEpochNum, 0);
 
   return true;
 }

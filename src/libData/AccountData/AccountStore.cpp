@@ -196,24 +196,19 @@ bool AccountStore::DeserializeDelta(const bytes& src, unsigned int offset,
     unique_lock<mutex> g2(m_mutexRevertibles, defer_lock);
     lock(g, g2);
 
-    uint64_t startMem = DisplayPhysicalMemoryStats("Before DeserializeDelta1",0,0);
     if (!Messenger::GetAccountStoreDelta(src, offset, *this, revertible,
                                          false)) {
       LOG_GENERAL(WARNING, "Messenger::GetAccountStoreDelta failed.");
       return false;
     }
-  DisplayPhysicalMemoryStats("After DeserializeDelta1", 0, startMem);
   } else {
     unique_lock<shared_timed_mutex> g(m_mutexPrimary);
 
-    uint64_t startMem =
-        DisplayPhysicalMemoryStats("Before DeserializeDelta2", 0, 0);
     if (!Messenger::GetAccountStoreDelta(src, offset, *this, revertible,
                                          false)) {
       LOG_GENERAL(WARNING, "Messenger::GetAccountStoreDelta failed.");
       return false;
     }
-    DisplayPhysicalMemoryStats("After DeserializeDelta2", 0, startMem);
   }
 
   return true;

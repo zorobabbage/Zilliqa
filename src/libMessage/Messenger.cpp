@@ -2675,9 +2675,7 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
   LOG_GENERAL(INFO,
               "Total Number of Accounts Delta: " << result.entries().size());
 
-  uint64_t startMem = DisplayPhysicalMemoryStats("Before GetAccountStoreDelta",0,0);
   for (const auto& entry : result.entries()) {
-    uint64_t startMem1 = DisplayPhysicalMemoryStats("Before each loop", 0, 0);
     Address address;
     Account account, t_account;
 
@@ -2686,16 +2684,12 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                                        (unsigned int)address.size),
          address.asArray().begin());
     LOG_GENERAL(WARNING, "Deserializing statedelta for account: " << address);
-    DisplayPhysicalMemoryStats("GetAccountStoreDelta1", 0, 0);
     const Account* oriAccount = accountStore.GetAccount(address);
-    DisplayPhysicalMemoryStats("GetAccountStoreDelta2", 0, 0);
     bool fullCopy = false;
     if (oriAccount == nullptr) {
       Account acc(0, 0);
       accountStore.AddAccount(address, acc);
-      DisplayPhysicalMemoryStats("GetAccountStoreDelta3", 0, 0);
       oriAccount = accountStore.GetAccount(address);
-      DisplayPhysicalMemoryStats("GetAccountStoreDelta4", 0, 0);
       fullCopy = true;
 
       if (oriAccount == nullptr) {
@@ -2706,8 +2700,6 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
 
     t_account = *oriAccount;
     account = *oriAccount;
-    uint64_t startMem2 =
-        DisplayPhysicalMemoryStats("Before GetAccountStoreDelta5", 0, 0);
     if (!ProtobufToAccountDelta(entry.account(), account, address, fullCopy,
                                 temp, revertible)) {
       LOG_GENERAL(WARNING,
@@ -2715,13 +2707,9 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                       << address.hex());
       return false;
     }
-    DisplayPhysicalMemoryStats("After GetAccountStoreDelta5", 0, startMem2);
     accountStore.AddAccountDuringDeserialization(address, account, t_account,
                                                  fullCopy, revertible);
-    DisplayPhysicalMemoryStats("GetAccountStoreDelta6", 0, 0);
-    DisplayPhysicalMemoryStats("After each loop", 0, startMem1);
   }
-  DisplayPhysicalMemoryStats("After GetAccountStoreDelta",0,startMem);
 
   return true;
 }
