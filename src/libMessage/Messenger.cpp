@@ -2682,13 +2682,17 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
          entry.address().begin() + min((unsigned int)entry.address().size(),
                                        (unsigned int)address.size),
          address.asArray().begin());
-
+    LOG_GENERAL(WARNING, "Deserializing statedelta for account: " << address);
+    DisplayPhysicalMemoryStats("GetAccountStoreDelta1", 0);
     const Account* oriAccount = accountStore.GetAccount(address);
+    DisplayPhysicalMemoryStats("GetAccountStoreDelta2", 0);
     bool fullCopy = false;
     if (oriAccount == nullptr) {
       Account acc(0, 0);
       accountStore.AddAccount(address, acc);
+      DisplayPhysicalMemoryStats("GetAccountStoreDelta3", 0);
       oriAccount = accountStore.GetAccount(address);
+      DisplayPhysicalMemoryStats("GetAccountStoreDelta4", 0);
       fullCopy = true;
 
       if (oriAccount == nullptr) {
@@ -2706,9 +2710,10 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                       << address.hex());
       return false;
     }
-
+    DisplayPhysicalMemoryStats("GetAccountStoreDelta5", 0);
     accountStore.AddAccountDuringDeserialization(address, account, t_account,
                                                  fullCopy, revertible);
+    DisplayPhysicalMemoryStats("GetAccountStoreDelta6", 0);
   }
 
   return true;
