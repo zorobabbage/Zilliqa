@@ -428,12 +428,10 @@ bool DirectoryService::ProcessMicroblockSubmissionFromShard(
 #endif
 
   LOG_GENERAL(INFO, "Received microblock for epoch " << epochNumber);
-
   if (microBlocks.empty()) {
     LOG_GENERAL(WARNING, "MicroBlocks received is empty");
     return false;
   }
-
   if (stateDeltas.empty()) {
     LOG_GENERAL(WARNING, "StateDeltas received is empty");
     return false;
