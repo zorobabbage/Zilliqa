@@ -902,12 +902,12 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
   bool isVacuousEpoch = m_mediator.GetIsVacuousEpoch();
   m_isVacuousEpochBuffer = isVacuousEpoch;
 
-  uint64_t startMem = DisplayPhysicalMemoryStats("ProcessFinalBlockCore6", m_mediator.m_currentEpochNum);
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before ProcessFinalBlockCore6", m_mediator.m_currentEpochNum);
   if (!ProcessStateDeltaFromFinalBlock(
           stateDelta, txBlock.GetHeader().GetStateDeltaHash())) {
     return false;
   }
-  DisplayPhysicalMemoryStats("ProcessFinalBlockCore6", m_mediator.m_currentEpochNum, startMem);
+  DisplayPhysicalMemoryStats("After ProcessFinalBlockCore6", m_mediator.m_currentEpochNum, startMem);
 
   if (isVacuousEpoch) {
     DisplayPhysicalMemoryStats("ProcessFinalBlockCore7", m_mediator.m_currentEpochNum);
