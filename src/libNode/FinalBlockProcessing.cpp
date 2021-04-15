@@ -1112,7 +1112,9 @@ bool Node::ProcessStateDeltaFromFinalBlock(
   LOG_MARKER();
 
   // Init local AccountStoreTemp first
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock1", m_mediator.m_currentEpochNum, 0);
   AccountStore::GetInstance().InitTemp();
+  DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock1", m_mediator.m_currentEpochNum, startMem);
 
   LOG_GENERAL(INFO,
               "State delta root hash = " << finalBlockStateDeltaHash.hex());
@@ -1121,7 +1123,9 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     LOG_GENERAL(INFO,
                 "State Delta hash received from finalblock is null, "
                 "skip processing state delta");
+  startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock2", m_mediator.m_currentEpochNum, 0);
     AccountStore::GetInstance().CommitTemp();
+  DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock2", m_mediator.m_currentEpochNum, startMem);
     return true;
   }
 
@@ -1130,9 +1134,11 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     return false;
   }
 
+  startMem = DisplayPhysicalMemoryStats("Before ProcessStateDeltaFromFinalBlock3", m_mediator.m_currentEpochNum, 0);
   SHA2<HashType::HASH_VARIANT_256> sha2;
   sha2.Update(stateDeltaBytes);
   StateHash stateDeltaHash(sha2.Finalize());
+  DisplayPhysicalMemoryStats("After ProcessStateDeltaFromFinalBlock3", m_mediator.m_currentEpochNum, startMem);
 
   if (stateDeltaHash != finalBlockStateDeltaHash) {
     LOG_CHECK_FAIL("State delta hash", finalBlockStateDeltaHash,
@@ -1152,6 +1158,7 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     LOG_GENERAL(WARNING, "AccountStore::GetInstance().DeserializeDelta failed");
     return false;
   }
+  DisplayPhysicalMemoryStats("End ProcessStateDeltaFromFinalBlock4", m_mediator.m_currentEpochNum, 0);
 
   return true;
 }

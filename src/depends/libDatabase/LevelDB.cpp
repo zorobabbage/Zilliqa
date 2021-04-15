@@ -577,7 +577,9 @@ bool LevelDB::ResetDBForNormalNode()
 int LevelDB::DeleteDBForLookupNode()
 {
     m_db.reset();
-    leveldb::Status s = leveldb::DestroyDB(this->m_dbName, leveldb::Options());
+    leveldb::Status s = leveldb::DestroyDB(STORAGE_PATH + PERSISTENCE_PATH +
+        (this->m_subdirectory.size() ? "/" + this->m_subdirectory : "") + "/" + this->m_dbName,
+        leveldb::Options());
     if (!s.ok())
     {
         LOG_GENERAL(WARNING, "[DeleteDB] Status: " << s.ToString());
