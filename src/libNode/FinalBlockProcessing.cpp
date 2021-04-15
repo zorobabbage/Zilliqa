@@ -864,7 +864,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
                    mbInfoHash);
     return false;
   }
-  DisplayPhysicalMemoryStats("ProcessFinalBlockCore3", m_mediator.m_currentEpochNum);
+
 
   if (!LOOKUP_NODE_MODE) {
     if (m_lastMicroBlockCoSig.first != m_mediator.m_currentEpochNum) {
