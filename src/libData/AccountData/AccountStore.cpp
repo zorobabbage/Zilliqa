@@ -230,6 +230,7 @@ bool AccountStore::MoveRootToDisk(const h256& root) {
 
 bool AccountStore::MoveUpdatesToDisk() {
   LOG_MARKER();
+  uint64_t startMem = DisplayPhysicalMemoryStats("Start MoveUpdatesToDisk", 0, 0);
 
   unique_lock<shared_timed_mutex> g(m_mutexPrimary, defer_lock);
   unique_lock<mutex> g2(m_mutexDB, defer_lock);
@@ -302,7 +303,7 @@ bool AccountStore::MoveUpdatesToDisk() {
     return false;
   }
 
-  uint64_t startMem = DisplayPhysicalMemoryStats("Before m_addressToAccount clear", 0, 0);
+  startMem = DisplayPhysicalMemoryStats("Before m_addressToAccount clear", 0, 0);
   m_addressToAccount->clear();
   DisplayPhysicalMemoryStats("After m_addressToAccount clear", 0, startMem);
 

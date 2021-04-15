@@ -799,7 +799,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
               "TxBlock co-sig verification failed");
     return false;
   }
-  DisplayPhysicalMemoryStats("ProcessFinalBlockCore2", m_mediator.m_currentEpochNum);
 
   // Check block number. Now put after verify co-sig to prevent malicious Tx
   // block message to make the node rejoin.
@@ -991,6 +990,8 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       return false;
     }
     auto writeStateToDisk = [this]() -> void {
+      uint64_t startMem = DisplayPhysicalMemoryStats("Before MoveUpdatesToDisk", m_mediator.m_currentEpochNum);
+      LOG_GENERAL(INFO, "GetNumOfAccounts before updates="<<AccountStore::GetInstance().GetNumOfAccounts());
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");
         // return false;
@@ -1038,6 +1039,8 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
           PopulateAccounts();
         }
       }
+      LOG_GENERAL(INFO, "GetNumOfAccounts after updates="<<AccountStore::GetInstance().GetNumOfAccounts());
+      DisplayPhysicalMemoryStats("After MoveUpdatesToDisk", m_mediator.m_currentEpochNum, startMem);
     };
     DetachedFunction(1, writeStateToDisk);
   }
@@ -1139,10 +1142,12 @@ bool Node::ProcessStateDeltaFromFinalBlock(
     return false;
   }
 
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before DeserializeDelta", m_mediator.m_currentEpochNum);
   if (!AccountStore::GetInstance().DeserializeDelta(stateDeltaBytes, 0)) {
     LOG_GENERAL(WARNING, "AccountStore::GetInstance().DeserializeDelta failed");
     return false;
   }
+  DisplayPhysicalMemoryStats("After DeserialzeDelta", m_mediator.m_currentEpochNum, startMem);
 
   return true;
 }

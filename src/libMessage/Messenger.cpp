@@ -2697,6 +2697,7 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
         return false;
       }
     }
+    LOG_GENERAL(INFO,"GetNumOfAccounts="<<accountStore.GetNumOfAccounts());
 
     t_account = *oriAccount;
     account = *oriAccount;
