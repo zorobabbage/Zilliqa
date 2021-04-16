@@ -26,6 +26,7 @@
 #include "libMessage/Messenger.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/JsonUtils.h"
+#include "libUtils/MemoryStats.h"
 
 #include <bits/stdc++.h>
 #include <boost/algorithm/string.hpp>
@@ -884,8 +885,12 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
   }
 
   lock_guard<mutex> g(m_stateDataMutex);
+  uint64_t startMem =
+      DisplayPhysicalMemoryStats("Before UpdateStateDatasAndToDeletes", 0, 0);
 
   if (temp) {
+    startMem = DisplayPhysicalMemoryStats("UpdateStateDatasAndToDeletes1", 0,
+                                          startMem);
     for (const auto& state : t_states) {
       t_stateDataMap[state.first] = state.second;
       auto pos = t_indexToBeDeleted.find(state.first);
@@ -893,10 +898,16 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
         t_indexToBeDeleted.erase(pos);
       }
     }
+    startMem = DisplayPhysicalMemoryStats("UpdateStateDatasAndToDeletes2", 0,
+                                          startMem);
     for (const auto& index : toDeleteIndices) {
       t_indexToBeDeleted.emplace(index);
     }
+    startMem = DisplayPhysicalMemoryStats("UpdateStateDatasAndToDeletes3", 0,
+                                          startMem);
   } else {
+    startMem = DisplayPhysicalMemoryStats("UpdateStateDatasAndToDeletes4", 0,
+                                          startMem);
     for (const auto& state : t_states) {
       if (revertible) {
         if (m_stateDataMap.find(state.first) != m_stateDataMap.end()) {
@@ -914,13 +925,19 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
         }
       }
     }
+    startMem = DisplayPhysicalMemoryStats("UpdateStateDatasAndToDeletes5", 0,
+                                          startMem);
     for (const auto& toDelete : toDeleteIndices) {
       if (revertible) {
         r_indexToBeDeleted.emplace(toDelete, true);
       }
       m_indexToBeDeleted.emplace(toDelete);
     }
+    startMem = DisplayPhysicalMemoryStats("After UpdateStateDatasAndToDeletes",
+                                          0, startMem);
   }
+  startMem = DisplayPhysicalMemoryStats("End UpdateStateDatasAndToDeletes", 0,
+                                        startMem);
 
   stateHash = GetContractStateHash(addr, temp);
 }
