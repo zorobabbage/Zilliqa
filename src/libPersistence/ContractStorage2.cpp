@@ -628,7 +628,9 @@ void ContractStorage2::FetchStateDataForContract(map<string, bytes>& states,
                                                  const vector<string>& indices,
                                                  bool temp) {
   string key = GenerateStorageKey(address, vname, indices);
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before FetchStateDataForContract", 0, 0);
   FetchStateDataForKey(states, key, temp);
+  startMem = DisplayPhysicalMemoryStats("After FetchStateDataForContract", 0, startMem);
 }
 
 void ContractStorage2::FetchUpdatedStateValuesForAddress(
@@ -1048,7 +1050,9 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   }
 
   std::map<std::string, bytes> states;
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before GetContractStateHashCore", 0, 0);
   FetchStateDataForContract(states, address, "", {}, temp);
+  startMem = DisplayPhysicalMemoryStats("After GetContractStateHashCore", 0, startMem);
 
   // iterate the raw protobuf string and hash
   SHA2<HashType::HASH_VARIANT_256> sha2;
@@ -1063,8 +1067,10 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
       sha2.Update(state.second);
     }
   }
+  startMem = DisplayPhysicalMemoryStats("End GetContractStateHashCore", 0, startMem);
   // return dev::h256(sha2.Finalize());
   dev::h256 ret(sha2.Finalize());
+  startMem = DisplayPhysicalMemoryStats("End1 GetContractStateHashCore", 0, startMem);
   return ret;
 }
 
