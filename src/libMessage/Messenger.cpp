@@ -678,6 +678,8 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
                               ? accbase.GetBalance().convert_to<int256_t>()
                               : 0 - accbase.GetBalance().convert_to<int256_t>();
   account.ChangeBalance(balanceDelta);
+  uint64_t startMem = DisplayPhysicalMemoryStats("Before ProtobufToAccountDelta5",0, 0);
+
 
   if (!account.IncreaseNonceBy(accbase.GetNonce())) {
     LOG_GENERAL(WARNING, "IncreaseNonceBy failed");
@@ -695,6 +697,7 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
                                  << MAX_CODE_SIZE_IN_BYTES);
         return false;
       }
+      startMem = DisplayPhysicalMemoryStats("Before Contract ProtobufToAccountDelta1", 0, startMem);
       codeBytes.resize(protoAccount.code().size());
       copy(protoAccount.code().begin(), protoAccount.code().end(),
            codeBytes.begin());
@@ -703,10 +706,12 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
            initDataBytes.begin());
       if (codeBytes != account.GetCode() ||
           initDataBytes != account.GetInitData()) {
+        startMem = DisplayPhysicalMemoryStats("Before SetImmutable ProtobufToAccountDelta1", 0, startMem);
         if (!account.SetImmutable(codeBytes, initDataBytes)) {
           LOG_GENERAL(WARNING, "Account::SetImmutable failed");
           return false;
         }
+      startMem = DisplayPhysicalMemoryStats("After SetImmutable ProtobufToAccountDelta1", 0, startMem);
       }
 
       if (account.GetCodeHash() != accbase.GetCodeHash()) {
@@ -715,7 +720,9 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
                                  << " Actual: " << accbase.GetCodeHash().hex());
         return false;
       }
+    startMem = DisplayPhysicalMemoryStats("After Contract ProtobufToAccountDelta1", 0, startMem);
     }
+    startMem = DisplayPhysicalMemoryStats("After Contract ProtobufToAccountDelta2", 0, startMem);
 
     if (accbase.GetStorageRoot() != account.GetStorageRoot()) {
       dev::h256 tmpHash;
@@ -732,7 +739,9 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
         toDeleteIndices.emplace_back(entry);
       }
 
+    startMem = DisplayPhysicalMemoryStats("Before ProtobufToAccountDelta3", 0, startMem);
       account.UpdateStates(addr, t_states, toDeleteIndices, temp, revertible);
+    startMem = DisplayPhysicalMemoryStats("After ProtobufToAccountDelta3", 0, startMem);
 
       if ((!t_states.empty() || !toDeleteIndices.empty()) &&
           accbase.GetStorageRoot() != account.GetStorageRoot()) {
@@ -744,6 +753,7 @@ bool ProtobufToAccountDelta(const ProtoAccount& protoAccount, Account& account,
       }
     }
   }
+  startMem = DisplayPhysicalMemoryStats("End ProtobufToAccountDelta5", 0, startMem);
 
   return true;
 }
@@ -2701,6 +2711,7 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
 
     t_account = *oriAccount;
     account = *oriAccount;
+    uint64_t startMem = DisplayPhysicalMemoryStats("Before ProtobufToAccountDelta",0);
     if (!ProtobufToAccountDelta(entry.account(), account, address, fullCopy,
                                 temp, revertible)) {
       LOG_GENERAL(WARNING,
@@ -2708,8 +2719,10 @@ bool Messenger::GetAccountStoreDelta(const bytes& src,
                       << address.hex());
       return false;
     }
+    startMem = DisplayPhysicalMemoryStats("After ProtobufToAccountDelta", 0, startMem);
     accountStore.AddAccountDuringDeserialization(address, account, t_account,
                                                  fullCopy, revertible);
+    DisplayPhysicalMemoryStats("End ProtobufToAccountDelta", 0, startMem);
   }
 
   return true;
