@@ -1082,6 +1082,7 @@ dev::h256 ContractStorage2::GetContractStateHash(const dev::h160& address,
 }
 
 void ContractStorage2::Reset() {
+  LOG_GENERAL(INFO, "Reset ContractStorage2");
   {
     lock_guard<mutex> g(m_codeMutex);
     m_codeDB.ResetDB();
