@@ -940,6 +940,8 @@ void ContractStorage2::UpdateStateDatasAndToDeletes(
                                         startMem);
 
   stateHash = GetContractStateHash(addr, temp);
+  startMem = DisplayPhysicalMemoryStats("End1 UpdateStateDatasAndToDeletes", 0,
+                                        startMem);
 }
 
 void ContractStorage2::BufferCurrentState() {

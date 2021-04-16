@@ -29,6 +29,7 @@
 #include "libUtils/JsonUtils.h"
 #include "libUtils/Logger.h"
 #include "libUtils/SafeMath.h"
+#include "libUtils/MemoryStats.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -360,9 +361,13 @@ void Account::UpdateStates(const Address& addr,
                            bool temp, bool revertible) {
   ContractStorage2::GetContractStorage().UpdateStateDatasAndToDeletes(
       addr, t_states, toDeleteIndices, m_storageRoot, temp, revertible);
+  uint64_t startMem = 0;
   if (!m_address) {
+    startMem = DisplayPhysicalMemoryStats("Before SetAddress", 0, 0);
     SetAddress(addr);
+    startMem = DisplayPhysicalMemoryStats("After SetAddress", 0, startMem);
   }
+    startMem = DisplayPhysicalMemoryStats("End UpdatesStates", 0, startMem);
 }
 
 bool Account::FetchStateJson(Json::Value& root, const string& vname,
