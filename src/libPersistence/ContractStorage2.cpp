@@ -1057,7 +1057,7 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
   // iterate the raw protobuf string and hash
   SHA2<HashType::HASH_VARIANT_256> sha2;
   for (const auto& state : states) {
-    if (LOG_SC) {
+    if (LOG_SC == false) {
       LOG_GENERAL(INFO, "state key: "
                             << state.first << " value: "
                             << DataConversion::CharArrayToString(state.second));
@@ -1067,6 +1067,7 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
       sha2.Update(state.second);
     }
   }
+  states.clear();
   startMem = DisplayPhysicalMemoryStats("End GetContractStateHashCore", 0, startMem);
   // return dev::h256(sha2.Finalize());
   dev::h256 ret(sha2.Finalize());
