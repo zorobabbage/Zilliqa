@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <malloc.h>
 #include <array>
 #include <boost/multiprecision/cpp_dec_float.hpp>
 #include <chrono>
@@ -962,6 +963,14 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       return false;
     }
 
+    if (LOOKUP_NODE_MODE) {
+      auto clearStlMemoryCache = []() -> void {
+        LOG_GENERAL(INFO, "Clearing STL container cache for lookups and seeds");
+        malloc_trim(0);
+      };
+      DetachedFunction(1, clearStlMemoryCache);
+    }
+
     // if lookup and loaded microblocks, then skip
     lock_guard<mutex> g(m_mutexUnavailableMicroBlocks);
     if (!(LOOKUP_NODE_MODE &&
@@ -989,6 +998,15 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
+    // Clear STL memory cache
+    if (!LOOKUP_NODE_MODE) {
+      auto clearStlMemoryCache = []() -> void {
+        LOG_GENERAL(INFO, "Clearing STL container cache for mining nodes");
+        malloc_trim(0);
+      };
+      DetachedFunction(1, clearStlMemoryCache);
+    }
+
     auto writeStateToDisk = [this]() -> void {
       uint64_t startMem = DisplayPhysicalMemoryStats("Before MoveUpdatesToDisk", m_mediator.m_currentEpochNum);
       LOG_GENERAL(INFO, "GetNumOfAccounts before updates="<<AccountStore::GetInstance().GetNumOfAccounts());
