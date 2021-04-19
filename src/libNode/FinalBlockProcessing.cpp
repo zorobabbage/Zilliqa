@@ -15,7 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <malloc.h>
 #include <array>
 #include <boost/multiprecision/cpp_dec_float.hpp>
 #include <chrono>
