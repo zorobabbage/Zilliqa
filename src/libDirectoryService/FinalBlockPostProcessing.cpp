@@ -182,13 +182,6 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
     return;
   }
 
-  // Clear STL memory cache
-  auto clearStlMemoryCache = []() -> void {
-    LOG_GENERAL(INFO, "Clearing STL container cache for dsnodes");
-    CommonUtils::ReleaseSTLMemoryCache();
-  };
-  DetachedFunction(1, clearStlMemoryCache);
-
   if (isVacuousEpoch) {
     auto writeStateToDisk = [this]() -> void {
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
@@ -224,6 +217,13 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
       }
     };
     DetachedFunction(1, writeStateToDisk);
+
+    // Clear STL memory cache
+    auto clearStlMemoryCache = []() -> void {
+      LOG_GENERAL(INFO, "Clearing STL container cache for dsnodes");
+      CommonUtils::ReleaseSTLMemoryCache();
+    };
+    DetachedFunction(1, clearStlMemoryCache);
   } else {
     // Coinbase
     SaveCoinbase(m_finalBlock->GetB1(), m_finalBlock->GetB2(),
