@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <malloc.h>
 #include <algorithm>
 #include <chrono>
 #include <thread>
@@ -96,7 +97,6 @@ bool DirectoryService::StoreFinalBlockToDisk() {
     LOG_GENERAL(WARNING, "Failed to put statedelta in persistence");
     return false;
   }
-
   return true;
 }
 
@@ -181,6 +181,13 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
     LOG_GENERAL(WARNING, "StoreFinalBlockToDisk failed!");
     return;
   }
+
+  // Clear STL memory cache
+  auto clearStlMemoryCache = []() -> void {
+    LOG_GENERAL(INFO, "Clearing STL container cache for dsnodes");
+    malloc_trim(0);
+  };
+  DetachedFunction(1, clearStlMemoryCache);
 
   if (isVacuousEpoch) {
     auto writeStateToDisk = [this]() -> void {
