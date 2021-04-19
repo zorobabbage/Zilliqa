@@ -37,6 +37,7 @@
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/Logger.h"
 #include "libUtils/SanityChecks.h"
+#include "libUtils/CommonUtils.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -185,7 +186,7 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
   // Clear STL memory cache
   auto clearStlMemoryCache = []() -> void {
     LOG_GENERAL(INFO, "Clearing STL container cache for dsnodes");
-    malloc_trim(0);
+    CommonUtils::ReleaseSTLMemoryCache();
   };
   DetachedFunction(1, clearStlMemoryCache);
 
