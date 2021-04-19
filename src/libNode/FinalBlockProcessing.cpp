@@ -45,6 +45,7 @@
 #include "libServer/LookupServer.h"
 #include "libServer/WebsocketServer.h"
 #include "libUtils/BitVector.h"
+#include "libUtils/CommonUtils.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/HashUtils.h"
@@ -54,7 +55,6 @@
 #include "libUtils/TimeLockedFunction.h"
 #include "libUtils/TimeUtils.h"
 #include "libUtils/TimestampVerifier.h"
-#include "libUtils/CommonUtils.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -959,12 +959,9 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       return false;
     }
 
+    // Clear STL memory cache
     if (LOOKUP_NODE_MODE) {
-      auto clearStlMemoryCache = []() -> void {
-        LOG_GENERAL(INFO, "Clearing STL container cache for lookups and seeds");
-        CommonUtils::ReleaseSTLMemoryCache();
-      };
-      DetachedFunction(1, clearStlMemoryCache);
+      DetachedFunction(1, CommonUtils::ReleaseSTLMemoryCache);
     }
 
     // if lookup and loaded microblocks, then skip
@@ -996,11 +993,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     }
     // Clear STL memory cache
     if (!LOOKUP_NODE_MODE) {
-      auto clearStlMemoryCache = []() -> void {
-        LOG_GENERAL(INFO, "Clearing STL container cache for mining nodes");
-        CommonUtils::ReleaseSTLMemoryCache();
-      };
-      DetachedFunction(1, clearStlMemoryCache);
+      DetachedFunction(1, CommonUtils::ReleaseSTLMemoryCache);
     }
 
     auto writeStateToDisk = [this]() -> void {

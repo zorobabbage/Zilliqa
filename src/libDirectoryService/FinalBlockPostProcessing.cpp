@@ -32,11 +32,11 @@
 #include "libNetwork/Blacklist.h"
 #include "libNetwork/Guard.h"
 #include "libPersistence/ContractStorage2.h"
+#include "libUtils/CommonUtils.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/Logger.h"
 #include "libUtils/SanityChecks.h"
-#include "libUtils/CommonUtils.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -219,11 +219,7 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
     DetachedFunction(1, writeStateToDisk);
 
     // Clear STL memory cache
-    auto clearStlMemoryCache = []() -> void {
-      LOG_GENERAL(INFO, "Clearing STL container cache for dsnodes");
-      CommonUtils::ReleaseSTLMemoryCache();
-    };
-    DetachedFunction(1, clearStlMemoryCache);
+    DetachedFunction(1, CommonUtils::ReleaseSTLMemoryCache);
   } else {
     // Coinbase
     SaveCoinbase(m_finalBlock->GetB1(), m_finalBlock->GetB2(),
