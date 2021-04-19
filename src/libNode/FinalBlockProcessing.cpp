@@ -55,6 +55,7 @@
 #include "libUtils/TimeLockedFunction.h"
 #include "libUtils/TimeUtils.h"
 #include "libUtils/TimestampVerifier.h"
+#include "libUtils/CommonUtils.h"
 
 using namespace std;
 using namespace boost::multiprecision;
@@ -962,7 +963,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     if (LOOKUP_NODE_MODE) {
       auto clearStlMemoryCache = []() -> void {
         LOG_GENERAL(INFO, "Clearing STL container cache for lookups and seeds");
-        malloc_trim(0);
+        CommonUtils::ReleaseSTLMemoryCache();
       };
       DetachedFunction(1, clearStlMemoryCache);
     }
@@ -998,7 +999,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     if (!LOOKUP_NODE_MODE) {
       auto clearStlMemoryCache = []() -> void {
         LOG_GENERAL(INFO, "Clearing STL container cache for mining nodes");
-        malloc_trim(0);
+        CommonUtils::ReleaseSTLMemoryCache();
       };
       DetachedFunction(1, clearStlMemoryCache);
     }
