@@ -2993,6 +2993,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(
                   "I am lagging behind in older ds epoch. Will rejoin again!");
       // Reset to NO_SYNC so that allow exiting already running syncing process.
       // And to start new one.
+      LOG_GENERAL(INFO, "SeedRecovery m_syncType=" << m_syncType);
       if (m_syncType == SyncType::NORMAL_SYNC ||
           m_syncType == SyncType::NEW_SYNC) {
         m_syncType = SyncType::NO_SYNC;
@@ -3003,6 +3004,17 @@ bool Lookup::ProcessSetTxBlockFromSeed(
         m_syncType = SyncType::NO_SYNC;
         this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
         m_mediator.m_ds->RejoinAsDS(false);
+      } else if (m_syncType == SyncType::NEW_LOOKUP_SYNC) {
+        if (ARCHIVAL_LOOKUP) {
+          m_syncType = SyncType::NO_SYNC;
+          this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
+          m_mediator.m_lookup->RejoinAsNewLookup(false);
+        } else {
+          m_syncType = SyncType::NO_SYNC;
+          m_mediator.m_lookup->RejoinAsLookup(false);
+        }
+      } else {
+        LOG_GENERAL(WARNING, "Alas !!! Unhandled rejoin scenario");
       }
       return false;
     }
