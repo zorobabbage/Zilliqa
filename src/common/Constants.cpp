@@ -229,6 +229,8 @@ const unsigned int MICROBLOCK_TIMEOUT{
     ReadConstantNumeric("MICROBLOCK_TIMEOUT", "node.epoch_timing.")};
 const unsigned int NEW_NODE_SYNC_INTERVAL{
     ReadConstantNumeric("NEW_NODE_SYNC_INTERVAL", "node.epoch_timing.")};
+const unsigned int INIT_SYNC_INTERVAL{
+    ReadConstantNumeric("INIT_SYNC_INTERVAL", "node.epoch_timing.")};
 const unsigned int POW_SUBMISSION_TIMEOUT{
     ReadConstantNumeric("POW_SUBMISSION_TIMEOUT", "node.epoch_timing.")};
 const unsigned int POW_WINDOW_IN_SECONDS{
@@ -536,6 +538,8 @@ const bool CONTRACT_STATES_MIGRATED{
     ReadConstantString("CONTRACT_STATES_MIGRATED", "node.recovery.") == "true"};
 const unsigned int MAX_IPCHANGE_REQUEST_LIMIT{
     ReadConstantNumeric("MAX_IPCHANGE_REQUEST_LIMIT", "node.recovery.")};
+const unsigned int MAX_REJOIN_NETWORK_ATTEMPTS{
+    ReadConstantNumeric("MAX_REJOIN_NETWORK_ATTEMPTS", "node.recovery.")};
 
 // Smart contract constants
 const bool ENABLE_SC{ReadConstantString("ENABLE_SC", "node.smart_contract.") ==
