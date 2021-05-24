@@ -654,7 +654,7 @@ void Node::WaitForNextTwoBlocksBeforeRejoin() {
     } while (m_mediator.m_lookup->cv_setTxBlockFromSeed.wait_for(
                  lock, chrono::seconds(RECOVERY_SYNC_TIMEOUT)) ==
              cv_status::timeout);
-
+    // TODO check if mutex impact rejoin.may cause rejoin in loop
     if (m_mediator.m_txBlockChain.GetBlockCount() > oldBlkCount + 1) {
       LOG_GENERAL(INFO, "Received next two txblocks. Ok to rejoin now!")
       break;
@@ -861,7 +861,8 @@ bool Node::StartRetrieveHistory(const SyncType syncType,
                     "Retrieve final block from lookup node, please wait...");
       } while (m_mediator.m_lookup->cv_setTxBlockFromSeed.wait_for(
                    lock, chrono::seconds(RECOVERY_SYNC_TIMEOUT)) ==
-               cv_status::timeout);
+               cv_status::timeout);  // TODO check if mutex impact rejoin.may
+                                     // cause rejoin in loop
 
       m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
 

@@ -393,7 +393,7 @@ class Lookup : public Executable {
   bool ProcessSetTxBlockFromSeed(
       const bytes& message, unsigned int offset, const Peer& from,
       [[gnu::unused]] const unsigned char& startByte);
-  void CommitTxBlocks(const std::vector<TxBlock>& txBlocks);
+  bool CommitTxBlocks(const std::vector<TxBlock>& txBlocks);
   void PrepareForStartPow();
   bool GetDSInfo();
   bool ProcessSetStateDeltaFromSeed(
@@ -501,6 +501,10 @@ class Lookup : public Executable {
     m_stakingServer = std::move(stakingServer);
   }
 
+  void RejoinNetwork();
+
+  uint16_t m_rejoinNetworkAttempts{0};
+
   bool m_fetchedOfflineLookups = false;
   std::mutex m_mutexOfflineLookupsUpdation;
   std::condition_variable cv_offlineLookups;
@@ -522,6 +526,11 @@ class Lookup : public Executable {
   // Get cosigrewards from seed
   std::mutex m_mutexSetCosigRewardsFromSeed;
   std::condition_variable cv_setCosigRewardsFromSeed;
+  // Rejoin recovery
+  std::mutex m_mutexCvSetRejoinRecovery;
+  std::condition_variable cv_setRejoinRecovery;
+
+  bool m_rejoinInProgress = false;
 
   bool InitMining();
 
@@ -560,6 +569,14 @@ class Lookup : public Executable {
   std::mutex m_mutexVCFinalBlockProcessed;
   std::condition_variable cv_vcFinalBlockProcessed;
   bool m_vcFinalBlockProcessed = false;
+
+  // TODO : Delete later on
+  // Flag to reproduce state hash root failure
+  // int m_stateRootMismatchFlag{0};
+
+  // TODO : Delete later on
+  // Flag to reproduce Deserialize state delta hash failure
+  // int m_reproduceIssue{0};
 
   // exit trigger
   std::atomic<bool> m_exitPullThread{};
