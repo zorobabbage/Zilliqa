@@ -3111,7 +3111,7 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
                                << lowBlockNum << "-" << highBlockNum);
       cv_setTxBlockFromSeed.notify_all();
       cv_waitJoined.notify_all();
-      return true;  // TODO confirm here since this will mean fetch from lookup
+      return false;  // Rejoin in case DeserializeDelta fails
     }
 
     // Check StateRootHash and One in last TxBlk
@@ -3120,7 +3120,7 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       LOG_CHECK_FAIL("State root hash",
                      txBlocks.back().GetHeader().GetStateRootHash(),
                      m_prevStateRootHashTemp);
-      return false;
+      return false;  // Rejoin incase StateRootHash failed
     }
   }
 
