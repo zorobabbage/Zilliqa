@@ -3111,7 +3111,7 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
                                << lowBlockNum << "-" << highBlockNum);
       cv_setTxBlockFromSeed.notify_all();
       cv_waitJoined.notify_all();
-      return false;  // TODO confirm here
+      return true;  // TODO confirm here since this will mean fetch from lookup
     }
 
     // Check StateRootHash and One in last TxBlk
@@ -3566,7 +3566,8 @@ void Lookup::RejoinNetwork() {
     m_mediator.m_ds->RejoinAsDS(false);
   } else if (m_syncType == SyncType::NEW_LOOKUP_SYNC) {
     if (ARCHIVAL_LOOKUP) {
-      m_syncType = SyncType::NO_SYNC;
+      m_syncType = SyncType::NO_SYNC;  // TODO Confirm : This prevents node to
+                                       // go out of while loop of InitSync
       this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
       rejoin = true;
       m_mediator.m_lookup->RejoinAsNewLookup(false);
