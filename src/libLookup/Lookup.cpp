@@ -3545,11 +3545,12 @@ bool Lookup::ProcessSetStateDeltasFromSeed(
 void Lookup::RejoinNetwork() {
   LOG_MARKER();
   bool rejoin = false;
-  if (m_rejoinNetworkAttempts < MAX_REJOIN_NETWORK_ATTEMPTS) {
+  if (m_rejoinNetworkAttempts > MAX_REJOIN_NETWORK_ATTEMPTS) {
     LOG_GENERAL(INFO,
                 "Max rejoin attempts reached.Do not rejoin now. "
                 "MAX_REJOIN_NETWORK_ATTEMPTS="
                     << MAX_REJOIN_NETWORK_ATTEMPTS);
+    return;
   }
   LOG_GENERAL(INFO, "SeedRecovery m_syncType=" << m_syncType);
   if (m_syncType == SyncType::NORMAL_SYNC || m_syncType == SyncType::NEW_SYNC) {
