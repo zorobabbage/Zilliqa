@@ -2993,36 +2993,14 @@ bool Lookup::ProcessSetTxBlockFromSeed(
                   "I am lagging behind in older ds epoch. Will rejoin again!");
       // Reset to NO_SYNC so that allow exiting already running syncing process.
       // And to start new one.
-      LOG_GENERAL(INFO, "SeedRecovery m_syncType=" << m_syncType);
-      if (m_syncType == SyncType::NORMAL_SYNC ||
-          m_syncType == SyncType::NEW_SYNC) {
-        m_syncType = SyncType::NO_SYNC;
-        this_thread::sleep_for(chrono::seconds(
-            m_startedPoW ? POW_WINDOW_IN_SECONDS : NEW_NODE_SYNC_INTERVAL));
-        m_mediator.m_node->RejoinAsNormal();
-      } else if (m_syncType == SyncType::DS_SYNC) {
-        m_syncType = SyncType::NO_SYNC;
-        this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
-        m_mediator.m_ds->RejoinAsDS(false);
-      } else if (m_syncType == SyncType::NEW_LOOKUP_SYNC) {
-        if (ARCHIVAL_LOOKUP) {
-          m_syncType = SyncType::NO_SYNC;
-          this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
-          m_mediator.m_lookup->RejoinAsNewLookup(false);
-        } else {
-          m_syncType = SyncType::NO_SYNC;
-          m_mediator.m_lookup->RejoinAsLookup(false);
-        }
-      } else {
-        LOG_GENERAL(WARNING, "Alas !!! Unhandled rejoin scenario");
-      }
+      RejoinNetwork();
       return false;
     }
     auto res = m_mediator.m_validator->CheckTxBlocks(
         txBlocks, m_mediator.m_blocklinkchain.GetBuiltDSComm(),
         m_mediator.m_blocklinkchain.GetLatestBlockLink());
     switch (res) {
-      case Validator::TxBlockValidationMsg::VALID:
+      case Validator::TxBlockValidationMsg::VALID: {
 #ifdef SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
         if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
           LOG_GENERAL(INFO,
@@ -3031,8 +3009,11 @@ bool Lookup::ProcessSetTxBlockFromSeed(
           this_thread::sleep_for(chrono::seconds(10));
         }
 #endif  // SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
-        CommitTxBlocks(txBlocks);
+        if (!CommitTxBlocks(txBlocks)) {
+          RejoinNetwork();
+        }
         break;
+      }
       case Validator::TxBlockValidationMsg::INVALID:
         LOG_GENERAL(INFO, "[TxBlockVerif]"
                               << "Invalid blocks");
@@ -3101,7 +3082,7 @@ void Lookup::PrepareForStartPow() {
   InitMining();
 }
 
-void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
+bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
   LOG_GENERAL(INFO, "[TxBlockVerif]"
                         << "Success");
   uint64_t lowBlockNum = txBlocks.front().GetHeader().GetBlockNum();
@@ -3130,7 +3111,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
                                << lowBlockNum << "-" << highBlockNum);
       cv_setTxBlockFromSeed.notify_all();
       cv_waitJoined.notify_all();
-      return;
+      return false;  // TODO confirm here
     }
 
     // Check StateRootHash and One in last TxBlk
@@ -3139,7 +3120,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       LOG_CHECK_FAIL("State root hash",
                      txBlocks.back().GetHeader().GetStateRootHash(),
                      m_prevStateRootHashTemp);
-      return;
+      return false;
     }
   }
 
@@ -3155,7 +3136,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
     if (!BlockStorage::GetBlockStorage().PutTxBlock(blockNum,
                                                     serializedTxBlock)) {
       LOG_GENERAL(WARNING, "BlockStorage::PutTxBlock failed " << txBlock);
-      return;
+      return false;
     }
 
     // If txblk not from vacaous epoch and is rejoining as ds node
@@ -3389,6 +3370,7 @@ void Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
 
   cv_setTxBlockFromSeed.notify_all();
   cv_waitJoined.notify_all();
+  return true;
 }
 
 void Lookup::FindMissingMBsForLastNTxBlks(const uint32_t& num) {
@@ -3558,6 +3540,46 @@ bool Lookup::ProcessSetStateDeltasFromSeed(
 
   cv_setStateDeltasFromSeed.notify_all();
   return true;
+}
+
+void Lookup::RejoinNetwork() {
+  LOG_MARKER();
+  bool rejoin = false;
+  if (m_rejoinNetworkAttempts < MAX_REJOIN_NETWORK_ATTEMPTS) {
+    LOG_GENERAL(INFO,
+                "Max rejoin attempts reached.Do not rejoin now. "
+                "MAX_REJOIN_NETWORK_ATTEMPTS="
+                    << MAX_REJOIN_NETWORK_ATTEMPTS);
+  }
+  LOG_GENERAL(INFO, "SeedRecovery m_syncType=" << m_syncType);
+  if (m_syncType == SyncType::NORMAL_SYNC || m_syncType == SyncType::NEW_SYNC) {
+    m_syncType = SyncType::NO_SYNC;
+    this_thread::sleep_for(chrono::seconds(
+        m_startedPoW ? POW_WINDOW_IN_SECONDS : NEW_NODE_SYNC_INTERVAL));
+    rejoin = true;
+    m_mediator.m_node->RejoinAsNormal();
+  } else if (m_syncType == SyncType::DS_SYNC) {
+    m_syncType = SyncType::NO_SYNC;
+    this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
+    rejoin = true;
+    m_mediator.m_ds->RejoinAsDS(false);
+  } else if (m_syncType == SyncType::NEW_LOOKUP_SYNC) {
+    if (ARCHIVAL_LOOKUP) {
+      m_syncType = SyncType::NO_SYNC;
+      this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
+      rejoin = true;
+      m_mediator.m_lookup->RejoinAsNewLookup(false);
+    } else {
+      m_syncType = SyncType::NO_SYNC;
+      rejoin = true;
+      m_mediator.m_lookup->RejoinAsLookup(false);
+    }
+  } else {
+    LOG_GENERAL(WARNING, "Alas !!! Unhandled rejoin scenario");
+  }
+  if (rejoin) {
+    m_rejoinNetworkAttempts++;
+  }
 }
 
 bool Lookup::ProcessGetTxnsFromLookup([[gnu::unused]] const bytes& message,

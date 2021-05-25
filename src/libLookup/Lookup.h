@@ -393,7 +393,7 @@ class Lookup : public Executable {
   bool ProcessSetTxBlockFromSeed(
       const bytes& message, unsigned int offset, const Peer& from,
       [[gnu::unused]] const unsigned char& startByte);
-  void CommitTxBlocks(const std::vector<TxBlock>& txBlocks);
+  bool CommitTxBlocks(const std::vector<TxBlock>& txBlocks);
   void PrepareForStartPow();
   bool GetDSInfo();
   bool ProcessSetStateDeltaFromSeed(
@@ -500,6 +500,10 @@ class Lookup : public Executable {
   void SetStakingServer(std::shared_ptr<StakingServer> stakingServer) {
     m_stakingServer = std::move(stakingServer);
   }
+
+  void RejoinNetwork();
+
+  uint16_t m_rejoinNetworkAttempts;
 
   bool m_fetchedOfflineLookups = false;
   std::mutex m_mutexOfflineLookupsUpdation;
