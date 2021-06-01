@@ -81,6 +81,7 @@ int main(int argc, const char* argv[]) {
         "loadconfig,l", "Loads configuration if set (deprecated)")(
         "synctype,s", po::value<unsigned int>(&syncType), synctype_descr)(
         "recovery,r", "Runs in recovery mode if set")(
+        "stdoutlog,o", "Send application logs to stdout instead of file")(
         "logpath,g", po::value<string>(&logpath),
         "customized log path, could be relative path (e.g., \"./logs/\"), or "
         "absolute path (e.g., \"/usr/local/test/logs/\")")(
@@ -166,7 +167,11 @@ int main(int argc, const char* argv[]) {
       return ERROR_IN_COMMAND_LINE;
     }
 
-    INIT_FILE_LOGGER("zilliqa", logpath.c_str());
+    if (vm.count("stdoutlog")) {
+      INIT_STDOUT_LOGGER();
+    } else {
+      INIT_FILE_LOGGER("zilliqa", logpath.c_str());
+    }
     INIT_STATE_LOGGER("state", logpath.c_str());
     INIT_EPOCHINFO_LOGGER("epochinfo", logpath.c_str());
 
@@ -225,13 +230,21 @@ int main(int argc, const char* argv[]) {
                     (SyncType)syncType, vm.count("recovery"),
                     vm.count("l2lsyncmode") <= 0,
                     make_pair(extSeedPrivKey, extSeedPubKey));
-    auto dispatcher = [&zilliqa](pair<bytes, Peer>* message) mutable -> void {
-      zilliqa.Dispatch(message);
-    };
+    auto dispatcher =
+        [&zilliqa](
+            pair<bytes, std::pair<Peer, const unsigned char>>* message) mutable
+        -> void { zilliqa.Dispatch(message); };
+    // Only start the incoming message queue
+    P2PComm::GetInstance().StartMessagePump(dispatcher);
 
-    P2PComm::GetInstance().StartMessagePump(my_network_info.m_listenPortHost,
-                                            dispatcher);
-
+    if (ENABLE_SEED_TO_SEED_COMMUNICATION && !MULTIPLIER_SYNC_MODE) {
+      LOG_GENERAL(DEBUG, "P2PSeed Do not open listener");
+      // Do not open listener
+      P2PComm::GetInstance().EnableConnect();
+    } else {
+      P2PComm::GetInstance().EnableListener(my_network_info.m_listenPortHost,
+                                            ENABLE_SEED_TO_SEED_COMMUNICATION);
+    }
   } catch (std::exception& e) {
     std::cerr << "Unhandled Exception reached the top of main: " << e.what()
               << ", application will now exit" << std::endl;

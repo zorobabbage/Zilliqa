@@ -116,8 +116,21 @@ def make_options_dictionary(options_dict):
 	options_dict["difficulty"] = "GetPrevDifficulty"
 	options_dict["set_sendsccallstods"] = "ToggleSendSCCallsToDS"
 	options_dict["get_sendsccallstods"] = "GetSendSCCallsToDS"
+	options_dict["set_sendalltods"]="ToggleSendAllToDS"
+	options_dict["get_sendalltods"] = "GetSendAllToDS"
 	options_dict["disable_pow"] = "DisablePoW"
 	options_dict["disabletxns"] = "ToggleDisableTxns"
+	options_dict["set_validatedb"] = "SetValidateDB"
+	options_dict["get_validatedb"] = "GetValidateDB"
+	options_dict["get_remotestorage"] = "GetRemoteStorage"
+	options_dict["set_remotestorage"] = "ToggleRemoteStorage"
+	options_dict["init_remotestorage"] = "InitRemoteStorage"
+	options_dict["blocktime"] = "GetAverageBlockTime"
+	options_dict["blacklist_check"] = "IsIPInBlacklist"
+	options_dict["blacklist_remove"] = "RemoveIPFromBlacklist"
+	options_dict["disablegetstate"] = "ToggleGetSmartContractState"
+	options_dict["audit_shard"] = "AuditShard"
+	options_dict["getpendingtxns"] = "ToggleGetPendingTxns"
 
 def ProcessResponseCore(resp, param):
 	if param:
@@ -142,7 +155,7 @@ def ProcessResponse(resp, params, batch):
 def main():
 	options_dictionary = {}
 	make_options_dictionary(options_dictionary)
-	option_param_required = ["checktxn","whitelist_add","whitelist_remove","seedswhitelist_add", "seedswhitelist_remove", "register_extseed", "deregister_extseed"]
+	option_param_required = ["checktxn","whitelist_add","whitelist_remove","seedswhitelist_add", "seedswhitelist_remove", "register_extseed", "deregister_extseed", "blacklist_check", "blacklist_remove", "audit_shard"]
 	global DEBUG_MODE
 	args = parse_arguments(sorted(options_dictionary.keys()))
 	DEBUG_MODE = args.debug

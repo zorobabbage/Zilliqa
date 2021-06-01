@@ -107,6 +107,8 @@ class AccountStore
 
   bool Deserialize(const bytes& src, unsigned int offset) override;
 
+  bool Deserialize(const std::string& src, unsigned int offset) override;
+
   /// generate serialized raw bytes for StateDelta
   bool SerializeDelta();
 
@@ -145,12 +147,13 @@ class AccountStore
   /// [[[WARNING]]] Test utility function, don't use in core protocol
   Account* GetAccountTemp(const Address& address);
 
+  Account* GetAccountTempAtomic(const Address& address);
+
   /// update account states in AccountStoreTemp
   bool UpdateAccountsTemp(const uint64_t& blockNum,
                           const unsigned int& numShards, const bool& isDS,
                           const Transaction& transaction,
-                          TransactionReceipt& receipt,
-                          ErrTxnStatus& error_code);
+                          TransactionReceipt& receipt, TxnStatus& error_code);
 
   /// add account in AccountStoreTemp
   void AddAccountTemp(const Address& address, const Account& account) {
@@ -223,10 +226,18 @@ class AccountStore
   /// revert the AccountStore if previously called CommitTempRevertible
   void RevertCommitTemp();
 
+  /// NotifyTimeout for AccountStoreTemp
+  void NotifyTimeoutTemp();
+
   /// clean the data for revert the AccountStore
   void InitRevertibles();
 
   std::shared_timed_mutex& GetPrimaryMutex() { return m_mutexPrimary; }
+
+  bool MigrateContractStates(
+      bool ignoreCheckerFailure, bool disambiguation,
+      const std::string& contract_address_output_filename,
+      const std::string& normal_address_output_filename);
 };
 
 #endif  // ZILLIQA_SRC_LIBDATA_ACCOUNTDATA_ACCOUNTSTORE_H_

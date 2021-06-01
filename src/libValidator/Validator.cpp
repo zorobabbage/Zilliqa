@@ -41,21 +41,21 @@ bool Validator::VerifyTransaction(const Transaction& tran) {
 
 bool Validator::CheckCreatedTransaction(const Transaction& tx,
                                         TransactionReceipt& receipt,
-                                        ErrTxnStatus& error_code) const {
+                                        TxnStatus& error_code) const {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Validator::CheckCreatedTransaction not expected to be "
                 "called from LookUp node.");
     return true;
   }
-  error_code = ErrTxnStatus::NOT_PRESENT;
+  error_code = TxnStatus::NOT_PRESENT;
   // LOG_MARKER();
 
   // LOG_GENERAL(INFO, "Tran: " << tx.GetTranID());
 
   if (DataConversion::UnpackA(tx.GetVersion()) != CHAIN_ID) {
     LOG_GENERAL(WARNING, "CHAIN_ID incorrect");
-    error_code = ErrTxnStatus::VERIF_ERROR;
+    error_code = TxnStatus::VERIF_ERROR;
     return false;
   }
 
@@ -63,7 +63,7 @@ bool Validator::CheckCreatedTransaction(const Transaction& tx,
     LOG_GENERAL(WARNING, "Transaction version incorrect "
                              << "Expected:" << TRANSACTION_VERSION << " Actual:"
                              << DataConversion::UnpackB(tx.GetVersion()));
-    error_code = ErrTxnStatus::VERIF_ERROR;
+    error_code = TxnStatus::VERIF_ERROR;
     return false;
   }
 
@@ -73,7 +73,7 @@ bool Validator::CheckCreatedTransaction(const Transaction& tx,
 
   if (IsNullAddress(fromAddr)) {
     LOG_GENERAL(WARNING, "Invalid address for issuing transactions");
-    error_code = ErrTxnStatus::INVALID_FROM_ACCOUNT;
+    error_code = TxnStatus::INVALID_FROM_ACCOUNT;
     return false;
   }
 
@@ -82,7 +82,7 @@ bool Validator::CheckCreatedTransaction(const Transaction& tx,
     LOG_GENERAL(WARNING, "fromAddr not found: " << fromAddr
                                                 << ". Transaction rejected: "
                                                 << tx.GetTranID());
-    error_code = ErrTxnStatus::INVALID_FROM_ACCOUNT;
+    error_code = TxnStatus::INVALID_FROM_ACCOUNT;
     return false;
   }
 
@@ -93,7 +93,7 @@ bool Validator::CheckCreatedTransaction(const Transaction& tx,
                   << " From Account  = 0x" << fromAddr << " Balance = "
                   << AccountStore::GetInstance().GetBalance(fromAddr)
                   << " Debit Amount = " << tx.GetAmount());
-    error_code = ErrTxnStatus::INSUFFICIENT_BALANCE;
+    error_code = TxnStatus::INSUFFICIENT_BALANCE;
     return false;
   }
 
@@ -106,7 +106,7 @@ bool Validator::CheckCreatedTransaction(const Transaction& tx,
 }
 
 bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
-                                                  ErrTxnStatus& error_code) {
+                                                  TxnStatus& error_code) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Validator::CheckCreatedTransactionFromLookup not expected "
@@ -114,13 +114,13 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
     return true;
   }
 
-  error_code = ErrTxnStatus::NOT_PRESENT;
+  error_code = TxnStatus::NOT_PRESENT;
 
   // LOG_MARKER();
 
   if (DataConversion::UnpackA(tx.GetVersion()) != CHAIN_ID) {
     LOG_GENERAL(WARNING, "CHAIN_ID incorrect");
-    error_code = ErrTxnStatus::VERIF_ERROR;
+    error_code = TxnStatus::VERIF_ERROR;
     return false;
   }
 
@@ -128,7 +128,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
     LOG_GENERAL(WARNING, "Transaction version incorrect "
                              << "Expected:" << TRANSACTION_VERSION << " Actual:"
                              << DataConversion::UnpackB(tx.GetVersion()));
-    error_code = ErrTxnStatus::VERIF_ERROR;
+    error_code = TxnStatus::VERIF_ERROR;
     return false;
   }
 
@@ -142,7 +142,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
       (m_mediator.m_ds->m_mode == DirectoryService::Mode::IDLE
            ? SHARD_MICROBLOCK_GAS_LIMIT
            : DS_MICROBLOCK_GAS_LIMIT)) {
-    error_code = ErrTxnStatus::HIGH_GAS_LIMIT;
+    error_code = TxnStatus::HIGH_GAS_LIMIT;
     // Already should be checked at lookup
     LOG_GENERAL(WARNING, "Txn gas limit too high");
     return false;
@@ -150,7 +150,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
 
   if (IsNullAddress(fromAddr)) {
     LOG_GENERAL(WARNING, "Invalid address for issuing transactions");
-    error_code = ErrTxnStatus::INVALID_FROM_ACCOUNT;
+    error_code = TxnStatus::INVALID_FROM_ACCOUNT;
     return false;
   }
 
@@ -163,7 +163,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
                     << " From Account  = 0x" << fromAddr
                     << " Correct shard = " << correct_shard_from
                     << " This shard    = " << m_mediator.m_node->GetShardId());
-      error_code = ErrTxnStatus::INCORRECT_SHARD;
+      error_code = TxnStatus::INCORRECT_SHARD;
       return false;
       // // Transaction created from the GenTransactionBulk will be rejected
       // // by all shards but one. Next line is commented to avoid this
@@ -179,7 +179,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
                                    << correct_shard_to
                                    << " is different for the call SC txn");
         // Already checked at lookup
-        error_code = ErrTxnStatus::CONTRACT_CALL_WRONG_SHARD;
+        error_code = TxnStatus::CONTRACT_CALL_WRONG_SHARD;
         return false;
       }
     }
@@ -191,7 +191,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
                            << " larger than maximum code size allowed "
                            << MAX_CODE_SIZE_IN_BYTES);
     // Already checked at lookup
-    error_code = ErrTxnStatus::HIGH_BYTE_SIZE_CODE;
+    error_code = TxnStatus::HIGH_BYTE_SIZE_CODE;
     return false;
   }
 
@@ -204,7 +204,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
                                  .GetHeader()
                                  .GetGasPrice());
     // Should be checked at lookup also
-    error_code = ErrTxnStatus::INSUFFICIENT_GAS;
+    error_code = TxnStatus::INSUFFICIENT_GAS;
     return false;
   }
 
@@ -212,7 +212,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Signature incorrect: " << fromAddr << ". Transaction rejected: "
                                       << tx.GetTranID());
-    error_code = ErrTxnStatus::VERIF_ERROR;
+    error_code = TxnStatus::VERIF_ERROR;
     return false;
   }
 
@@ -221,7 +221,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "fromAddr not found: " << fromAddr << ". Transaction rejected: "
                                      << tx.GetTranID());
-    error_code = ErrTxnStatus::INVALID_FROM_ACCOUNT;
+    error_code = TxnStatus::INVALID_FROM_ACCOUNT;
     return false;
   }
 
@@ -232,7 +232,7 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
                   << " From Account  = 0x" << fromAddr << " Balance = "
                   << AccountStore::GetInstance().GetBalance(fromAddr)
                   << " Debit Amount = " << tx.GetAmount());
-    error_code = ErrTxnStatus::INSUFFICIENT_BALANCE;
+    error_code = TxnStatus::INSUFFICIENT_BALANCE;
     return false;
   }
 
@@ -241,8 +241,11 @@ bool Validator::CheckCreatedTransactionFromLookup(const Transaction& tx,
 
 template <class Container, class DirectoryBlock>
 bool Validator::CheckBlockCosignature(const DirectoryBlock& block,
-                                      const Container& commKeys) {
-  LOG_MARKER();
+                                      const Container& commKeys,
+                                      const bool showLogs) {
+  if (showLogs) {
+    LOG_MARKER();
+  }
 
   unsigned int index = 0;
   unsigned int count = 0;
@@ -295,8 +298,7 @@ bool Validator::CheckBlockCosignature(const DirectoryBlock& block,
 }
 
 bool Validator::CheckDirBlocks(
-    const vector<boost::variant<DSBlock, VCBlock,
-                                FallbackBlockWShardingStructure>>& dirBlocks,
+    const vector<boost::variant<DSBlock, VCBlock>>& dirBlocks,
     const DequeOfNode& initDsComm, const uint64_t& index_num,
     DequeOfNode& newDSComm) {
   DequeOfNode mutable_ds_comm = initDsComm;
@@ -340,7 +342,7 @@ bool Validator::CheckDirBlocks(
         LOG_GENERAL(WARNING, "prevHash incorrect "
                                  << prevHash << " "
                                  << dsblock.GetHeader().GetPrevHash()
-                                 << "in DS block " << prevdsblocknum + 1);
+                                 << " in DS block " << prevdsblocknum + 1);
         ret = false;
         break;
       }
@@ -414,84 +416,105 @@ bool Validator::CheckDirBlocks(
       }
       prevHash = vcblock.GetBlockHash();
       totalIndex++;
-    } else if (typeid(FallbackBlockWShardingStructure) == dirBlock.type()) {
-      const auto& fallbackwshardingstructure =
-          get<FallbackBlockWShardingStructure>(dirBlock);
+    } else {
+      LOG_GENERAL(WARNING, "dirBlock type unexpected ");
+    }
+  }
 
-      const auto& fallbackblock = fallbackwshardingstructure.m_fallbackblock;
-      const DequeOfShard& shards = fallbackwshardingstructure.m_shards;
+  newDSComm = move(mutable_ds_comm);
+  return ret;
+}
 
-      if (fallbackblock.GetHeader().GetFallbackDSEpochNo() !=
-          prevdsblocknum + 1) {
-        LOG_GENERAL(WARNING,
-                    "Fallback block ds epoch number does not match the number "
-                    "being processed "
-                        << prevdsblocknum << " "
-                        << fallbackblock.GetHeader().GetFallbackDSEpochNo());
+bool Validator::CheckDirBlocksNoUpdate(
+    const vector<boost::variant<DSBlock, VCBlock>>& dirBlocks,
+    const DequeOfNode& initDsComm, const uint64_t& index_num,
+    DequeOfNode& newDSComm) {
+  DequeOfNode mutable_ds_comm = initDsComm;
+
+  bool ret = true;
+
+  uint64_t prevdsblocknum = 0;
+  uint64_t totalIndex = index_num;
+  BlockHash prevHash = get<BlockLinkIndex::BLOCKHASH>(
+      BlockLinkChain::GetFromPersistentStorage(0));
+
+  for (const auto& dirBlock : dirBlocks) {
+    if (typeid(DSBlock) == dirBlock.type()) {
+      const auto& dsblock = get<DSBlock>(dirBlock);
+      if (dsblock.GetHeader().GetBlockNum() != prevdsblocknum + 1) {
+        LOG_GENERAL(WARNING, "DSblocks not in sequence "
+                                 << dsblock.GetHeader().GetBlockNum() << " "
+                                 << prevdsblocknum);
         ret = false;
         break;
       }
-
-      if (fallbackblock.GetHeader().GetMyHash() !=
-          fallbackblock.GetBlockHash()) {
-        LOG_GENERAL(WARNING,
-                    "Fallbackblock in "
-                        << prevdsblocknum
-                        << " has different blockhash than stored "
-                        << " Stored: " << fallbackblock.GetBlockHash());
+      if (dsblock.GetHeader().GetMyHash() != dsblock.GetBlockHash()) {
+        LOG_GENERAL(WARNING, "DSblock "
+                                 << prevdsblocknum + 1
+                                 << " has different blockhash than stored "
+                                 << " Stored: " << dsblock.GetBlockHash());
         ret = false;
         break;
       }
-
-      if (prevHash != fallbackblock.GetHeader().GetPrevHash()) {
+      if (!CheckBlockCosignature(dsblock, mutable_ds_comm, false)) {
+        LOG_GENERAL(WARNING, "Co-sig verification of ds block "
+                                 << prevdsblocknum + 1 << " failed");
+        ret = false;
+        break;
+      }
+      if (prevHash != dsblock.GetHeader().GetPrevHash()) {
         LOG_GENERAL(WARNING, "prevHash incorrect "
                                  << prevHash << " "
-                                 << fallbackblock.GetHeader().GetPrevHash()
-                                 << "in FB block " << prevdsblocknum + 1);
+                                 << dsblock.GetHeader().GetPrevHash()
+                                 << " in DS block " << prevdsblocknum + 1);
         ret = false;
         break;
       }
+      prevdsblocknum++;
+      prevHash = dsblock.GetBlockHash();
+      m_mediator.m_node->UpdateDSCommitteeComposition(mutable_ds_comm, dsblock,
+                                                      false);
+      totalIndex++;
+    } else if (typeid(VCBlock) == dirBlock.type()) {
+      const auto& vcblock = get<VCBlock>(dirBlock);
 
-      ShardingHash shardinghash;
-      if (!Messenger::GetShardingStructureHash(SHARDINGSTRUCTURE_VERSION,
-                                               shards, shardinghash)) {
-        LOG_GENERAL(WARNING, "GetShardingStructureHash failed");
+      if (vcblock.GetHeader().GetViewChangeDSEpochNo() != prevdsblocknum + 1) {
+        LOG_GENERAL(WARNING,
+                    "VC block ds epoch number does not match the number being "
+                    "processed "
+                        << prevdsblocknum << " "
+                        << vcblock.GetHeader().GetViewChangeDSEpochNo());
         ret = false;
         break;
       }
-
-      if (shardinghash != prevShardingHash) {
-        LOG_GENERAL(WARNING, "ShardingHash does not match ");
+      if (vcblock.GetHeader().GetMyHash() != vcblock.GetBlockHash()) {
+        LOG_GENERAL(WARNING, "VCblock in "
+                                 << prevdsblocknum
+                                 << " has different blockhash than stored "
+                                 << " Stored: " << vcblock.GetBlockHash());
         ret = false;
         break;
       }
-
-      uint32_t shard_id = fallbackblock.GetHeader().GetShardId();
-
-      if (!CheckBlockCosignature(fallbackblock, shards.at(shard_id))) {
-        LOG_GENERAL(WARNING, "Co-sig verification of fallbackblock in "
+      if (!CheckBlockCosignature(vcblock, mutable_ds_comm, false)) {
+        LOG_GENERAL(WARNING, "Co-sig verification of vc block in "
                                  << prevdsblocknum << " failed"
                                  << totalIndex + 1);
         ret = false;
         break;
       }
-      const PubKey& leaderPubKey = fallbackblock.GetHeader().GetLeaderPubKey();
-      const Peer& leaderNetworkInfo =
-          fallbackblock.GetHeader().GetLeaderNetworkInfo();
-      m_mediator.m_node->UpdateDSCommitteeAfterFallback(
-          shard_id, leaderPubKey, leaderNetworkInfo, mutable_ds_comm, shards);
-      m_mediator.m_blocklinkchain.AddBlockLink(totalIndex, prevdsblocknum + 1,
-                                               BlockType::FB,
-                                               fallbackblock.GetBlockHash());
-      bytes fallbackblockser;
-      fallbackwshardingstructure.Serialize(fallbackblockser, 0);
-      if (!BlockStorage::GetBlockStorage().PutFallbackBlock(
-              fallbackblock.GetBlockHash(), fallbackblockser)) {
-        LOG_GENERAL(WARNING,
-                    "BlockStorage::PutFallbackBlock failed " << fallbackblock);
-        return false;
+
+      if (prevHash != vcblock.GetHeader().GetPrevHash()) {
+        LOG_GENERAL(WARNING, "prevHash incorrect "
+                                 << prevHash << " "
+                                 << vcblock.GetHeader().GetPrevHash()
+                                 << "in VC block " << prevdsblocknum + 1);
+        ret = false;
+        break;
       }
-      prevHash = fallbackblock.GetBlockHash();
+
+      m_mediator.m_node->UpdateRetrieveDSCommitteeCompositionAfterVC(
+          vcblock, mutable_ds_comm, false);
+      prevHash = vcblock.GetBlockHash();
       totalIndex++;
     } else {
       LOG_GENERAL(WARNING, "dirBlock type unexpected ");

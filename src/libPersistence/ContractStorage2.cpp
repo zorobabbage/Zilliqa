@@ -108,51 +108,43 @@ string ContractStorage2::GenerateStorageKey(const dev::h160& addr,
   return ret;
 }
 
-// This function will go away when ScillaVM is complete.
-bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
-                                       unsigned int s_offset, bytes& dst,
-                                       unsigned int d_offset, bool& foundVal) {
-  if (LOG_SC) {
-    LOG_MARKER();
-  }
+bool ContractStorage2::IsReservedVName(const string& name) {
+  return (name == CONTRACT_ADDR_INDICATOR || name == SCILLA_VERSION_INDICATOR ||
+          name == MAP_DEPTH_INDICATOR || name == TYPE_INDICATOR ||
+          name == HAS_MAP_INDICATOR);
+}
 
-  lock_guard<mutex> g(m_stateDataMutex);
+namespace PbScillaVMBridge {
 
-  foundVal = true;
-
+// Translate from protobuf query to ScillaVM query.
+bool translateQuery(const bytes& src, unsigned int s_offset,
+                    ScillaVM::ScillaParams::StateQuery& dst) {
   if (s_offset > src.size()) {
-    LOG_GENERAL(WARNING, "Invalid src data and offset, data size "
-                             << src.size() << ", offset " << s_offset);
-  }
-  if (d_offset > dst.size()) {
-    LOG_GENERAL(WARNING, "Invalid dst data and offset, data size "
-                             << dst.size() << ", offset " << d_offset);
+    LOG_GENERAL(WARNING, "Invalid src/dst data and offset, data size ");
+    return false;
   }
 
-  ProtoScillaQuery query;
-  query.ParseFromArray(src.data() + s_offset, src.size() - s_offset);
+  ProtoScillaQuery q;
+  q.ParseFromArray(src.data() + s_offset, src.size() - s_offset);
 
-  if (!query.IsInitialized()) {
+  if (!q.IsInitialized()) {
     LOG_GENERAL(WARNING, "Parse bytes into ProtoScillaQuery failed");
     return false;
   }
 
-  ScillaVM::ScillaParams::StateQuery q;
-  q.Name = query.name();
-  q.MapDepth = query.mapdepth();
-  std::vector<std::string> indices(query.indices().begin(),
-                                   query.indices().end());
-  q.Indices.swap(indices);
-  q.IgnoreVal = query.ignoreval();
+  dst.Name = q.name();
+  dst.MapDepth = q.mapdepth();
+  std::vector<std::string> indices(q.indices().begin(), q.indices().end());
+  dst.Indices.swap(indices);
+  dst.IgnoreVal = q.ignoreval();
 
-  boost::any dstany;
-  if (!FetchStateValue(addr, q, dstany, foundVal)) {
-    return false;
-  }
+  return true;
+}
 
-  ProtoScillaVal v;
-  std::function<void(const boost::any&, ProtoScillaVal*)> anyToPB =
-      [&anyToPB](const boost::any& aval, ProtoScillaVal* pval) -> void {
+// Translate result of query to protobuf struct.
+bool translateResult(const boost::any& srcany, ProtoScillaVal& v) {
+  std::function<bool(const boost::any&, ProtoScillaVal*)> anyToPB =
+      [&anyToPB](const boost::any& aval, ProtoScillaVal* pval) -> bool {
     if (boost::has_type<ScillaVM::ScillaParams::MapValueT>(aval)) {
       auto& mval =
           boost::any_cast<const ScillaVM::ScillaParams::MapValueT&>(aval);
@@ -161,30 +153,86 @@ bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
         auto& pmval = pval->mutable_mval()->mutable_m()->operator[](iter.first);
         anyToPB(iter.second, &pmval);
       }
-    } else {
+    } else if (boost::has_type<std::string>(aval)) {
       const std::string& bval = boost::any_cast<const std::string&>(aval);
       pval->set_bval(bval);
+    } else {
+      LOG_GENERAL(WARNING, "Invalid result from state query");
+      return false;
     }
+    return true;
   };
-  if (!q.IgnoreVal && foundVal) {
-    anyToPB(dstany, &v);
+
+  return anyToPB(srcany, &v);
+}
+
+}  // namespace PbScillaVMBridge
+
+bool ContractStorage2::FetchStateValue(const dev::h160& addr, const bytes& src,
+                                       unsigned int s_offset, bytes& dst,
+                                       unsigned int d_offset, bool& foundVal) {
+  if (d_offset > dst.size()) {
+    LOG_GENERAL(WARNING, "Invalid dst data and offset, data size "
+                             << dst.size() << ", offset " << d_offset);
   }
-  return SerializeToArray(v, dst, 0);
+
+  ScillaVM::ScillaParams::StateQuery q;
+  if (!PbScillaVMBridge::translateQuery(src, s_offset, q)) {
+    return false;
+  }
+
+  std::string typeIgnored;
+  boost::any vany;
+  if (!FetchStateValue(addr, q, vany, foundVal, false, typeIgnored)) {
+    return false;
+  }
+
+  if (!q.IgnoreVal && foundVal) {
+    ProtoScillaVal v;
+    PbScillaVMBridge::translateResult(vany, v);
+    return SerializeToArray(v, dst, 0);
+  }
+  return true;
 }
 
 bool ContractStorage2::FetchStateValue(
     const dev::h160& addr, const ScillaVM::ScillaParams::StateQuery& query,
-    boost::any& dst, bool& foundVal) {
+    boost::any& dst, bool& foundVal, bool getType, string& type) {
   if (LOG_SC) {
     LOG_GENERAL(INFO, "query for fetch: " << query.Name);
   }
 
+  lock_guard<mutex> g(m_stateDataMutex);
+
   // The default is not found.
   foundVal = false;
 
-  if (query.Name == FIELDS_MAP_DEPTH_INDICATOR) {
-    LOG_GENERAL(WARNING, "query name is " << FIELDS_MAP_DEPTH_INDICATOR);
+  if (IsReservedVName(query.Name)) {
+    LOG_GENERAL(WARNING, "invalid query: " << query.Name);
     return false;
+  }
+
+  if (getType) {
+    std::map<std::string, bytes> t_type;
+    std::string type_key =
+        GenerateStorageKey(addr, TYPE_INDICATOR, {query.Name});
+    FetchStateDataForKey(t_type, type_key, true);
+    if (t_type.empty()) {
+      LOG_GENERAL(WARNING, "Failed to fetch type for addr: "
+                               << addr.hex() << " vname: " << query.Name);
+      foundVal = false;
+      return true;
+    }
+    try {
+      type = DataConversion::CharArrayToString(t_type[type_key]);
+    } catch (const std::exception& e) {
+      LOG_GENERAL(WARNING, "Invalid type fetched for key="
+                               << type_key << " for addr=" << addr.hex() << ": "
+                               << e.what());
+      return false;
+    }
+    // If not interested in the value, exit early.
+    if (query.Indices.empty() && query.IgnoreVal) return true;
   }
 
   string key =
@@ -240,13 +288,8 @@ bool ContractStorage2::FetchStateValue(
         }
         bval = DataConversion::StringToCharArray(m_stateDataDB.Lookup(key));
       } else {
-        if (query.MapDepth == 0) {
-          // for non-map value, should be existing in db otherwise error
-          return false;
-        } else {
-          // for in-map value, it's okay if cannot find
-          return true;
-        }
+        foundVal = false;
+        return true;
       }
     }
 
@@ -386,6 +429,90 @@ bool ContractStorage2::FetchStateValue(
   return true;
 }
 
+bool ContractStorage2::FetchExternalStateValue(
+    const dev::h160& target, const bytes& src, unsigned int s_offset,
+    bytes& dst, unsigned int d_offset, bool& foundVal, string& type) {
+  ScillaVM::ScillaParams::StateQuery query;
+  if (!PbScillaVMBridge::translateQuery(src, s_offset, query)) {
+    return false;
+  }
+
+  boost::any vany;
+  if (!FetchExternalStateValue(target, query, vany, foundVal, type)) {
+    return false;
+  }
+
+  if (!query.IgnoreVal && foundVal) {
+    ProtoScillaVal v;
+    PbScillaVMBridge::translateResult(vany, v);
+    return SerializeToArray(v, dst, 0);
+  }
+  return true;
+}
+
+bool ContractStorage2::FetchExternalStateValue(
+    const dev::h160& target, const ScillaParams::StateQuery& query,
+    boost::any& dst, bool& foundVal, string& type) {
+  std::string special_query;
+  Account* account;
+  Account* accountAtomic =
+      AccountStore::GetInstance().GetAccountTempAtomic(target);
+  if (!accountAtomic) {
+    LOG_GENERAL(INFO,
+                "Could not find account " << target.hex() << " in atomic");
+    account = AccountStore::GetInstance().GetAccountTemp(target);
+  } else {
+    account = accountAtomic;
+  }
+
+  if (!account) {
+    foundVal = false;
+    return true;
+  }
+  if (query.Name == "_balance") {
+    const uint128_t& balance = account->GetBalance();
+    special_query = "\"" + balance.convert_to<string>() + "\"";
+    type = "Uint128";
+  } else if (query.Name == "_nonce") {
+    uint128_t nonce = account->GetNonce();
+    special_query = "\"" + nonce.convert_to<string>() + "\"";
+    type = "Uint64";
+  } else if (query.Name == "_this_address") {
+    if (account->isContract()) {
+      special_query = "\"0x" + target.hex() + "\"";
+      type = "ByStr20";
+    }
+  }
+
+  if (!special_query.empty()) {
+    dst = special_query;
+    foundVal = true;
+    return true;
+  }
+
+  // External state queries don't have map depth set. Get it from the database.
+  map<string, bytes> map_depth;
+  string map_depth_key =
+      GenerateStorageKey(target, MAP_DEPTH_INDICATOR, {query.Name});
+  FetchStateDataForKey(map_depth, map_depth_key, true);
+
+  int map_depth_val;
+  try {
+    map_depth_val = !map_depth.empty()
+                        ? std::stoi(DataConversion::CharArrayToString(
+                              map_depth[map_depth_key]))
+                        : -1;
+  } catch (const std::exception& e) {
+    LOG_GENERAL(WARNING, "invalid map depth: " << e.what());
+    return false;
+  }
+  ScillaParams::StateQuery queryNew(query);
+  queryNew.MapDepth = map_depth_val;
+
+  // get value
+  return FetchStateValue(target, queryNew, dst, foundVal, true, type);
+}
+
 void ContractStorage2::DeleteByPrefix(const string& prefix) {
   auto p = t_stateDataMap.lower_bound(prefix);
   while (p != t_stateDataMap.end() &&
@@ -444,35 +571,6 @@ void ContractStorage2::DeleteByIndex(const string& index) {
   }
 }
 
-bool ContractStorage2::FetchContractFieldsMapDepth(const dev::h160& address,
-                                                   Json::Value& map_depth_json,
-                                                   bool temp) {
-  std::map<std::string, bytes> map_depth_data_in_map;
-  string map_depth_data;
-  FetchStateDataForContract(map_depth_data_in_map, address,
-                            FIELDS_MAP_DEPTH_INDICATOR, {}, temp);
-
-  /// check the data obtained from storage
-  if (map_depth_data_in_map.size() == 1 &&
-      map_depth_data_in_map.find(
-          address.hex() + SCILLA_INDEX_SEPARATOR + FIELDS_MAP_DEPTH_INDICATOR +
-          SCILLA_INDEX_SEPARATOR) != map_depth_data_in_map.end()) {
-    map_depth_data = DataConversion::CharArrayToString(map_depth_data_in_map.at(
-        address.hex() + SCILLA_INDEX_SEPARATOR + FIELDS_MAP_DEPTH_INDICATOR +
-        SCILLA_INDEX_SEPARATOR));
-  } else {
-    LOG_GENERAL(WARNING, "Cannot find FIELDS_MAP_DEPTH_INDICATOR");
-    return false;
-  }
-
-  if (!map_depth_data.empty() && !JSONUtils::GetInstance().convertStrtoJson(
-                                     map_depth_data, map_depth_json)) {
-    LOG_GENERAL(WARNING, "Cannot parse " << map_depth_data << " to JSON");
-    return false;
-  }
-  return true;
-}
-
 void UnquoteString(string& input) {
   if (input.empty()) {
     return;
@@ -523,17 +621,11 @@ bool ContractStorage2::FetchStateJsonForContract(Json::Value& _json,
                                                  const string& vname,
                                                  const vector<string>& indices,
                                                  bool temp) {
+  LOG_MARKER();
   lock_guard<mutex> g(m_stateDataMutex);
 
   std::map<std::string, bytes> states;
   FetchStateDataForContract(states, address, vname, indices, temp);
-
-  /// get the map depth
-  Json::Value map_depth_json;
-  if (!FetchContractFieldsMapDepth(address, map_depth_json, temp)) {
-    LOG_GENERAL(WARNING, "FetchContractFieldsMapDepth failed for contract: "
-                             << address.hex());
-  }
 
   for (const auto& state : states) {
     vector<string> fragments;
@@ -547,7 +639,7 @@ bool ContractStorage2::FetchStateJsonForContract(Json::Value& _json,
 
     string vname = fragments.at(1);
 
-    if (vname == FIELDS_MAP_DEPTH_INDICATOR) {
+    if (IsReservedVName(vname)) {
       continue;
     }
 
@@ -598,9 +690,15 @@ bool ContractStorage2::FetchStateJsonForContract(Json::Value& _json,
       }
     };
 
+    map<string, bytes> map_depth;
+    string map_depth_key =
+        GenerateStorageKey(address, MAP_DEPTH_INDICATOR, {vname});
+    FetchStateDataForKey(map_depth, map_depth_key, temp);
+
     jsonMapWrapper(_json[vname], map_indices, state.second, 0,
-                   (!map_depth_json.empty() && map_depth_json.isMember(vname))
-                       ? map_depth_json[vname].asInt()
+                   !map_depth.empty()
+                       ? std::stoi(DataConversion::CharArrayToString(
+                             map_depth[map_depth_key]))
                        : -1);
   }
 
@@ -791,35 +889,18 @@ bool ContractStorage2::UpdateStateValue(const dev::h160& addr, const bytes& q,
 
   lock_guard<mutex> g(m_stateDataMutex);
 
-  if (q_offset > q.size()) {
-    LOG_GENERAL(WARNING, "Invalid query data and offset, data size "
-                             << q.size() << ", offset " << q_offset);
-    return false;
-  }
-
   if (v_offset > v.size()) {
     LOG_GENERAL(WARNING, "Invalid value data and offset, data size "
                              << v.size() << ", offset " << v_offset);
-  }
-
-  ProtoScillaQuery query;
-  query.ParseFromArray(q.data() + q_offset, q.size() - q_offset);
-
-  if (!query.IsInitialized()) {
-    LOG_GENERAL(WARNING, "Parse bytes into ProtoScillaQuery failed");
-    return false;
   }
 
   ProtoScillaVal pbvalue;
   pbvalue.ParseFromArray(v.data() + v_offset, v.size() - v_offset);
 
   ScillaVM::ScillaParams::StateQuery scq;
-  scq.Name = query.name();
-  scq.MapDepth = query.mapdepth();
-  std::vector<std::string> indices(query.indices().begin(),
-                                   query.indices().end());
-  scq.Indices.swap(indices);
-  scq.IgnoreVal = query.ignoreval();
+  if (!PbScillaVMBridge::translateQuery(q, q_offset, scq)) {
+    return false;
+  }
 
   // Convert protobuf to anyval
   boost::any val;
@@ -851,8 +932,8 @@ bool ContractStorage2::UpdateStateValue(const dev::h160& addr, const bytes& q,
 bool ContractStorage2::UpdateStateValue(
     const dev::h160& addr, const ScillaVM::ScillaParams::StateQuery& query,
     const boost::any& value) {
-  if (query.Name == FIELDS_MAP_DEPTH_INDICATOR) {
-    LOG_GENERAL(WARNING, "query name is " << FIELDS_MAP_DEPTH_INDICATOR);
+  if (IsReservedVName(query.Name)) {
+    LOG_GENERAL(WARNING, "invalid query: " << query.Name);
     return false;
   }
 
@@ -1005,14 +1086,14 @@ void ContractStorage2::BufferCurrentState() {
   LOG_MARKER();
   lock_guard<mutex> g(m_stateDataMutex);
   p_stateDataMap = t_stateDataMap;
-  p_indexToBeDeleted = m_indexToBeDeleted;
+  p_indexToBeDeleted = t_indexToBeDeleted;
 }
 
 void ContractStorage2::RevertPrevState() {
   LOG_MARKER();
   lock_guard<mutex> g(m_stateDataMutex);
   t_stateDataMap = std::move(p_stateDataMap);
-  m_indexToBeDeleted = std::move(p_indexToBeDeleted);
+  t_indexToBeDeleted = std::move(p_indexToBeDeleted);
 }
 
 void ContractStorage2::RevertContractStates() {
@@ -1115,7 +1196,7 @@ dev::h256 ContractStorage2::GetContractStateHashCore(const dev::h160& address,
                             << state.first << " value: "
                             << DataConversion::CharArrayToString(state.second));
     }
-    sha2.Update(DataConversion::StringToCharArray(state.first));
+    sha2.Update(state.first);
     if (!state.second.empty()) {
       sha2.Update(state.second);
     }

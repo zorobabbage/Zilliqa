@@ -28,13 +28,13 @@ class Synchronizer {
                                      const DSBlock& dsBlock);
   bool InitializeGenesisDSBlock(DSBlockChain& dsBlockChain);
 
-  TxBlock ConstructGenesisTxBlock();
   bool AddGenesisTxBlockToBlockChain(TxBlockChain& txBlockChain,
                                      const TxBlock& txBlock);
   bool InitializeGenesisTxBlock(TxBlockChain& txBlockChain);
 
  public:
   static DSBlock ConstructGenesisDSBlock();
+  static TxBlock ConstructGenesisTxBlock();
   bool InitializeGenesisBlocks(DSBlockChain& dsBlockChain,
                                TxBlockChain& txBlockChain);
 
@@ -42,7 +42,6 @@ class Synchronizer {
   bool FetchLatestDSBlocks(Lookup* lookup, uint64_t currentBlockChainSize);
   bool FetchLatestDSBlocksSeed(Lookup* lookup, uint64_t currentBlockChainSize);
   bool FetchLatestTxBlocks(Lookup* lookup, uint64_t currentBlockChainSize);
-  bool AttemptPoW(Lookup* lookup);
   bool FetchOfflineLookups(Lookup* lookup);
 
   bool FetchLatestTxBlockSeed(Lookup* lookup, uint64_t currentBlockChainSize);

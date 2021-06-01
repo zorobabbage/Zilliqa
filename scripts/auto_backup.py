@@ -26,11 +26,15 @@ import math
 import shutil
 import logging
 from logging import handlers
+import requests
+import xml.etree.ElementTree as ET
 
 TAG_NUM_FINAL_BLOCK_PER_POW = "NUM_FINAL_BLOCK_PER_POW"
 TESTNET_NAME= "TEST_NET_NAME"
 BUCKET_NAME='BUCKET_NAME'
 AWS_PERSISTENCE_LOCATION= "s3://"+BUCKET_NAME+"/persistence/"+TESTNET_NAME
+AWS_BLOCKCHAINDATA_FOLDERNAME= "blockchain-data/"+TESTNET_NAME+"/"
+AWS_S3_URL= "http://"+BUCKET_NAME+".s3.amazonaws.com"
 
 FORMATTER = logging.Formatter(
     "[%(asctime)s %(levelname)-6s %(filename)s:%(lineno)s] %(message)s"
@@ -110,9 +114,13 @@ def GetCurrentTxBlockNum():
     return blockNum + 1
 
 def CreateTempPersistence():
-    bashCommand = "rsync --recursive --delete -a persistence tempbackup"
-    process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
-    output, error = process.communicate()
+    static_folders = GetStaticFoldersFromS3(AWS_S3_URL, AWS_BLOCKCHAINDATA_FOLDERNAME)
+    exclusion_string = ' '.join(['--exclude ' + s for s in static_folders])
+    bashCommand = "rsync --recursive --inplace --delete -a " + exclusion_string + " persistence tempbackup"
+    logging.info("Command = " + bashCommand)
+    for i in range(2):
+        process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
+        output, error = process.communicate()
     logging.info("Copied local persistence to temporary")
 
 def backUp(curr_blockNum):
@@ -130,6 +138,31 @@ def backUp(curr_blockNum):
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     return None
 
+def GetStaticFoldersFromS3(url, folderName):
+    list_of_folders = []
+    MARKER = ""
+    # Try get the entire persistence keys.
+    # S3 limitation to get only max 1000 keys. so work around using marker.
+    while True:
+        response = requests.get(url, params={"prefix":folderName, "max-keys":1000, "marker":MARKER, "delimiter":"/"})
+        tree = ET.fromstring(response.text)
+        if(tree[6:] == []):
+            print("Empty response")
+            break
+        lastkey = ''
+        for key in tree[6:]:
+            key_url = key[0].text.split(folderName,1)[1].replace('/', '')
+            if key_url != '':
+                list_of_folders.append(key_url)
+            lastkey = key[0].text
+        istruncated=tree[5].text
+        if istruncated == 'true':
+            MARKER=lastkey
+            print(istruncated)
+        else:
+            break
+    return list_of_folders
+
 def main():
     setup_logging()
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -145,8 +178,6 @@ def main():
     frequency = 0
     if 'frequency' in args:
         frequency = int(args['frequency'])
-
-    isBackup = False
 
     while True:
         if os.path.isfile(os.path.dirname(os.path.abspath(__file__)) + "/constants.xml"):
@@ -167,14 +198,10 @@ def main():
             curr_blockNum = GetCurrentTxBlockNum()
             print("Current blockNum = %s" % curr_blockNum)
 
-            if(curr_blockNum % num_final_block_per_pow == 0):
-                isBackup = False
-
-            if((curr_blockNum % num_final_block_per_pow) == target_backup_final_block) and isBackup == False:
+            if((curr_blockNum % num_final_block_per_pow) == target_backup_final_block):
                 logging.info("Starting to back-up persistence at blockNum : %s" % curr_blockNum)
                 backUp(curr_blockNum)
                 logging.info("Backing up persistence successfully.")
-                isBackup = True
 
             time.sleep(frequency)
         except Exception as e:

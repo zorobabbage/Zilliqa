@@ -24,8 +24,8 @@
 #include "Transaction.h"
 #include "TransactionReceipt.h"
 #include "common/Constants.h"
-#include "common/ErrTxn.h"
 #include "common/Serializable.h"
+#include "common/TxnStatus.h"
 #include "depends/common/FixedHash.h"
 
 template <class MAP>
@@ -39,7 +39,7 @@ class AccountStoreBase : public SerializableDataBlock {
                           const uint128_t& gasPrice, uint128_t& gasRefund);
 
   bool UpdateAccounts(const Transaction& transaction,
-                      TransactionReceipt& receipt, ErrTxnStatus& error_code);
+                      TransactionReceipt& receipt, TxnStatus& error_code);
 
  public:
   virtual void Init();
@@ -50,13 +50,17 @@ class AccountStoreBase : public SerializableDataBlock {
   /// Implements the Deserialize function inherited from Serializable.
   virtual bool Deserialize(const bytes& src, unsigned int offset);
 
+  /// Implements the Deserialize function inherited from Serializable.
+  virtual bool Deserialize(const std::string& src, unsigned int offset);
+
   virtual Account* GetAccount(const Address& address);
 
   /// Verifies existence of Account in the list.
   bool IsAccountExist(const Address& address);
 
   /// Adds an Account to the list.
-  bool AddAccount(const Address& address, const Account& account);
+  bool AddAccount(const Address& address, const Account& account,
+                  bool toReplace = false);
   bool AddAccount(const PubKey& pubKey, const Account& account);
 
   void RemoveAccount(const Address& address);

@@ -34,7 +34,7 @@
 
 #include "depends/libTrie/TrieDB.h"
 
-class ProtoScillaVal;
+class ProtoScillaQuery;
 
 namespace Contract {
 
@@ -121,9 +121,13 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
   bool DeleteInitData(const dev::h160& address);
 
   /////////////////////////////////////////////////////////////////////////////
-  std::string GenerateStorageKey(const dev::h160& addr,
-                                 const std::string& vname,
-                                 const std::vector<std::string>& indices);
+  static std::string GenerateStorageKey(
+      const dev::h160& addr, const std::string& vname,
+      const std::vector<std::string>& indices);
+
+  std::string RemoveAddrFromKey(const std::string& key);
+
+  bool IsReservedVName(const std::string& name);
 
   bool FetchStateValue(const dev::h160& addr, const bytes& src,
                        unsigned int s_offset, bytes& dst, unsigned int d_offset,
@@ -131,10 +135,18 @@ class ContractStorage2 : public Singleton<ContractStorage2> {
 
   bool FetchStateValue(const dev::h160& addr,
                        const ScillaVM::ScillaParams::StateQuery& query,
-                       boost::any& dst, bool& foundVal);
+                       boost::any& dst, bool& foundVal, bool getType,
+                       std::string& type);
 
-  bool FetchContractFieldsMapDepth(const dev::h160& address,
-                                   Json::Value& map_depth_json, bool temp);
+  bool FetchExternalStateValue(const dev::h160& target, const bytes& src,
+                               unsigned int s_offset, bytes& dst,
+                               unsigned int d_offset, bool& foundVal,
+                               std::string& type);
+
+  bool FetchExternalStateValue(const dev::h160& target,
+                               const ScillaVM::ScillaParams::StateQuery& query,
+                               boost::any& dst, bool& foundVal,
+                               std::string& type);
 
   void InsertValueToStateJson(Json::Value& _json, std::string key,
                               std::string value, bool unquote = true,

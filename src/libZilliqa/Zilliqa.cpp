@@ -27,6 +27,7 @@
 #include "libCrypto/Sha2.h"
 #include "libData/AccountData/Address.h"
 #include "libNetwork/Guard.h"
+#include "libRemoteStorageDB/RemoteStorageDB.h"
 #include "libServer/GetWorkServer.h"
 #include "libServer/WebsocketServer.h"
 #include "libUtils/DataConversion.h"
@@ -78,7 +79,8 @@ void Zilliqa::LogSelfNodeInfo(const PairOfKey& key, const Peer& peer) {
          MessageTypeInstructionStrings[msgType][instruction];
 }
 
-void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
+void Zilliqa::ProcessMessage(
+    pair<bytes, pair<Peer, const unsigned char>>* message) {
   if (message->first.size() >= MessageOffset::BODY) {
     const unsigned char msg_type = message->first.at(MessageOffset::TYPE);
 
@@ -105,9 +107,9 @@ void Zilliqa::ProcessMessage(pair<bytes, Peer>* message) {
 
         tpStart = std::chrono::high_resolution_clock::now();
       }
-
       bool result = msg_handlers[msg_type]->Execute(
-          message->first, MessageOffset::INST, message->second);
+          message->first, MessageOffset::INST, message->second.first,
+          message->second.second);
 
       if (ENABLE_CHECK_PERFORMANCE_LOG) {
         auto tpNow = std::chrono::high_resolution_clock::now();
@@ -148,7 +150,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
 
   // Launch the thread that reads messages from the queue
   auto funcCheckMsgQueue = [this]() mutable -> void {
-    pair<bytes, Peer>* message = NULL;
+    pair<bytes, std::pair<Peer, const unsigned char>>* message = NULL;
     while (true) {
       while (m_msgQueue.pop(message)) {
         // For now, we use a thread pool to handle this message
@@ -177,6 +179,38 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
     LOG_GENERAL(FATAL, "Archvial lookup is true but not lookup ");
   }
 
+  if (GUARD_MODE) {
+    // Setting the guard upon process launch
+    Guard::GetInstance().Init();
+
+    if (Guard::GetInstance().IsNodeInDSGuardList(key.second)) {
+      LOG_GENERAL(INFO, "Current node is a DS guard");
+    } else if (Guard::GetInstance().IsNodeInShardGuardList(key.second)) {
+      LOG_GENERAL(INFO, "Current node is a shard guard");
+    }
+  }
+
+  // when individual node is being recovered and persistence is not available
+  // locally, then Rejoin as if new miner node which will download persistence
+  // from S3 incremental db and identify if already part of any
+  // shard/dscommittee and proceed accordingly.
+
+  if (!LOOKUP_NODE_MODE && (SyncType::RECOVERY_ALL_SYNC == syncType)) {
+    if (!boost::filesystem::exists(STORAGE_PATH + PERSISTENCE_PATH)) {
+      syncType = SyncType::NEW_SYNC;
+      m_lookup.SetSyncType(SyncType::NEW_SYNC);
+    }
+    // assumption: this node is recovering/upgrading as part of entire network
+    // recovery from another network. syncType : recovery, persistence : exists,
+    // node : DS guard or Shard guard node
+    else if (Guard::GetInstance().IsNodeInDSGuardList(key.second) ||
+             Guard::GetInstance().IsNodeInShardGuardList(key.second)) {
+      LOG_GENERAL(INFO,
+                  "I will skip waiting on microblocks for current ds epoch!");
+      m_mediator.m_ds->m_dsEpochAfterUpgrade = true;
+    }
+  }
+
   if (SyncType::NEW_SYNC == syncType) {
     // Setting it earliest before even p2pcomm is instantiated
     m_n.m_runFromLate = true;
@@ -188,18 +222,6 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
   // Clear any existing diagnostic data from previous runs
   BlockStorage::GetBlockStorage().ResetDB(BlockStorage::DIAGNOSTIC_NODES);
   BlockStorage::GetBlockStorage().ResetDB(BlockStorage::DIAGNOSTIC_COINBASE);
-
-  if (GUARD_MODE) {
-    // Setting the guard upon process launch
-    Guard::GetInstance().Init();
-
-    if (Guard::GetInstance().IsNodeInDSGuardList(m_mediator.m_selfKey.second)) {
-      LOG_GENERAL(INFO, "Current node is a DS guard");
-    } else if (Guard::GetInstance().IsNodeInShardGuardList(
-                   m_mediator.m_selfKey.second)) {
-      LOG_GENERAL(INFO, "Current node is a shard guard");
-    }
-  }
 
   if (SyncType::NEW_LOOKUP_SYNC == syncType || SyncType::NEW_SYNC == syncType) {
     while (!m_n.DownloadPersistenceFromS3()) {
@@ -287,7 +309,22 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
       case SyncType::NEW_LOOKUP_SYNC:
         LOG_GENERAL(INFO, "Sync as a new lookup node");
         if (toRetrieveHistory) {
-          m_lookup.InitSync();
+          // Check if next ds epoch was crossed -cornercase after syncing from
+          // S3
+          if ((m_mediator.m_txBlockChain.GetBlockCount() %
+                   NUM_FINAL_BLOCK_PER_POW ==
+               0)  // Can fetch dsblock and txblks from new ds epoch
+              || m_mediator.m_lookup
+                     ->GetDSInfo()) {  // have same ds committee as upper seeds
+                                       // to confirm if no new ds epoch started
+            m_mediator.m_lookup->InitSync();
+          } else {
+            // Sync from S3 again
+            LOG_GENERAL(INFO,
+                        "I am lagging behind by ds epoch! Will rejoin again!");
+            m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+            m_mediator.m_lookup->RejoinAsNewLookup(false);
+          }
         } else {
           LOG_GENERAL(FATAL,
                       "Error: Sync for new lookup should retrieve history as "
@@ -301,7 +338,7 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
         break;
       case SyncType::DS_SYNC:
         LOG_GENERAL(INFO, "Sync as a ds node");
-        m_ds.StartSynchronization();
+        m_ds.StartSynchronization(false);
         break;
       case SyncType::LOOKUP_SYNC:
         LOG_GENERAL(INFO, "Sync as a lookup node");
@@ -403,6 +440,11 @@ Zilliqa::Zilliqa(const PairOfKey& key, const Peer& peer, SyncType syncType,
       }
     }
 
+    if (LOOKUP_NODE_MODE && REMOTESTORAGE_DB_ENABLE) {
+      LOG_GENERAL(INFO, "Starting connection to mongoDB")
+      RemoteStorageDB::GetInstance().Init();
+    }
+
     if (ENABLE_STATUS_RPC) {
       m_statusServerConnector =
           make_unique<TcpSocketServer>(IP_TO_BIND, STATUS_RPC_PORT);
@@ -451,7 +493,8 @@ Zilliqa::~Zilliqa() {
   }
 }
 
-void Zilliqa::Dispatch(pair<bytes, Peer>* message) {
+void Zilliqa::Dispatch(
+    pair<bytes, std::pair<Peer, const unsigned char>>* message) {
   // LOG_MARKER();
 
   // Queue message

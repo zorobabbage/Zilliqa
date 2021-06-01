@@ -70,6 +70,9 @@ void DirectoryService::StartSynchronization(bool clean) {
 
   if (clean) {
     this->CleanVariables();
+    m_mediator.m_node->CleanVariables();
+  } else {
+    m_mediator.m_node->CleanMBConsensusAndTxnBuffers();
   }
 
   if (!m_mediator.m_node->GetOfflineLookups()) {
@@ -153,9 +156,9 @@ uint32_t DirectoryService::GetNumShards() const {
   return m_shards.size();
 }
 
-bool DirectoryService::ProcessSetPrimary(const bytes& message,
-                                         unsigned int offset,
-                                         [[gnu::unused]] const Peer& from) {
+bool DirectoryService::ProcessSetPrimary(
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::ProcessSetPrimary not "
@@ -311,11 +314,13 @@ bool DirectoryService::ProcessSetPrimary(const bytes& message,
 
   if ((m_consensusMyID < POW_PACKET_SENDERS) ||
       (primary == m_mediator.m_selfPeer)) {
+    m_powSubmissionWindowExpired = false;
     LOG_GENERAL(INFO, "m_consensusMyID: " << m_consensusMyID);
     LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
               "Waiting " << POW_WINDOW_IN_SECONDS
                          << " seconds, accepting PoW submissions...");
     this_thread::sleep_for(chrono::seconds(POW_WINDOW_IN_SECONDS));
+    m_powSubmissionWindowExpired = true;
 
     // create and send POW submission packets
     auto func = [this]() mutable -> void {
@@ -435,7 +440,6 @@ bool DirectoryService::CleanVariables() {
   }
 
   m_stopRecvNewMBSubmission = false;
-  m_startedRunFinalblockConsensus = false;
 
   {
     std::lock_guard<mutex> lock(m_mutexConsensus);
@@ -474,10 +478,14 @@ bool DirectoryService::CleanVariables() {
 
   m_forceMulticast = false;
 
+  m_powSubmissionWindowExpired = false;
+
+  m_dsEpochAfterUpgrade = false;
+
   return true;
 }
 
-void DirectoryService::RejoinAsDS(bool modeCheck) {
+void DirectoryService::RejoinAsDS(bool modeCheck, bool fromUpperSeed) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::RejoinAsDS not expected to be called "
@@ -488,33 +496,40 @@ void DirectoryService::RejoinAsDS(bool modeCheck) {
   LOG_MARKER();
   if (m_mediator.m_lookup->GetSyncType() == SyncType::NO_SYNC &&
       (m_mode == BACKUP_DS || !modeCheck)) {
-    auto func = [this]() mutable -> void {
-      while (true) {
-        m_mediator.m_lookup->SetSyncType(SyncType::DS_SYNC);
-        m_mediator.m_node->CleanVariables();
-        this->CleanVariables();
-        while (!m_mediator.m_node->DownloadPersistenceFromS3()) {
-          LOG_GENERAL(
-              WARNING,
-              "Downloading persistence from S3 has failed. Will try again!");
+    if (fromUpperSeed) {  // syncing via upper_seed
+      LOG_GENERAL(INFO, "Syncing from upper seeds ...");
+      m_mediator.m_lookup->SetSyncType(SyncType::DS_SYNC);
+      auto func = [this]() mutable -> void { StartSynchronization(false); };
+      DetachedFunction(1, func);
+    } else {
+      auto func = [this]() mutable -> void {
+        while (true) {
+          m_mediator.m_lookup->SetSyncType(SyncType::DS_SYNC);
+          m_mediator.m_node->CleanVariables();
+          this->CleanVariables();
+          while (!m_mediator.m_node->DownloadPersistenceFromS3()) {
+            LOG_GENERAL(
+                WARNING,
+                "Downloading persistence from S3 has failed. Will try again!");
+            this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
+          }
+          if (!BlockStorage::GetBlockStorage().RefreshAll()) {
+            LOG_GENERAL(WARNING, "BlockStorage::RefreshAll failed");
+            return;
+          }
+          if (!AccountStore::GetInstance().RefreshDB()) {
+            LOG_GENERAL(WARNING, "AccountStore::RefreshDB failed");
+            return;
+          }
+          if (m_mediator.m_node->Install(SyncType::DS_SYNC, true)) {
+            break;
+          }
           this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
         }
-        if (!BlockStorage::GetBlockStorage().RefreshAll()) {
-          LOG_GENERAL(WARNING, "BlockStorage::RefreshAll failed");
-          return;
-        }
-        if (!AccountStore::GetInstance().RefreshDB()) {
-          LOG_GENERAL(WARNING, "AccountStore::RefreshDB failed");
-          return;
-        }
-        if (m_mediator.m_node->Install(SyncType::DS_SYNC, true)) {
-          break;
-        }
-        this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
-      }
-      this->StartSynchronization(false);
-    };
-    DetachedFunction(1, func);
+        this->StartSynchronization(false);
+      };
+      DetachedFunction(1, func);
+    }
   }
 }
 
@@ -660,14 +675,13 @@ bool DirectoryService::FinishRejoinAsDS(bool fetchShardingStruct) {
     m_mediator.m_node->ComposeAndSendRemoveNodeFromBlacklist(Node::PEER);
     StartNextTxEpoch();
   } else {  // vacaous epoch
-    StartNewDSEpochConsensus(false, true);
+    StartNewDSEpochConsensus(true);
   }
 
   return true;
 }
 
-void DirectoryService::StartNewDSEpochConsensus(bool fromFallback,
-                                                bool isRejoin) {
+void DirectoryService::StartNewDSEpochConsensus(bool isRejoin) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::StartNewDSEpochConsensus not "
@@ -697,35 +711,18 @@ void DirectoryService::StartNewDSEpochConsensus(bool fromFallback,
       FULL_DATASET_MINE);
 
   if (m_mode == PRIMARY_DS) {
-    // Notify lookup that it's time to do PoW
-    bytes startpow_message = {MessageType::LOOKUP,
-                              LookupInstructionType::RAISESTARTPOW};
-
-    if (!Messenger::SetLookupSetRaiseStartPoW(
-            startpow_message, MessageOffset::BODY,
-            (uint8_t)LookupInstructionType::RAISESTARTPOW,
-            m_mediator.m_currentEpochNum, m_mediator.m_selfKey)) {
-      LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
-                "Messenger::SetLookupSetRaiseStartPoW failed.");
-      return;
-    }
-
-    m_mediator.m_lookup->SendMessageToLookupNodes(startpow_message);
-
     // New nodes poll DSInfo from the lookups every NEW_NODE_SYNC_INTERVAL
-    // So let's add that to our wait time to allow new nodes to get SETSTARTPOW
-    // and submit a PoW
-
+    // So let's add that to our wait time to allow new nodes to get last TxBlock
+    // + DSInfo and submit a PoW
+    m_powSubmissionWindowExpired = false;
     LOG_GENERAL(INFO, "m_consensusMyID: " << m_consensusMyID);
     LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-              "Waiting " << NEW_NODE_SYNC_INTERVAL + POW_WINDOW_IN_SECONDS +
-                                (fromFallback ? FALLBACK_EXTRA_TIME : 0)
+              "Waiting " << NEW_NODE_SYNC_INTERVAL + POW_WINDOW_IN_SECONDS
                          << " seconds, accepting PoW submissions...");
 
     this_thread::sleep_for(
-        chrono::seconds(NEW_NODE_SYNC_INTERVAL + POW_WINDOW_IN_SECONDS +
-                        (fromFallback ? FALLBACK_EXTRA_TIME : 0)));
-
+        chrono::seconds(NEW_NODE_SYNC_INTERVAL + POW_WINDOW_IN_SECONDS));
+    m_powSubmissionWindowExpired = true;
     // create and send POW submission packets
     auto func = [this]() mutable -> void {
       this->SendPoWPacketSubmissionToOtherDSComm();
@@ -745,19 +742,18 @@ void DirectoryService::StartNewDSEpochConsensus(bool fromFallback,
     std::unique_lock<std::mutex> cv_lk(m_MutexCVDSBlockConsensus);
 
     // New nodes poll DSInfo from the lookups every NEW_NODE_SYNC_INTERVAL
-    // So let's add that to our wait time to allow new nodes to get SETSTARTPOW
-    // and submit a PoW
+    // So let's add that to our wait time to allow new nodes to get last TxBlock
+    // + DSInfo and submit a PoW
+    m_powSubmissionWindowExpired = false;
     if (cv_DSBlockConsensus.wait_for(
-            cv_lk,
-            std::chrono::seconds((isRejoin ? 0 : NEW_NODE_SYNC_INTERVAL) +
-                                 POW_WINDOW_IN_SECONDS +
-                                 (fromFallback ? FALLBACK_EXTRA_TIME : 0))) ==
-        std::cv_status::timeout) {
+            cv_lk, std::chrono::seconds(
+                       (isRejoin ? 0 : NEW_NODE_SYNC_INTERVAL) +
+                       POW_WINDOW_IN_SECONDS)) == std::cv_status::timeout) {
       LOG_GENERAL(INFO, "Woken up from the sleep of "
                             << (isRejoin ? 0 : NEW_NODE_SYNC_INTERVAL) +
-                                   POW_WINDOW_IN_SECONDS +
-                                   (fromFallback ? FALLBACK_EXTRA_TIME : 0)
+                                   POW_WINDOW_IN_SECONDS
                             << " seconds");
+      m_powSubmissionWindowExpired = true;
       // if i am suppose to create pow submission packet for other DS members
       if (m_consensusMyID < POW_PACKET_SENDERS) {
         // create and send POW submission packets
@@ -894,8 +890,8 @@ bool DirectoryService::UpdateDSGuardIdentity() {
 }
 
 bool DirectoryService::ProcessNewDSGuardNetworkInfo(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (!GUARD_MODE) {
@@ -1016,8 +1012,8 @@ bool DirectoryService::ProcessNewDSGuardNetworkInfo(
 }
 
 bool DirectoryService::ProcessCosigsRewardsFromSeed(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (LOOKUP_NODE_MODE) {
@@ -1066,13 +1062,14 @@ void DirectoryService::GetCoinbaseRewardees(
 }
 
 bool DirectoryService::Execute(const bytes& message, unsigned int offset,
-                               const Peer& from) {
+                               const Peer& from,
+                               const unsigned char& startByte) {
   // LOG_MARKER();
 
   bool result = false;
 
   typedef bool (DirectoryService::*InstructionHandler)(
-      const bytes&, unsigned int, const Peer&);
+      const bytes&, unsigned int, const Peer&, const unsigned char&);
 
   std::vector<InstructionHandler> ins_handlers;
 
@@ -1098,7 +1095,8 @@ bool DirectoryService::Execute(const bytes& message, unsigned int offset,
   }
 
   if (ins_byte < ins_handlers_count) {
-    result = (this->*ins_handlers[ins_byte])(message, offset + 1, from);
+    result =
+        (this->*ins_handlers[ins_byte])(message, offset + 1, from, startByte);
 
     if (!result) {
       // To-do: Error recovery

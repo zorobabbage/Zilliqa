@@ -100,7 +100,8 @@ bool Node::VerifyVCBlockCoSignature(const VCBlock& vcblock) {
 }
 
 bool Node::ProcessVCBlock(const bytes& message, unsigned int cur_offset,
-                          [[gnu::unused]] const Peer& from) {
+                          [[gnu::unused]] const Peer& from,
+                          [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   lock_guard<mutex> g(m_mutexVCBlock);
@@ -238,8 +239,11 @@ bool Node::ProcessVCBlockCore(const VCBlock& vcblock) {
       make_pair(vcblock.GetHeader().GetCandidateLeaderPubKey(),
                 vcblock.GetHeader().GetCandidateLeaderNetworkInfo());
 
-  auto iterDSLeaderID = find(m_mediator.m_DSCommittee->begin(),
-                             m_mediator.m_DSCommittee->end(), dsLeaderInfo);
+  auto iterDSLeaderID = find_if(m_mediator.m_DSCommittee->begin(),
+                                m_mediator.m_DSCommittee->end(),
+                                [dsLeaderInfo](const PairOfNode& p) {
+                                  return p.first == dsLeaderInfo.first;
+                                });
 
   if (iterDSLeaderID == m_mediator.m_DSCommittee->end()) {
     LOG_GENERAL(WARNING, "Cannot find new DS leader in the ds committee "
@@ -306,9 +310,13 @@ void Node::UpdateDSCommitteeCompositionAfterVC(const VCBlock& vcblock,
 
 // Only compares the pubkeys to kickout
 void Node::UpdateRetrieveDSCommitteeCompositionAfterVC(const VCBlock& vcblock,
-                                                       DequeOfNode& dsComm) {
+                                                       DequeOfNode& dsComm,
+                                                       const bool showLogs) {
   if (GUARD_MODE) {
-    LOG_GENERAL(INFO, "In guard mode. No updating of DS composition requried");
+    if (showLogs) {
+      LOG_GENERAL(INFO,
+                  "In guard mode. No updating of DS composition requried");
+    }
     return;
   }
   for (const auto& faultyLeader : vcblock.GetHeader().GetFaultyLeaders()) {

@@ -27,6 +27,7 @@
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/Logger.h"
+#include "libUtils/RandomGenerator.h"
 
 using namespace std;
 
@@ -183,11 +184,21 @@ void ConsensusLeader::GenerateConsensusSubsets() {
     }
     // For other subsets, its commit from every one together.
     else {
+      unsigned int guardCount = 1;  // myself
       for (unsigned int j = 0; j < m_numForConsensus - 1; j++) {
         unsigned int index = peersWhoCommitted.at(j);
         subset.commitPointMap.at(index) = m_commitPointMap.at(index);
         subset.commitPoints.emplace_back(m_commitPointMap.at(index));
         subset.commitMap.at(index) = true;
+        if (GUARD_MODE && m_DS &&
+            index < Guard::GetInstance().GetNumOfDSGuard()) {
+          guardCount++;
+        }
+      }
+      if (GUARD_MODE && m_DS) {
+        LOG_GENERAL(INFO, "[SubsetID: " << i << "] Guards = " << guardCount
+                                        << ", Non-guards = "
+                                        << m_numForConsensus - guardCount);
       }
     }
 
@@ -466,7 +477,7 @@ bool ConsensusLeader::ProcessMessageCommitFailure(const bytes& commitFailureMsg,
   m_commitFailureMap[backupID] = errorMsg;
   m_nodeCommitFailureHandlerFunc(errorMsg, from);
 
-  if (m_commitFailureCounter == m_numForConsensusFailure) {
+  if (m_commitFailureCounter == (m_numForConsensusFailure + 1)) {
     m_state = INITIAL;
 
     bytes consensusFailureMsg = {m_classByte, m_insByte, CONSENSUSFAILURE};
@@ -591,7 +602,14 @@ bool ConsensusLeader::ProcessMessageResponseCore(
     return false;
   }
 
-  for (unsigned int subsetID = 0; subsetID < subsetInfo.size(); subsetID++) {
+  if (subsetInfo.empty()) {
+    LOG_GENERAL(WARNING, "Empty response from " << backupID);
+    return false;
+  }
+
+  bool guardInOtherSubsets = false;
+
+  for (int subsetID = subsetInfo.size() - 1; subsetID >= 0; subsetID--) {
     // Check subset state
     if (!CheckStateSubset(subsetID, action)) {
       continue;
@@ -628,6 +646,16 @@ bool ConsensusLeader::ProcessMessageResponseCore(
       continue;
     }
 
+    // If a guard belongs to just subset 0, introduce artificial delay to give
+    // other subsets higher chance of completing first
+    if (GUARD_MODE && (subsetID == 0) && !guardInOtherSubsets &&
+        ((m_DS && (backupID < Guard::GetInstance().GetNumOfDSGuard())))) {
+      const unsigned int delay =
+          RandomGenerator::GetRandomInt(SUBSET0_RESPONSE_DELAY_IN_MS) + 1;
+      LOG_GENERAL(INFO, "Delay guard " << backupID << " by " << delay << "ms");
+      std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+    }
+
     // Update internal state
     // =====================
 
@@ -651,6 +679,8 @@ bool ConsensusLeader::ProcessMessageResponseCore(
                                    << subset.responseCounter << " / "
                                    << m_numForConsensus);
     }
+
+    guardInOtherSubsets = true;
 
     // Generate collective sig if sufficient responses have been obtained
     // ==================================================================
@@ -805,13 +835,37 @@ bool ConsensusLeader::GenerateCollectiveSigMessage(bytes& collectivesig,
     return false;
   }
 
+  bytes new_announcement_message;
+  if (m_collSigAnnouncementGeneratorFunc) {
+    // Wait and fetch new announcement message once ready
+    // ==================================
+    new_announcement_message = {m_classByte, m_insByte,
+                                ConsensusMessageType::ANNOUNCE};
+
+    if (!m_collSigAnnouncementGeneratorFunc(
+            new_announcement_message, MessageOffset::BODY + sizeof(uint8_t),
+            m_consensusID, m_blockNumber, m_blockHash, m_myID,
+            make_pair(m_myPrivKey, GetCommitteeMember(m_myID).first),
+            m_messageToCosign)) {
+      LOG_GENERAL(WARNING, "Failed to generate new announcement message");
+      return false;
+    }
+    // Leader will have new m_messageToCosign as per new announcement.
+
+    // However, CS1 + B1 is still one for older value of m_messageToCosign
+    // Backup is expected to validate CS1 + B1 against older m_messageToCosign.
+    // And should therafter use new m_messageToCosign for commit phase and later
+    // phase.
+  }
+
   // Assemble collective signature message body
   // ==========================================
 
   if (!Messenger::SetConsensusCollectiveSig(
           collectivesig, offset, m_consensusID, m_blockNumber, m_blockHash,
           m_myID, subset.collectiveSig, subset.responseMap,
-          make_pair(m_myPrivKey, GetCommitteeMember(m_myID).first))) {
+          make_pair(m_myPrivKey, GetCommitteeMember(m_myID).first),
+          new_announcement_message)) {
     LOG_GENERAL(WARNING, "Messenger::SetConsensusCollectiveSig failed.");
     return false;
   }
@@ -895,6 +949,7 @@ ConsensusLeader::~ConsensusLeader() {}
 
 bool ConsensusLeader::StartConsensus(
     const AnnouncementGeneratorFunc& announcementGeneratorFunc,
+    const AnnouncementGeneratorFunc& newAnnouncementGeneratorFunc,
     bool useGossipProto) {
   LOG_MARKER();
 
@@ -918,6 +973,8 @@ bool ConsensusLeader::StartConsensus(
     LOG_GENERAL(WARNING, "Failed to generate announcement message");
     return false;
   }
+
+  m_collSigAnnouncementGeneratorFunc = newAnnouncementGeneratorFunc;
 
   // Update internal state
   // =====================

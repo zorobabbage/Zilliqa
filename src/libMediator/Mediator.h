@@ -100,6 +100,18 @@ class Mediator {
   /// Prevent transactions from being created, forwarded, and dispatched
   static std::atomic<bool> m_disableTxns;
 
+  /// Prevent use of GetSmartContractState API
+  static std::atomic<bool> m_disableGetSmartContractState;
+
+  /// Prevent use of GetPendingTxns API
+  static std::atomic<bool> m_disableGetPendingTxns;
+
+  /// ValidateDB state, used by StatusServer
+  std::atomic<ValidateState> m_validateState;
+
+  /// Average TxBlock time in seconds, used by GetWorkServer
+  std::atomic<double> m_aveBlockTimeInSeconds;
+
   /// Constructor.
   Mediator(const PairOfKey& key, const Peer& peer);
 
@@ -122,7 +134,7 @@ class Mediator {
 
   bool GetIsVacuousEpoch();
 
-  bool GetIsVacuousEpoch(const uint64_t& epochNum);
+  static bool GetIsVacuousEpoch(const uint64_t& epochNum);
 
   uint32_t GetShardSize(const bool& useShardStructure) const;
 

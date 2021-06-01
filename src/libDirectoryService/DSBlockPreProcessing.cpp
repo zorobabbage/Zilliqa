@@ -30,6 +30,7 @@
 #include "libCrypto/Sha2.h"
 #include "libMediator/Mediator.h"
 #include "libMessage/Messenger.h"
+#include "libNetwork/Blacklist.h"
 #include "libNetwork/Guard.h"
 #include "libNetwork/P2PComm.h"
 #include "libPOW/pow.h"
@@ -303,6 +304,10 @@ void DirectoryService::InjectPoWForDSNode(
       m_allPoWConns.emplace(*rit);
       LOG_GENERAL(INFO, "Injecting into PoW connections " << rit->second);
     }
+
+    // Remove this node from blacklist if it exists
+    Peer& p = rit->second;
+    Blacklist::GetInstance().Remove(p.GetIpAddress());
 
     ++counter;
   }
@@ -712,12 +717,15 @@ bool DirectoryService::VerifyNodePriority(const DequeOfShard& shards,
     for (const auto& shardNode : shard) {
       const PubKey& toFind = std::get<SHARD_NODE_PUBKEY>(shardNode);
       if (setTopPriorityNodes.find(toFind) == setTopPriorityNodes.end()) {
-        auto reputation = m_mapNodeReputation[toFind];
-        auto priority = CalculateNodePriority(reputation);
-        if (priority < lowestPriority) {
-          ++numOutOfMyPriorityList;
-          LOG_GENERAL(WARNING,
-                      "Node " << toFind << " is not in my top priority list");
+        auto reputation = m_mapNodeReputation.find(toFind);
+        // New miners have no priority record and cannot be checked here
+        if (reputation != m_mapNodeReputation.end()) {
+          auto priority = CalculateNodePriority(reputation->second);
+          if (priority < lowestPriority) {
+            ++numOutOfMyPriorityList;
+            LOG_GENERAL(WARNING,
+                        "Node " << toFind << " is not in my top priority list");
+          }
         }
       }
     }
@@ -832,10 +840,33 @@ VectorOfPoWSoln DirectoryService::SortPoWSoln(
 
       // Assign non shard guards if there is any slots
       for (auto kv = ShadowPoWOrderSorter.begin();
-           (kv != ShadowPoWOrderSorter.end()) && (count < numNodesAfterTrim);
-           kv++) {
-        FilteredPoWOrderSorter.emplace(*kv);
-        count++;
+           (kv != ShadowPoWOrderSorter.end()) && (count < numNodesAfterTrim);) {
+        if (!Guard::GetInstance().IsNodeInShardGuardList(kv->second)) {
+          FilteredPoWOrderSorter.emplace(*kv);
+          kv = ShadowPoWOrderSorter.erase(kv);
+          count++;
+        } else {
+          kv++;
+        }
+      }
+
+      auto leftOverCount = (int32_t)EXPECTED_SHARD_NODE_NUM -
+                           (int32_t)FilteredPoWOrderSorter.size();
+      leftOverCount =
+          std::min(leftOverCount, (int32_t)ShadowPoWOrderSorter.size());
+
+      if (count < numNodesAfterTrim && leftOverCount > 0) {
+        // If there is not enough shard nodes, need to fill up the gap
+        LOG_GENERAL(INFO, "Gap to fill = " << leftOverCount);
+
+        for (auto kv = ShadowPoWOrderSorter.begin();
+             (kv != ShadowPoWOrderSorter.end()) && (count < numNodesAfterTrim);
+             kv++) {
+          FilteredPoWOrderSorter.emplace(*kv);
+          --leftOverCount;
+          ++count;
+          if (leftOverCount == 0) break;
+        }
       }
 
       // Sort "FilteredPoWOrderSorter" and stored it in "sortedPoWSolns"
@@ -933,11 +964,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
 
   // Determine the losers from the performance.
   unsigned int numByzantine = 0;
-  if (m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
-      UPGRADE_TARGET_DS_NUM) {
-    numByzantine =
-        DetermineByzantineNodes(numOfProposedDSMembers, removeDSNodePubkeys);
-  }
+  numByzantine =
+      DetermineByzantineNodes(numOfProposedDSMembers, removeDSNodePubkeys);
 
   // Sort and trim the PoW solutions.
   auto sortedPoWSolns = SortPoWSoln(allPoWs, true, numByzantine);
@@ -973,6 +1001,38 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
 
   ClearReputationOfNodeWithoutPoW();
   ComputeSharding(sortedPoWSolns);
+
+  GovDSShardVotesMap govProposalMap;
+  for (const auto& dsnode : powDSWinners) {
+    if (GUARD_MODE && !Guard::GetInstance().IsNodeInDSGuardList(dsnode.first)) {
+      const auto& powSolIter = allDSPoWs.find(dsnode.first);
+      if (powSolIter != allDSPoWs.end()) {
+        const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
+        const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
+        if (proposalId > 0 && voteValue > 0) {
+          LOG_GENERAL(INFO, "[Gov] DS proposalId=" << proposalId
+                                                   << " vote=" << voteValue);
+          govProposalMap[proposalId].first[voteValue]++;
+        }
+      }
+    }
+  }
+
+  for (const auto& miner : sortedPoWSolns) {
+    if (GUARD_MODE &&
+        !Guard::GetInstance().IsNodeInShardGuardList(miner.second)) {
+      const auto& powSolIter = allPoWs.find(miner.second);
+      if (powSolIter != allPoWs.end()) {
+        const uint32_t& proposalId = powSolIter->second.m_govProposal.first;
+        const uint32_t& voteValue = powSolIter->second.m_govProposal.second;
+        if (proposalId > 0 && voteValue > 0) {
+          LOG_GENERAL(INFO, "[Gov] Shard proposalId=" << proposalId
+                                                      << " vote=" << voteValue);
+          govProposalMap[proposalId].second[voteValue]++;
+        }
+      }
+    }
+  }
 
   vector<Peer> proposedDSMembersInfo;
   proposedDSMembersInfo.reserve(sortedDSPoWSolns.size());
@@ -1013,7 +1073,8 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         DSBlockHeader(dsDifficulty, difficulty, m_mediator.m_selfKey.second,
                       blockNum, m_mediator.m_currentEpochNum, GetNewGasPrice(),
                       m_mediator.m_curSWInfo, powDSWinners, removeDSNodePubkeys,
-                      dsBlockHashSet, version, committeeHash, prevHash),
+                      dsBlockHashSet, govProposalMap, version, committeeHash,
+                      prevHash),
         CoSignatures(m_mediator.m_DSCommittee->size())));
   }
 
@@ -1036,11 +1097,11 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
   }
 #endif  // VC_TEST_DS_SUSPEND_1
 
-#ifdef VC_TEST_DS_SUSPEND_3
+#if defined(VC_TEST_DS_SUSPEND_3) || defined(GOVVC_TEST_DS_SUSPEND_3)
   if (m_mode == PRIMARY_DS && m_viewChangeCounter < 3) {
-    LOG_EPOCH(
-        WARNING, m_mediator.m_currentEpochNum,
-        "I am suspending myself to test viewchange (VC_TEST_DS_SUSPEND_3)");
+    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
+              "I am suspending myself to test viewchange "
+              "(VC_TEST_DS_SUSPEND_3) or (GOVVC_TEST_DS_SUSPEND_3)");
     return false;
   }
 #endif  // VC_TEST_DS_SUSPEND_3
@@ -1079,7 +1140,7 @@ bool DirectoryService::RunConsensusOnDSBlockWhenDSPrimary() {
         *m_pendingDSBlock, m_shards, m_allPoWs, dsWinnerPoWs, messageToCosign);
   };
 
-  cl->StartConsensus(announcementGeneratorFunc, BROADCAST_GOSSIP_MODE);
+  cl->StartConsensus(announcementGeneratorFunc, nullptr, BROADCAST_GOSSIP_MODE);
   return true;
 }
 
@@ -1222,9 +1283,7 @@ bool DirectoryService::DSBlockValidator(
   // validation.
   const uint32_t REMOVED_FIELD_DSBLOCK_VERSION = 2;
   if (m_pendingDSBlock->GetHeader().GetVersion() >=
-          REMOVED_FIELD_DSBLOCK_VERSION &&
-      m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() >=
-          UPGRADE_TARGET_DS_NUM) {
+      REMOVED_FIELD_DSBLOCK_VERSION) {
     // Verify the injected Byzantine nodes to be removed in the winners list.
     if (!VerifyRemovedByzantineNodes()) {
       LOG_GENERAL(WARNING,

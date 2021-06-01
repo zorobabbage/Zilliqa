@@ -46,7 +46,8 @@ class LookupServer : public Server,
     return m_mediator.m_lookup->AddToTxnShardMap(tx, shardId);
   };
 
-  Json::Value GetTransactionsForTxBlock(const std::string& txBlockNum);
+  Json::Value GetTransactionsForTxBlock(const std::string& txBlockNum,
+                                        const std::string& pageNumber);
 
  public:
   LookupServer(Mediator& mediator, jsonrpc::AbstractServerConnector& server);
@@ -68,13 +69,25 @@ class LookupServer : public Server,
                                       Json::Value& response) {
     response = this->GetTransaction(request[0u].asString());
   }
+  inline virtual void GetSoftConfirmedTransactionI(const Json::Value& request,
+                                                   Json::Value& response) {
+    response = this->GetSoftConfirmedTransaction(request[0u].asString());
+  }
   inline virtual void GetDsBlockI(const Json::Value& request,
                                   Json::Value& response) {
     response = this->GetDsBlock(request[0u].asString());
   }
+  inline virtual void GetDsBlockVerboseI(const Json::Value& request,
+                                         Json::Value& response) {
+    response = this->GetDsBlock(request[0u].asString(), true);
+  }
   inline virtual void GetTxBlockI(const Json::Value& request,
                                   Json::Value& response) {
     response = this->GetTxBlock(request[0u].asString());
+  }
+  inline virtual void GetTxBlockVerboseI(const Json::Value& request,
+                                         Json::Value& response) {
+    response = this->GetTxBlock(request[0u].asString(), true);
   }
   inline virtual void GetLatestDsBlockI(const Json::Value& request,
                                         Json::Value& response) {
@@ -193,24 +206,35 @@ class LookupServer : public Server,
   }
   inline virtual void GetTransactionsForTxBlockI(const Json::Value& request,
                                                  Json::Value& response) {
-    response = this->GetTransactionsForTxBlock(request[0u].asString());
+    response = this->GetTransactionsForTxBlock(request[0u].asString(), "");
+  }
+  inline virtual void GetTransactionsForTxBlockExI(const Json::Value& request,
+                                                   Json::Value& response) {
+    response = this->GetTransactionsForTxBlock(request[0u].asString(),
+                                               request[1u].asString());
   }
   inline virtual void GetTxnBodiesForTxBlockI(const Json::Value& request,
                                               Json::Value& response) {
-    response = this->GetTxnBodiesForTxBlock(request[0u].asString());
+    response = this->GetTxnBodiesForTxBlock(request[0u].asString(), "");
+  }
+  inline virtual void GetTxnBodiesForTxBlockExI(const Json::Value& request,
+                                                Json::Value& response) {
+    response = this->GetTxnBodiesForTxBlock(request[0u].asString(),
+                                            request[1u].asString());
   }
   inline virtual void GetShardMembersI(const Json::Value& request,
                                        Json::Value& response) {
     response = this->GetShardMembers(request[0u].asUInt());
   }
+  inline virtual void GetCurrentDSCommI(const Json::Value& request,
+                                        Json::Value& response) {
+    (void)request;
+    response = this->GetCurrentDSComm();
+  }
   inline virtual void GetTotalCoinSupplyI(const Json::Value& request,
                                           Json::Value& response) {
     (void)request;
     response = this->GetTotalCoinSupply();
-  }
-  inline virtual void GetPendingTxnI(const Json::Value& request,
-                                     Json::Value& response) {
-    response = this->GetPendingTxn(request[0u].asString());
   }
   inline virtual void GetPendingTxnsI(const Json::Value& request,
                                       Json::Value& response) {
@@ -221,6 +245,10 @@ class LookupServer : public Server,
                                     Json::Value& response) {
     response = this->GetMinerInfo(request[0u].asString());
   }
+  inline virtual void GetTransactionStatusI(const Json::Value& request,
+                                            Json::Value& response) {
+    response = this->GetTransactionStatus(request[0u].asString());
+  }
 
   std::string GetNetworkId();
   Json::Value CreateTransaction(const Json::Value& _json,
@@ -228,8 +256,9 @@ class LookupServer : public Server,
                                 const uint128_t& gasPrice,
                                 const CreateTransactionTargetFunc& targetFunc);
   Json::Value GetTransaction(const std::string& transactionHash);
-  Json::Value GetDsBlock(const std::string& blockNum);
-  Json::Value GetTxBlock(const std::string& blockNum);
+  Json::Value GetSoftConfirmedTransaction(const std::string& txnHash);
+  Json::Value GetDsBlock(const std::string& blockNum, bool verbose = false);
+  Json::Value GetTxBlock(const std::string& blockNum, bool verbose = false);
   Json::Value GetLatestDsBlock();
   Json::Value GetLatestTxBlock();
   Json::Value GetBalance(const std::string& address);
@@ -244,6 +273,7 @@ class LookupServer : public Server,
   double GetTxBlockRate();
   double GetDSBlockRate();
   std::string GetTotalCoinSupply();
+  Json::Value GetCurrentDSComm();
   Json::Value GetShardMembers(unsigned int shardID);
   Json::Value DSBlockListing(unsigned int page);
   Json::Value TxBlockListing(unsigned int page);
@@ -261,7 +291,6 @@ class LookupServer : public Server,
 
   // gets the number of transaction starting from block blockNum to most recent
   // block
-  Json::Value GetPendingTxn(const std::string& tranID);
   Json::Value GetPendingTxns();
   Json::Value GetSmartContractState(
       const std::string& address, const std::string& vname = "",
@@ -269,11 +298,14 @@ class LookupServer : public Server,
   Json::Value GetSmartContractInit(const std::string& address);
   Json::Value GetSmartContractCode(const std::string& address);
 
-  static Json::Value GetTransactionsForTxBlock(const TxBlock& txBlock,
-                                               bool historicalDB);
+  static Json::Value GetTransactionsForTxBlock(
+      const TxBlock& txBlock,
+      const uint32_t pageNumber = std::numeric_limits<uint32_t>::max());
 
   Json::Value GetMinerInfo(const std::string& blockNum);
-  Json::Value GetTxnBodiesForTxBlock(const std::string& txBlockNum);
+  Json::Value GetTxnBodiesForTxBlock(const std::string& txBlockNum,
+                                     const std::string& pageNumber);
+  Json::Value GetTransactionStatus(const std::string& txnhash);
 };
 
 #endif  // ZILLIQA_SRC_LIBSERVER_LOOKUPSERVER_H_

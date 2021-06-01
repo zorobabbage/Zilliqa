@@ -18,15 +18,15 @@ target_link_libraries(Test_TrieDB PUBLIC Utils Trie Persistence)
 
 add_executable(Test_DSPersistence Test_DSPersistence.cpp)
 target_include_directories(Test_DSPersistence PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(Test_DSPersistence PUBLIC AccountData Utils Persistence Message)
+target_link_libraries(Test_DSPersistence PUBLIC AccountData Utils Persistence Message TestUtils)
 
 add_executable(Test_TxPersistence Test_TxPersistence.cpp)
 target_include_directories(Test_TxPersistence PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(Test_TxPersistence PUBLIC AccountData Utils Persistence Message)
 
 add_executable(Test_TxBody Test_TxBody.cpp)
-target_include_directories(Test_TxBody PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(Test_TxBody PUBLIC AccountData Utils Persistence Message)
+target_include_directories(Test_TxBody PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/tests)
+target_link_libraries(Test_TxBody PUBLIC AccountData Utils Persistence Message TestUtils)
 
 add_executable(Test_Diagnostic Test_Diagnostic.cpp)
 target_include_directories(Test_Diagnostic PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/tests)

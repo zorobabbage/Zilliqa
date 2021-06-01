@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.16.1)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -43,6 +43,11 @@ endif()
 include(InstallG3log)
 find_package(g3logger CONFIG REQUIRED)
 
+include(InstallCryptoUtils)
+
+include(InstallMongo)
+find_package(mongocxx CONFIG REQUIRED)
+ 
 include(InstallWebsocketpp)
 find_package(websocketpp CONFIG REQUIRED)
 
@@ -128,10 +133,6 @@ if(CUDA_MINE)
     add_definitions(-DCUDA_MINE)
 endif()
 
-if(FALLBACKTEST)
-    add_definitions(-DFALLBACK_TEST)
-endif()
-
 # VC related test scenario
 # For DS Block Consensus
 if(VC_TEST_DS_SUSPEND_1)
@@ -142,6 +143,11 @@ endif()
 if(VC_TEST_DS_SUSPEND_3)
     message(STATUS "VC 2 test enabled")
     add_definitions(-DVC_TEST_DS_SUSPEND_3)
+endif()
+
+if(GOVVC_TEST_DS_SUSPEND_3)
+    message(STATUS "GOVVC 2 test enabled")
+    add_definitions(-DGOVVC_TEST_DS_SUSPEND_3)
 endif()
 
 # For Final Block Consensus
@@ -246,7 +252,7 @@ endif()
 
 include_directories(${PROTOBUF_INSTALL_DIR}/include)
 
-include_directories(${CMAKE_SOURCE_DIR}/src/depends/libethash/include/)
+include_directories(${CMAKE_SOURCE_DIR}/src/depends/cryptoutils/include/)
 
 include_directories(${G3LOG_INCLUDE_DIR})
 
@@ -312,7 +318,7 @@ if (LIBFUZZER_SANITIZER)
     message(STATUS "Libfuzzer with address and undefined behavior sanitizer enabled")
 endif()
 
-
+set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 if (ENABLE_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
     if (NOT TESTS)
         message(FATAL_ERROR "TESTS is not ON")
@@ -322,7 +328,7 @@ if (ENABLE_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
     link_libraries(--coverage)
     add_custom_target(ctest COMMAND ${CMAKE_CTEST_COMMAND})
     # TODO: remove the hardcoded number in -j option
-    setup_target_for_coverage(${PROJECT_NAME}_coverage ctest coverage "-j2;--output-on-failure")
+    setup_target_for_coverage(${PROJECT_NAME}_coverage ctest coverage "-j1;--output-on-failure")
 endif()
 
 add_subdirectory (src)
@@ -335,10 +341,10 @@ endif()
 
 # installation
 
-set_target_properties(zilliqa sendcmd genaccounts genkeypair getpub getaddr gentxn signmultisig verifymultisig zilliqad gensigninitialds grepperf getnetworkhistory getrewardhistory validateDB restore genTxnBodiesFromS3 isolatedServer
+set_target_properties(zilliqa sendcmd genaccounts genkeypair getpub getaddr gentxn signmultisig verifymultisig zilliqad gensigninitialds grepperf getnetworkhistory getrewardhistory validateDB restore genTxnBodiesFromS3 isolatedServer data_migrate
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set_target_properties(Common Trie ethash NAT
+set_target_properties(Common Trie CryptoUtils NAT
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 if(OPENCL_MINE)

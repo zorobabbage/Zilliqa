@@ -40,10 +40,12 @@
 #include "libNetwork/Blacklist.h"
 #include "libNetwork/Guard.h"
 #include "libPOW/pow.h"
+#include "libRemoteStorageDB/RemoteStorageDB.h"
 #include "libServer/JSONConversion.h"
 #include "libServer/LookupServer.h"
 #include "libServer/WebsocketServer.h"
 #include "libUtils/BitVector.h"
+#include "libUtils/CommonUtils.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/HashUtils.h"
@@ -74,6 +76,24 @@ bool Node::StoreFinalBlock(const TxBlock& txBlock) {
           txBlock.GetHeader().GetBlockNum(), serializedTxBlock)) {
     LOG_GENERAL(WARNING, "BlockStorage::PutTxBlock failed " << txBlock);
     return false;
+  }
+
+  // Update average block time except when txblock is first block for the epoch
+  if ((txBlock.GetHeader().GetBlockNum() % NUM_FINAL_BLOCK_PER_POW) > 0) {
+    const uint64_t& timestampBef =
+        m_mediator.m_txBlockChain
+            .GetBlock(txBlock.GetHeader().GetBlockNum() - 1)
+            .GetTimestamp();
+    const uint64_t& timestampNow = txBlock.GetTimestamp();
+    const double lastBlockTimeInSeconds =
+        static_cast<double>(timestampNow - timestampBef) / 1000000;
+    double tmpAveBlockTimeInSeconds = m_mediator.m_aveBlockTimeInSeconds;
+    tmpAveBlockTimeInSeconds -=
+        tmpAveBlockTimeInSeconds / NUM_FINAL_BLOCK_PER_POW;
+    tmpAveBlockTimeInSeconds +=
+        lastBlockTimeInSeconds / NUM_FINAL_BLOCK_PER_POW;
+    m_mediator.m_aveBlockTimeInSeconds =
+        (tmpAveBlockTimeInSeconds < 1) ? 1 : tmpAveBlockTimeInSeconds;
   }
 
   m_mediator.IncreaseEpochNum();
@@ -112,6 +132,7 @@ bool Node::LoadUnavailableMicroBlockHashes(const TxBlock& finalBlock,
   const auto& microBlockInfos = finalBlock.GetMicroBlockInfos();
 
   bool foundMB = false;
+  bool foundMismatchedMB = false;
   // bool doRejoin = false;
 
   for (const auto& info : microBlockInfos) {
@@ -136,19 +157,21 @@ bool Node::LoadUnavailableMicroBlockHashes(const TxBlock& finalBlock,
       }
     } else {
       if (info.m_shardId == m_myshardId) {
+        foundMB = true;
         if (m_microblock == nullptr) {
           LOG_GENERAL(WARNING,
                       "Found my shard microblock but microblock obj "
                       "not initiated");
+          foundMismatchedMB = true;
           // doRejoin = true;
         } else if (m_lastMicroBlockCoSig.first !=
                    m_mediator.m_currentEpochNum) {
           LOG_GENERAL(WARNING,
                       "Found my shard microblock but Cosig not updated");
+          foundMismatchedMB = true;
           // doRejoin = true;
         } else if (m_microblock->GetBlockHash() == info.m_microBlockHash) {
           // Update transaction processed
-          foundMB = true;
           UpdateProcessedTransactions();
           toSendTxnToLookup = true;
         } else {
@@ -167,9 +190,18 @@ bool Node::LoadUnavailableMicroBlockHashes(const TxBlock& finalBlock,
     }
   }
 
-  if (!foundMB && !LOOKUP_NODE_MODE) {
-    LOG_GENERAL(INFO, "My MB not in FB");
-    PutProcessedInUnconfirmedTxns();
+  if (!LOOKUP_NODE_MODE) {
+    if (!foundMB) {
+      LOG_GENERAL(INFO, "No MB for my shard itself in FB!");
+    } else if (foundMismatchedMB) {
+      LOG_GENERAL(INFO,
+                  "Received shard MB in FB. But since I had failed MB "
+                  "Consensus, I will clear my txnpool!");
+      // clear the transactions
+      CleanCreatedTransaction();
+    } else {
+      LOG_GENERAL(INFO, "Found my MB in FB!");
+    }
   }
 
   if (/*doRejoin || */ m_doRejoinAtFinalBlock) {
@@ -376,12 +408,16 @@ void Node::BeginNextConsensusRound() {
   }
 
   LOG_MARKER();
+  if (m_mediator.m_ds->m_dsEpochAfterUpgrade) {
+    LOG_GENERAL(INFO, "Skip running mb consensus for current ds epoch..");
+    return;
+  }
 
   UpdateStateForNextConsensusRound();
 
   ScheduleMicroBlockConsensus();
 
-  CommitTxnPacketBuffer();
+  // CommitTxnPacketBuffer();
 }
 
 bool Node::FindTxnInProcessedTxnsList(
@@ -467,7 +503,10 @@ bool Node::ComposeMBnForwardTxnMessageForSender(bytes& mb_txns_message) {
   {
     const vector<TxnHash>& tx_hashes = m_microblock->GetTranHashes();
     lock_guard<mutex> g(m_mutexProcessedTransactions);
-    auto& processedTransactions = m_processedTransactions[blocknum];
+    auto& processedTransactions =
+        m_mediator.m_ds->m_mode == DirectoryService::IDLE
+            ? t_processedTransactions
+            : m_processedTransactions[blocknum];
     for (const auto& tx_hash : tx_hashes) {
       const auto& txnIt = processedTransactions.find(tx_hash);
       if (txnIt != processedTransactions.end()) {
@@ -532,7 +571,8 @@ void Node::PrepareGoodStateForFinalBlock() {
 }
 
 bool Node::ProcessVCFinalBlock(const bytes& message, unsigned int offset,
-                               [[gnu::unused]] const Peer& from) {
+                               const Peer& from,
+                               const unsigned char& startByte) {
   LOG_MARKER();
   if (!LOOKUP_NODE_MODE || !ARCHIVAL_LOOKUP || MULTIPLIER_SYNC_MODE) {
     LOG_GENERAL(
@@ -541,11 +581,12 @@ bool Node::ProcessVCFinalBlock(const bytes& message, unsigned int offset,
         "called by other than seed node without multiplier syncing mode.");
     return false;
   }
-  return ProcessVCFinalBlockCore(message, offset, from);
+  return ProcessVCFinalBlockCore(message, offset, from, startByte);
 }
 
-bool Node::ProcessVCFinalBlockCore(const bytes& message, unsigned int offset,
-                                   [[gnu::unused]] const Peer& from) {
+bool Node::ProcessVCFinalBlockCore(
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
   uint64_t dsBlockNumber = 0;
   uint32_t consensusID = 0;
@@ -586,7 +627,8 @@ bool Node::ProcessVCFinalBlockCore(const bytes& message, unsigned int offset,
 }
 
 bool Node::ProcessFinalBlock(const bytes& message, unsigned int offset,
-                             [[gnu::unused]] const Peer& from) {
+                             [[gnu::unused]] const Peer& from,
+                             [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   uint64_t dsBlockNumber = 0;
@@ -656,6 +698,10 @@ bool Node::ProcessFinalBlock(const bytes& message, unsigned int offset,
       }
       // Clear the vc blocks store
       m_vcBlockStore.clear();
+    } else if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP &&
+               LOOKUP_NODE_MODE) {
+      RemoteStorageDB::GetInstance().ClearHashMapForUpdates();
+      // Clear Hash map for duplicate updates
     }
     return true;
   }
@@ -682,11 +728,17 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     return false;
   }
 
-  // Check timestamp
-  if (!VerifyTimestamp(
-          txBlock.GetTimestamp(),
-          CONSENSUS_OBJECT_TIMEOUT + MICROBLOCK_TIMEOUT +
-              (TX_DISTRIBUTE_TIME_IN_MS + ANNOUNCEMENT_DELAY_IN_MS) / 1000)) {
+  // Check timestamp with extra time added for first txepoch for tx
+  // distribution.
+  auto extra_time =
+      (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW != 0)
+          ? 0
+          : EXTRA_TX_DISTRIBUTE_TIME_IN_MS;
+  if (!VerifyTimestamp(txBlock.GetTimestamp(),
+                       CONSENSUS_OBJECT_TIMEOUT + MICROBLOCK_TIMEOUT +
+                           (TX_DISTRIBUTE_TIME_IN_MS + extra_time +
+                            DS_ANNOUNCEMENT_DELAY_IN_MS) /
+                               1000)) {
     return false;
   }
 
@@ -701,6 +753,43 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
   if (committeeHash != txBlock.GetHeader().GetCommitteeHash()) {
     LOG_CHECK_FAIL("DS committee hash", txBlock.GetHeader().GetCommitteeHash(),
                    committeeHash);
+    // Lets check if its legitimate hash check failure, if i am lagging behind
+    // in prev ds epoch.
+    if (LOOKUP_NODE_MODE && !m_mediator.m_lookup->m_confirmedLatestDSBlock) {
+      // Check if I have a latest DS Info (but do it only once in current ds
+      // epoch)
+      uint64_t latestDSBlockNum =
+          m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+      uint64_t recvdDsBlockNum = txBlock.GetHeader().GetDSBlockNum();
+      m_mediator.m_lookup->m_confirmedLatestDSBlock = true;
+
+      if ((recvdDsBlockNum > latestDSBlockNum) ||
+          (m_mediator.m_dsBlockChain.GetBlockCount() <= 1)) {
+        auto func = [this]() -> void {
+          if (ARCHIVAL_LOOKUP) {
+            m_mediator.m_lookup->SetSyncType(SyncType::NEW_LOOKUP_SYNC);
+          } else {
+            m_mediator.m_lookup->SetSyncType(SyncType::LOOKUP_SYNC);
+          }
+          if (!m_mediator.m_lookup->GetDSInfo()) {
+            LOG_GENERAL(INFO,
+                        "I am lagging behind actual ds epoch. Will Rejoin!");
+            m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+            if (ARCHIVAL_LOOKUP) {
+              // Sync from S3
+              m_mediator.m_lookup->RejoinAsNewLookup(false);
+            } else  // Lookup - sync from S3
+            {
+              m_mediator.m_lookup->RejoinAsLookup(false);
+            }
+          } else {
+            m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+          }
+        };
+        DetachedFunction(1, func);
+      }
+    }
+
     return false;
   }
 
@@ -753,7 +842,8 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
         m_mediator.m_lookup->RejoinAsNewLookup(false);
       } else  // Lookup
       {
-        m_mediator.m_lookup->RejoinAsLookup();
+        // Sync from S3
+        m_mediator.m_lookup->RejoinAsLookup(false);
       }
     }
     // Missed some final block, rejoin
@@ -780,6 +870,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
         }
       } else  // Lookup
       {
+        // Sync from lookup
         m_mediator.m_lookup->RejoinAsLookup();
       }
     }
@@ -801,7 +892,15 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
   }
 
   if (!LOOKUP_NODE_MODE) {
-    if (m_lastMicroBlockCoSig.first != m_mediator.m_currentEpochNum) {
+    // After rejoin or recovery or dsepoch-after-upgrade
+    if (m_lastMicroBlockCoSig.first == 0) {
+      m_txn_distribute_window_open = true;
+    }
+    // I don't want to wait if I failed last mb consensus already and already in
+    // WAITING_FINALBLOCK state
+    else if (m_lastMicroBlockCoSig.first != m_mediator.m_currentEpochNum &&
+             (m_state == MICROBLOCK_CONSENSUS ||
+              m_state == MICROBLOCK_CONSENSUS_PREP)) {
       std::unique_lock<mutex> cv_lk(m_MutexCVFBWaitMB);
       if (cv_FBWaitMB.wait_for(
               cv_lk, std::chrono::seconds(CONSENSUS_MSG_ORDER_BLOCK_WINDOW)) ==
@@ -894,6 +993,11 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       return false;
     }
 
+    // Clear STL memory cache
+    if (LOOKUP_NODE_MODE) {
+      DetachedFunction(1, CommonUtils::ReleaseSTLMemoryCache);
+    }
+
     // if lookup and loaded microblocks, then skip
     lock_guard<mutex> g(m_mutexUnavailableMicroBlocks);
     if (!(LOOKUP_NODE_MODE &&
@@ -914,6 +1018,10 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       QueryLookupForDSGuardNetworkInfoUpdate();
     }
 
+    if (m_mediator.m_ds->m_dsEpochAfterUpgrade) {
+      m_mediator.m_ds->m_dsEpochAfterUpgrade = false;
+    }
+
     // Remove because shard nodes will be shuffled in next epoch.
     CleanMicroblockConsensusBuffer();
 
@@ -921,6 +1029,11 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       LOG_GENERAL(WARNING, "StoreFinalBlock failed!");
       return false;
     }
+    // Clear STL memory cache
+    if (!LOOKUP_NODE_MODE) {
+      DetachedFunction(1, CommonUtils::ReleaseSTLMemoryCache);
+    }
+
     auto writeStateToDisk = [this]() -> void {
       if (!AccountStore::GetInstance().MoveUpdatesToDisk()) {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");
@@ -934,12 +1047,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
           return;
         }
         if (!LOOKUP_NODE_MODE) {
-          if (!BlockStorage::GetBlockStorage().PutMetadata(
-                  MetaType::DSINCOMPLETED, {'0'})) {
-            LOG_GENERAL(WARNING,
-                        "BlockStorage::PutMetadata (DSINCOMPLETED) '0' failed");
-            return;
-          }
           if (!BlockStorage::GetBlockStorage().PutEpochFin(
                   m_mediator.m_currentEpochNum)) {
             LOG_GENERAL(WARNING, "BlockStorage::PutEpochFin failed "
@@ -953,11 +1060,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
                   m_mediator.m_txBlockChain.GetLastBlock()
                       .GetHeader()
                       .GetBlockNum()) == m_unavailableMicroBlocks.end()) {
-            if (!BlockStorage::GetBlockStorage().PutMetadata(
-                    MetaType::DSINCOMPLETED, {'0'})) {
-              LOG_GENERAL(WARNING,
-                          "BlockStorage::PutMetadata DSINCOMPLETED '0' failed");
-            }
             if (!BlockStorage::GetBlockStorage().PutEpochFin(
                     m_mediator.m_currentEpochNum)) {
               LOG_GENERAL(WARNING, "BlockStorage::PutEpochFin failed "
@@ -1002,9 +1104,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
   LOG_GENERAL(INFO, "toSendPendingTxn " << toSendPendingTxn);
 
   if (!LOOKUP_NODE_MODE) {
-    if (toSendTxnToLookup) {
-      CallActOnFinalblock();
-    }
     if (toSendPendingTxn) {
       SendPendingTxnToLookup();
     }
@@ -1022,16 +1121,14 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       m_consensusLeaderID++;
       m_consensusLeaderID = m_consensusLeaderID % m_mediator.GetShardSize(true);
     }
-    ClearPendingAndDroppedTxn();
     // Now only forwarded txn are left, so only call in lookup
 
     uint32_t numShards = m_mediator.m_ds->GetNumShards();
 
     CommitMBnForwardedTransactionBuffer();
-    CommitPendingTxnBuffer();
     if (!ARCHIVAL_LOOKUP && m_mediator.m_lookup->GetIsServer() &&
         !isVacuousEpoch && !m_mediator.GetIsVacuousEpoch() &&
-        ((m_mediator.m_currentEpochNum + NUM_VACUOUS_EPOCHS + 1) %
+        ((m_mediator.m_currentEpochNum + NUM_VACUOUS_EPOCHS) %
          NUM_FINAL_BLOCK_PER_POW) != 0) {
       m_mediator.m_lookup->SenderTxnBatchThread(numShards);
     }
@@ -1039,8 +1136,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     m_mediator.m_lookup->CheckAndFetchUnavailableMBs(
         true);  // except last block
   }
-
-  FallbackTimerPulse();
 
   return true;
 }
@@ -1108,10 +1203,13 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
               << "BGN")
   }
 
+  const uint64_t& epochNum = entry.m_microBlock.GetHeader().GetEpochNum();
+
   for (const auto& twr : entry.m_transactions) {
-    LOG_GENERAL(INFO, "Commit txn " << twr.GetTransaction().GetTranID().hex());
+    const auto& txhash = twr.GetTransaction().GetTranID();
+    LOG_GENERAL(INFO, "Commit txn " << txhash.hex());
     if (LOOKUP_NODE_MODE) {
-      LookupServer::AddToRecentTransactions(twr.GetTransaction().GetTranID());
+      LookupServer::AddToRecentTransactions(txhash);
     }
 
     // feed the event log holder
@@ -1119,15 +1217,23 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
       WebsocketServer::GetInstance().ParseTxn(twr);
     }
 
+    if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+      RemoteStorageDB::GetInstance().UpdateTxn(
+          txhash.hex(), TxnStatus::CONFIRMED, m_mediator.m_currentEpochNum,
+          twr.GetTransactionReceipt().GetJsonValue()["success"].asBool());
+    }
+
     // Store TxBody to disk
     bytes serializedTxBody;
     twr.Serialize(serializedTxBody, 0);
     if (!BlockStorage::GetBlockStorage().PutTxBody(
-            twr.GetTransaction().GetTranID(), serializedTxBody)) {
-      LOG_GENERAL(WARNING, "BlockStorage::PutTxBody failed "
-                               << twr.GetTransaction().GetTranID());
+            epochNum, twr.GetTransaction().GetTranID(), serializedTxBody)) {
+      LOG_GENERAL(WARNING, "BlockStorage::PutTxBody failed " << txhash);
       return;
     }
+  }
+  if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+    RemoteStorageDB::GetInstance().ExecuteWriteDetached();
   }
   LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
             "Proceessed " << entry.m_transactions.size() << " of txns.");
@@ -1135,6 +1241,66 @@ void Node::CommitForwardedTransactions(const MBnForwardedTxnEntry& entry) {
     LOG_STATE("[TXNPUT]"
               << "DONE [" << entry.m_transactions.size() << "]");
   }
+}
+
+void Node::SoftConfirmForwardedTransactions(const MBnForwardedTxnEntry& entry) {
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Node::SoftConfirmForwardedTransactions not expected to be "
+                "called from Normal node.");
+    return;
+  }
+
+  LOG_MARKER();
+
+  lock_guard<mutex> g(m_mutexSoftConfirmedTxns);
+
+  for (const auto& twr : entry.m_transactions) {
+    const auto& txhash = twr.GetTransaction().GetTranID();
+    m_softConfirmedTxns.emplace(txhash, twr);
+    if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+      RemoteStorageDB::GetInstance().UpdateTxn(
+          txhash.hex(), TxnStatus::SOFT_CONFIRMED, m_mediator.m_currentEpochNum,
+          twr.GetTransactionReceipt().GetJsonValue()["success"].asBool());
+    }
+  }
+  if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+    RemoteStorageDB::GetInstance().ExecuteWriteDetached();
+  }
+}
+
+bool Node::GetSoftConfirmedTransaction(const TxnHash& txnHash,
+                                       TxBodySharedPtr& tptr) {
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Node::GetSoftConfirmedTransaction not expected to be "
+                "called from Normal node.");
+    return false;
+  }
+
+  lock_guard<mutex> g(m_mutexSoftConfirmedTxns);
+
+  auto find = m_softConfirmedTxns.find(txnHash);
+  if (find != m_softConfirmedTxns.end()) {
+    tptr = TxBodySharedPtr(new TransactionWithReceipt(find->second));
+    return true;
+  }
+  return false;
+}
+
+void Node::ClearSoftConfirmedTransactions() {
+  if (!LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Node::ClearSoftConfirmedTransactions not expected to be "
+                "called from Normal node.");
+    return;
+  }
+
+  LOG_MARKER();
+
+  lock_guard<mutex> g(m_mutexSoftConfirmedTxns);
+
+  m_softConfirmedTxns.clear();
 }
 
 void Node::DeleteEntryFromFwdingAssgnAndMissingBodyCountMap(
@@ -1181,9 +1347,9 @@ void Node::DeleteEntryFromFwdingAssgnAndMissingBodyCountMap(
   }
 }
 
-bool Node::ProcessMBnForwardTransaction(const bytes& message,
-                                        unsigned int cur_offset,
-                                        const Peer& from) {
+bool Node::ProcessMBnForwardTransaction(
+    const bytes& message, unsigned int cur_offset, const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (!LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Node::ProcessMBnForwardTransaction not expected to be "
@@ -1208,6 +1374,30 @@ bool Node::ProcessMBnForwardTransaction(const bytes& message,
   if (!Messenger::GetNodeMBnForwardTransaction(message, cur_offset, entry)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::ProcessMBnForwardTransaction failed.");
+    return false;
+  }
+
+  if (entry.m_microBlock.GetHeader().GetVersion() != MICROBLOCK_VERSION) {
+    LOG_CHECK_FAIL("MicroBlock version",
+                   entry.m_microBlock.GetHeader().GetVersion(),
+                   MICROBLOCK_VERSION);
+    return false;
+  }
+
+  bool isDSMB = false;
+
+  {
+    std::lock_guard<mutex> g(m_mediator.m_ds->m_mutexShards);
+    isDSMB = entry.m_microBlock.GetHeader().GetShardId() ==
+             m_mediator.m_ds->m_shards.size();
+  }
+
+  // Verify the co-signature if not DS MB
+  if (!isDSMB &&
+      !m_mediator.m_ds->VerifyMicroBlockCoSignature(
+          entry.m_microBlock, entry.m_microBlock.GetHeader().GetShardId())) {
+    LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
+              "Microblock co-sig verification failed");
     return false;
   }
 
@@ -1269,13 +1459,33 @@ bool Node::ProcessMBnForwardTransaction(const bytes& message,
        m_mediator.m_lookup->GetSyncType() == SyncType::NEW_LOOKUP_SYNC) ||
       (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP &&
        m_mediator.m_lookup->GetSyncType() == SyncType::LOOKUP_SYNC)) {
-    lock_guard<mutex> g(m_mutexMBnForwardedTxnBuffer);
-    m_mbnForwardedTxnBuffer[entry.m_microBlock.GetHeader().GetEpochNum()]
-        .push_back(entry);
-    LOG_GENERAL(INFO, "Buffered MB & TXN BODIES #"
-                          << entry.m_microBlock.GetHeader().GetEpochNum()
-                          << " shard "
-                          << entry.m_microBlock.GetHeader().GetShardId());
+    {
+      lock_guard<mutex> g(m_mutexMBnForwardedTxnBuffer);
+      m_mbnForwardedTxnBuffer[entry.m_microBlock.GetHeader().GetEpochNum()]
+          .push_back(entry);
+      LOG_GENERAL(INFO, "Buffered MB & TXN BODIES #"
+                            << entry.m_microBlock.GetHeader().GetEpochNum()
+                            << " shard "
+                            << entry.m_microBlock.GetHeader().GetShardId());
+    }
+
+    // skip soft confirmation for DSMB
+    if (isDSMB) {
+      return true;
+    }
+
+    // shard microblock only:
+    // pre-process of early MBnForwardTxn submission
+    // soft confirmation
+    SoftConfirmForwardedTransactions(entry);
+    // invoke txn distribution
+    if (!m_mediator.GetIsVacuousEpoch() &&
+        ((m_mediator.m_currentEpochNum + NUM_VACUOUS_EPOCHS + 1) %
+             NUM_FINAL_BLOCK_PER_POW !=
+         0)) {
+      m_mediator.m_lookup->SendTxnPacketToShard(
+          entry.m_microBlock.GetHeader().GetShardId(), false, true);
+    }
 
     return true;
   }
@@ -1284,7 +1494,7 @@ bool Node::ProcessMBnForwardTransaction(const bytes& message,
 }
 
 bool Node::AddPendingTxn(const HashCodeMap& pendingTxns, const PubKey& pubkey,
-                         uint32_t shardId) {
+                         uint32_t shardId, const bytes& txnListHash) {
   uint size;
   {
     lock_guard<mutex> g(m_mediator.m_ds->m_mutexShards);
@@ -1309,13 +1519,17 @@ bool Node::AddPendingTxn(const HashCodeMap& pendingTxns, const PubKey& pubkey,
     }
   }
 
+  {
+    lock_guard<mutex> g(m_mutexPendingTxnListsThisEpoch);
+    if (!m_pendingTxnListsThisEpoch.insert(txnListHash).second) {
+      LOG_GENERAL(WARNING, "Dropping duplicate PENDINGTXN message");
+      return false;
+    }
+  }
+
   const auto& currentEpochNum =
       m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum();
 
-  lock(m_pendingTxnsMutex, m_droppedTxnsMutex);
-
-  unique_lock<shared_timed_mutex> g1(m_pendingTxnsMutex, adopt_lock);
-  unique_lock<shared_timed_mutex> g2(m_droppedTxnsMutex, adopt_lock);
   for (const auto& entry : pendingTxns) {
     LOG_GENERAL(INFO, " " << entry.first << " " << entry.second);
 
@@ -1326,12 +1540,18 @@ bool Node::AddPendingTxn(const HashCodeMap& pendingTxns, const PubKey& pubkey,
       continue;
     }
 
-    if (!IsTxnDropped(entry.second)) {
-      m_pendingTxns.insert(entry.first, entry.second, currentEpochNum);
-    } else {
+    if (IsTxnDropped(entry.second)) {
       LOG_GENERAL(INFO, "[DTXN]" << entry.first << " " << currentEpochNum);
-      m_droppedTxns.insert(entry.first, entry.second, currentEpochNum);
     }
+
+    if (REMOTESTORAGE_DB_ENABLE && !ARCHIVAL_LOOKUP) {
+      RemoteStorageDB::GetInstance().UpdateTxn(
+          entry.first.hex(), entry.second, m_mediator.m_currentEpochNum, false);
+    }
+  }
+
+  if (!ARCHIVAL_LOOKUP && REMOTESTORAGE_DB_ENABLE) {
+    RemoteStorageDB::GetInstance().ExecuteWriteDetached();
   }
   return true;
 }
@@ -1366,53 +1586,36 @@ bool Node::SendPendingTxnToLookup() {
 }
 
 bool Node::ProcessPendingTxn(const bytes& message, unsigned int cur_offset,
-                             [[gnu::unused]] const Peer& from) {
+                             [[gnu::unused]] const Peer& from,
+                             [[gnu::unused]] const unsigned char& startByte) {
   if (!LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING, "Node::ProcessPendingTxn called from Normal node");
     return false;
   }
   uint64_t epochNum;
-  unordered_map<TxnHash, ErrTxnStatus> hashCodeMap;
+  unordered_map<TxnHash, TxnStatus> hashCodeMap;
   uint32_t shardId;
   PubKey pubkey;
+  bytes txnListHash;
 
   if (!Messenger::GetNodePendingTxn(message, cur_offset, epochNum, hashCodeMap,
-                                    shardId, pubkey)) {
+                                    shardId, pubkey, txnListHash)) {
     LOG_GENERAL(WARNING, "Failed to set GetNodePendingTxn");
     return false;
   }
   const auto& currentEpochNum =
       m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum();
 
-  if (currentEpochNum > epochNum) {
-    LOG_GENERAL(WARNING, "PENDINGTXN sent of an older epoch " << epochNum);
+  if (currentEpochNum > epochNum + 1) {
+    LOG_GENERAL(WARNING,
+                "PENDINGTXN sent of an two epoches older epoch " << epochNum);
     return false;
-  } else if (currentEpochNum < epochNum || /* Buffer for syncing seed node */
-             (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP &&
-              m_mediator.m_lookup->GetSyncType() ==
-                  SyncType::NEW_LOOKUP_SYNC) ||
-             (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP &&
-              m_mediator.m_lookup->GetSyncType() == SyncType::LOOKUP_SYNC)) {
-    lock_guard<mutex> g(m_mutexPendingTxnBuffer);
-    m_pendingTxnBuffer[epochNum].emplace_back(hashCodeMap, pubkey, shardId);
-    LOG_GENERAL(INFO, "Buffer PENDINGTXN for epoch " << epochNum);
-    return true;
-  }
-  LOG_GENERAL(INFO, "Received message for epoch " << epochNum << " and shard "
-                                                  << shardId);
-  // Store to local map for PENDINGTXN
-  // map -> key : epochnum value : map {key: shardid, value: vector<bytes>
-  // pend_txns_message}
-  if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP && MULTIPLIER_SYNC_MODE) {
-    std::lock_guard<mutex> g1(m_mutexPendingTxnStore);
-    auto it = m_pendingTxnStore.find(epochNum);
-    if (it == m_pendingTxnStore.end() ||
-        (it->second.find(shardId) == it->second.end())) {
-      m_pendingTxnStore[epochNum][shardId] = message;
-    }
   }
 
-  AddPendingTxn(hashCodeMap, pubkey, shardId);
+  LOG_GENERAL(INFO, "Received PENDINGTXN for epoch "
+                        << epochNum << " and shard " << shardId);
+
+  AddPendingTxn(hashCodeMap, pubkey, shardId, txnListHash);
 
   return true;
 }
@@ -1463,6 +1666,8 @@ bool Node::ProcessMBnForwardTransactionCore(const MBnForwardedTxnEntry& entry) {
       DeleteEntryFromFwdingAssgnAndMissingBodyCountMap(
           entry.m_microBlock.GetHeader().GetEpochNum());
 
+      ClearSoftConfirmedTransactions();
+
       if (m_isVacuousEpochBuffer) {
         // Check is states updated
         uint64_t epochNum;
@@ -1482,33 +1687,12 @@ bool Node::ProcessMBnForwardTransactionCore(const MBnForwardedTxnEntry& entry) {
             m_mediator.m_txBlockChain.GetLastBlock()
                 .GetHeader()
                 .GetStateRootHash()) {
-          if (!BlockStorage::GetBlockStorage().PutMetadata(
-                  MetaType::DSINCOMPLETED, {'0'})) {
-            LOG_GENERAL(WARNING,
-                        "BlockStorage::PutMetadata (DSINCOMPLETED) '0' failed");
-            return false;
-          }
           if (!BlockStorage::GetBlockStorage().PutEpochFin(
                   m_mediator.m_currentEpochNum)) {
             LOG_GENERAL(WARNING,
                         "BlockStorage::PutEpochFin failed "
                             << entry.m_microBlock.GetHeader().GetEpochNum());
             return false;
-          }
-          if (!BlockStorage::GetBlockStorage().ResetDB(
-                  BlockStorage::TX_BODY_TMP)) {
-            LOG_GENERAL(WARNING, "BlockStorage::ResetDB (TX_BODY_TMP) failed");
-          }
-        } else if (epochNum == m_mediator.m_currentEpochNum) {
-          if (!BlockStorage::GetBlockStorage().PutMetadata(
-                  MetaType::DSINCOMPLETED, {'0'})) {
-            LOG_GENERAL(WARNING,
-                        "BlockStorage::PutMetadata (DSINCOMPLETED) '0' failed");
-            return false;
-          }
-          if (!BlockStorage::GetBlockStorage().ResetDB(
-                  BlockStorage::TX_BODY_TMP)) {
-            LOG_GENERAL(WARNING, "BlockStorage::ResetDB (TX_BODY_TMP) failed");
           }
         }
       } else {
@@ -1526,8 +1710,7 @@ bool Node::ProcessMBnForwardTransactionCore(const MBnForwardedTxnEntry& entry) {
         const TxBlock& txBlock = m_mediator.m_txBlockChain.GetLastBlock();
         Json::Value j_txnhashes;
         try {
-          j_txnhashes = LookupServer::GetTransactionsForTxBlock(
-              txBlock, m_mediator.m_lookup->m_historicalDB);
+          j_txnhashes = LookupServer::GetTransactionsForTxBlock(txBlock);
         } catch (...) {
           j_txnhashes = Json::arrayValue;
         }
@@ -1565,24 +1748,4 @@ void Node::CommitMBnForwardedTransactionBuffer() {
     }
     it = m_mbnForwardedTxnBuffer.erase(it);
   }
-}
-
-void Node::CommitPendingTxnBuffer() {
-  // Clear Pending txn
-  lock_guard<mutex> g(m_mutexPendingTxnBuffer);
-
-  const auto& epochNum =
-      m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum();
-
-  auto itr = m_pendingTxnBuffer.find(epochNum);
-
-  if (itr != m_pendingTxnBuffer.end()) {
-    for (const auto& entry : itr->second) {
-      AddPendingTxn(get<PendingData::HASH_CODE_MAP>(entry),
-                    get<PendingData::PUBKEY>(entry),
-                    get<PendingData::SHARD_ID>(entry));
-    }
-  }
-
-  m_pendingTxnBuffer.clear();
 }

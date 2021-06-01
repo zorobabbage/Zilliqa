@@ -24,7 +24,6 @@
 #include "libData/AccountData/TransactionReceipt.h"
 #include "libData/BlockChainData/BlockLinkChain.h"
 #include "libData/BlockData/Block.h"
-#include "libData/BlockData/Block/FallbackBlockWShardingStructure.h"
 #include "libNetwork/Peer.h"
 
 class Mediator;
@@ -40,18 +39,23 @@ class Validator {
 
   bool CheckCreatedTransaction(const Transaction& tx,
                                TransactionReceipt& receipt,
-                               ErrTxnStatus& error_code) const;
+                               TxnStatus& error_code) const;
 
   bool CheckCreatedTransactionFromLookup(const Transaction& tx,
-                                         ErrTxnStatus& error_code);
+                                         TxnStatus& error_code);
 
   template <class Container, class DirectoryBlock>
   bool CheckBlockCosignature(const DirectoryBlock& block,
-                             const Container& commKeys);
+                             const Container& commKeys,
+                             const bool showLogs = true);
 
   bool CheckDirBlocks(
-      const std::vector<boost::variant<
-          DSBlock, VCBlock, FallbackBlockWShardingStructure>>& dirBlocks,
+      const std::vector<boost::variant<DSBlock, VCBlock>>& dirBlocks,
+      const DequeOfNode& initDsComm, const uint64_t& index_num,
+      DequeOfNode& newDSComm);
+
+  bool CheckDirBlocksNoUpdate(
+      const std::vector<boost::variant<DSBlock, VCBlock>>& dirBlocks,
       const DequeOfNode& initDsComm, const uint64_t& index_num,
       DequeOfNode& newDSComm);
 

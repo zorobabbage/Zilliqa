@@ -67,7 +67,7 @@ LevelDB::LevelDB(const string& dbName, const string& path, const string& subdire
 
     if(!status.ok())
     {
-        LOG_GENERAL(WARNING, "LevelDB status is not OK. "<<status.ToString());
+        LOG_GENERAL(WARNING, "LevelDB " << m_dbName << " status is not OK - " << status.ToString());
     }
 
     m_db.reset(db);
@@ -99,7 +99,7 @@ LevelDB::LevelDB(const std::string & dbName, const std::string& subdirectory, bo
     if(!status.ok())
     {
         // throw exception();
-        LOG_GENERAL(WARNING, "LevelDB status is not OK.");
+        LOG_GENERAL(WARNING, "LevelDB " << dbName << " status is not OK - " << status.ToString());
     }
 
     m_db.reset(db);
@@ -114,7 +114,7 @@ void LevelDB::Reopen() {
     status = leveldb::DB::Open(m_options, m_open_db_path, &db);
     if (!status.ok())
     {
-        LOG_GENERAL(WARNING, "LevelDB status is not OK.");
+        LOG_GENERAL(WARNING, "LevelDB " << m_dbName << " status is not OK - " << status.ToString());
     }
     m_db.reset(db);
 }
@@ -143,6 +143,19 @@ string LevelDB::Lookup(const std::string & key) const
 {
     string value;
     leveldb::Status s = m_db->Get(leveldb::ReadOptions(), key, &value);
+    if (!s.ok())
+    {
+        // TODO
+        return "";
+    }
+
+    return value;
+}
+
+string LevelDB::Lookup(const vector<unsigned char>& key) const
+{
+    string value;
+    leveldb::Status s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(vector_ref<const unsigned char>(&key[0], key.size())), &value);
     if (!s.ok())
     {
         // TODO
@@ -215,6 +228,22 @@ std::shared_ptr<leveldb::DB> LevelDB::GetDB()
 int LevelDB::Insert(const dev::h256 & key, dev::bytesConstRef value)
 {
     return Insert(key, value.toString());
+}
+
+int LevelDB::Insert(const vector<unsigned char>& key, const vector<unsigned char>& body)
+{
+    leveldb::Status s = m_db->Put(leveldb::WriteOptions(),
+                                  leveldb::Slice(vector_ref<const unsigned char>(&key[0], key.size())),
+                                  leveldb::Slice(vector_ref<const unsigned char>(&body[0],
+                                                                                 body.size())));
+
+    if (!s.ok())
+    {
+        LOG_GENERAL(WARNING, "[Insert] Status: " << s.ToString());
+        return -1;
+    }
+
+    return 0;
 }
 
 int LevelDB::Insert(const boost::multiprecision::uint256_t & blockNum,
@@ -382,6 +411,12 @@ bool LevelDB::Exists(const dev::h256 & key) const
     return !ret.empty();
 }
 
+bool LevelDB::Exists(const vector<unsigned char>& key) const
+{
+    auto ret = Lookup(key);
+    return !ret.empty();
+}
+
 bool LevelDB::Exists(const boost::multiprecision::uint256_t & blockNum) const
 {
     auto ret = Lookup(blockNum);
@@ -431,6 +466,18 @@ int LevelDB::DeleteKey(const std::string & key)
     return 0;
 }
 
+int LevelDB::DeleteKey(const vector<unsigned char> & key)
+{
+    leveldb::Status s = m_db->Delete(leveldb::WriteOptions(), leveldb::Slice(vector_ref<const unsigned char>(&key[0], key.size())));
+    if(!s.ok())
+    {
+        LOG_GENERAL(WARNING, "[DeleteKey] Status: " << s.ToString());
+        return -1;
+    }
+
+    return 0;
+}
+
 int LevelDB::DeleteDB()
 {
     if (LOOKUP_NODE_MODE)
@@ -469,7 +516,7 @@ bool LevelDB::RefreshDB()
     if(!status.ok())
     {
         // throw exception();
-        LOG_GENERAL(WARNING, "LevelDB status is not OK. "<<status.ToString());
+        LOG_GENERAL(WARNING, "LevelDB " << m_dbName << " status is not OK - " << status.ToString());
         return false;
     }
 
@@ -513,7 +560,7 @@ bool LevelDB::ResetDBForNormalNode()
         if(!status.ok())
         {
             // throw exception();
-            LOG_GENERAL(WARNING, "LevelDB status is not OK.");
+            LOG_GENERAL(WARNING, "LevelDB " << m_dbName << " status is not OK - " << status.ToString());
         }
 
         m_db.reset(db);
@@ -557,7 +604,7 @@ bool LevelDB::ResetDBForLookupNode()
         if(!status.ok())
         {
             // throw exception();
-            LOG_GENERAL(WARNING, "LevelDB status is not OK.");
+            LOG_GENERAL(WARNING, "LevelDB " << m_dbName << " status is not OK - " << status.ToString());
             return false;
         }
 

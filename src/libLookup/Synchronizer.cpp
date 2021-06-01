@@ -44,13 +44,16 @@ DSBlock Synchronizer::ConstructGenesisDSBlock() {
   uint64_t genesisEpochNumer = 0;
   std::map<PubKey, Peer> powDSWinners;
   std::vector<PubKey> removeDSNodePubkeys;
+  std::map<uint32_t, std::pair<std::map<uint32_t, uint32_t>,
+                               std::map<uint32_t, uint32_t>>>
+      govProposalMap;
 
   DSBlock dsBlock(
       DSBlockHeader(DS_POW_DIFFICULTY, POW_DIFFICULTY, pubKey,
                     genesisBlockNumer, genesisEpochNumer, PRECISION_MIN_VALUE,
                     SWInfo(), powDSWinners, removeDSNodePubkeys,
-                    DSBlockHashSet(), GENESIS_DSBLOCK_VERSION, CommitteeHash(),
-                    prevHash),
+                    DSBlockHashSet(), govProposalMap, GENESIS_DSBLOCK_VERSION,
+                    CommitteeHash(), prevHash),
       CoSignatures());
   return dsBlock;
 }
@@ -171,23 +174,6 @@ bool Synchronizer::FetchLatestTxBlockSeed(Lookup* lookup,
   }
 
   return lookup->GetTxBlockFromSeedNodes(currentBlockChainSize, 0);
-}
-
-bool Synchronizer::AttemptPoW(Lookup* lookup) {
-  if (LOOKUP_NODE_MODE) {
-    LOG_GENERAL(WARNING,
-                "Synchronizer::AttemptPoW not expected to be called from "
-                "LookUp node.");
-    return true;
-  }
-
-  if (lookup->InitMining(uint32_t() - 1)) {
-    LOG_GENERAL(INFO, "new node attempted pow");
-    return true;
-  } else {
-    LOG_GENERAL(INFO, "new node did not attempt pow")
-    return false;
-  }
 }
 
 bool Synchronizer::FetchOfflineLookups(Lookup* lookup) {

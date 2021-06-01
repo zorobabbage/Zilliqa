@@ -63,9 +63,6 @@ bool DirectoryService::SaveCoinbaseCore(const vector<bool>& b1,
   }
 
   unsigned int i = 0;
-  constexpr uint16_t MAX_REPUTATION =
-      4096;  // This means the max priority is 12. A node need to continually
-             // run for 5 days to achieve this reputation.
 
   for (const auto& kv : shard) {
     const auto& pubKey = std::get<SHARD_NODE_PUBKEY>(kv);
@@ -194,13 +191,7 @@ void DirectoryService::InitCoinbase() {
   LOG_GENERAL(INFO, "Total signatures count: " << sig_count << " lookup count "
                                                << lookup_count);
 
-  uint128_t total_reward = 0;
-
-  if (!SafeMath<uint128_t>::add(COINBASE_REWARD_PER_DS, m_totalTxnFees,
-                                total_reward)) {
-    LOG_GENERAL(WARNING, "total_reward addition unsafe!");
-    return;
-  }
+  uint128_t total_reward = COINBASE_REWARD_PER_DS;
 
   LOG_GENERAL(INFO, "Total reward: " << total_reward);
 

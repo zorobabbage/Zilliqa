@@ -32,6 +32,7 @@
 #include "libNetwork/Blacklist.h"
 #include "libNetwork/Guard.h"
 #include "libPersistence/ContractStorage2.h"
+#include "libUtils/CommonUtils.h"
 #include "libUtils/DataConversion.h"
 #include "libUtils/DetachedFunction.h"
 #include "libUtils/Logger.h"
@@ -59,7 +60,9 @@ bool DirectoryService::StoreFinalBlockToDisk() {
     bytes body;
     m_mediator.m_node->m_microblock->Serialize(body, 0);
     if (!BlockStorage::GetBlockStorage().PutMicroBlock(
-            m_mediator.m_node->m_microblock->GetBlockHash(), body)) {
+            m_mediator.m_node->m_microblock->GetBlockHash(),
+            m_mediator.m_node->m_microblock->GetHeader().GetEpochNum(),
+            m_mediator.m_node->m_microblock->GetHeader().GetShardId(), body)) {
       LOG_GENERAL(WARNING, "Failed to put microblock in persistence");
       return false;
     }
@@ -94,7 +97,6 @@ bool DirectoryService::StoreFinalBlockToDisk() {
     LOG_GENERAL(WARNING, "Failed to put statedelta in persistence");
     return false;
   }
-
   return true;
 }
 
@@ -186,12 +188,6 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
         LOG_GENERAL(WARNING, "MoveUpdatesToDisk failed, what to do?");
         return;
       } else {
-        if (!BlockStorage::GetBlockStorage().PutMetadata(
-                MetaType::DSINCOMPLETED, {'0'})) {
-          LOG_GENERAL(WARNING,
-                      "BlockStorage::PutMetadata (DSINCOMPLETED) '0' failed");
-          return;
-        }
         if (!BlockStorage::GetBlockStorage().PutLatestEpochStatesUpdated(
                 m_mediator.m_currentEpochNum)) {
           LOG_GENERAL(WARNING, "BlockStorage::PutLatestEpochStatesUpdated "
@@ -221,6 +217,9 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
       }
     };
     DetachedFunction(1, writeStateToDisk);
+
+    // Clear STL memory cache
+    DetachedFunction(1, CommonUtils::ReleaseSTLMemoryCache);
   } else {
     // Coinbase
     SaveCoinbase(m_finalBlock->GetB1(), m_finalBlock->GetB2(),
@@ -308,7 +307,7 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
       LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
                 "[No PoW needed] Waiting for Microblock.");
 
-      if (m_mediator.m_node->m_myshardId == 0) {
+      if (m_mediator.m_node->m_myshardId == 0 || m_dsEpochAfterUpgrade) {
         LOG_GENERAL(INFO,
                     "[No PoW needed] No other shards. So no other microblocks "
                     "expected to be received");
@@ -337,12 +336,22 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
         };
         DetachedFunction(1, func1);
 
-        CommitMBSubmissionMsgBuffer();
+        auto func2 = [this]() mutable -> void {
+          std::this_thread::sleep_for(chrono::milliseconds(10));
+          CommitMBSubmissionMsgBuffer();
+        };
+        DetachedFunction(1, func2);
 
         std::unique_lock<std::mutex> cv_lk(
             m_MutexScheduleDSMicroBlockConsensus);
+        // Check timestamp with extra time added for first txepoch for tx
+        // distribution in shard
+        auto extra_time =
+            (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW != 0)
+                ? 0
+                : EXTRA_TX_DISTRIBUTE_TIME_IN_MS;
         if (cv_scheduleDSMicroBlockConsensus.wait_for(
-                cv_lk, std::chrono::seconds(MICROBLOCK_TIMEOUT)) ==
+                cv_lk, std::chrono::seconds(MICROBLOCK_TIMEOUT + extra_time)) ==
             std::cv_status::timeout) {
           LOG_GENERAL(WARNING,
                       "Timeout: Didn't receive all Microblock. Proceeds "
@@ -367,9 +376,9 @@ void DirectoryService::ProcessFinalBlockConsensusWhenDone() {
   DetachedFunction(1, func);
 }
 
-bool DirectoryService::ProcessFinalBlockConsensus(const bytes& message,
-                                                  unsigned int offset,
-                                                  const Peer& from) {
+bool DirectoryService::ProcessFinalBlockConsensus(
+    const bytes& message, unsigned int offset, const Peer& from,
+    const unsigned char& startByte) {
   LOG_MARKER();
 
   if (LOOKUP_NODE_MODE) {
@@ -445,7 +454,8 @@ bool DirectoryService::ProcessFinalBlockConsensus(const bytes& message,
       AddToFinalBlockConsensusBuffer(consensus_id, reserialized_message, offset,
                                      from, senderPubKey);
     } else {
-      return ProcessFinalBlockConsensusCore(reserialized_message, offset, from);
+      return ProcessFinalBlockConsensusCore(reserialized_message, offset, from,
+                                            startByte);
     }
   }
 
@@ -453,12 +463,13 @@ bool DirectoryService::ProcessFinalBlockConsensus(const bytes& message,
 }
 
 void DirectoryService::CommitFinalBlockConsensusBuffer() {
+  LOG_MARKER();
   lock_guard<mutex> g(m_mutexFinalBlockConsensusBuffer);
 
   for (const auto& i : m_finalBlockConsensusBuffer[m_mediator.m_consensusID]) {
     auto runconsensus = [this, i]() {
       ProcessFinalBlockConsensusCore(std::get<NODE_MSG>(i), MessageOffset::BODY,
-                                     std::get<NODE_PEER>(i));
+                                     std::get<NODE_PEER>(i), START_BYTE_NORMAL);
     };
     DetachedFunction(1, runconsensus);
   }
@@ -505,7 +516,7 @@ void DirectoryService::CleanFinalBlockConsensusBuffer() {
 
 bool DirectoryService::ProcessFinalBlockConsensusCore(
     [[gnu::unused]] const bytes& message, [[gnu::unused]] unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const Peer& from, const unsigned char& startByte) {
   LOG_MARKER();
 
   if (!CheckState(PROCESS_FINALBLOCKCONSENSUS)) {
@@ -589,15 +600,11 @@ bool DirectoryService::ProcessFinalBlockConsensusCore(
         m_consensusObject->RecoveryAndProcessFromANewState(
             ConsensusCommon::INITIAL);
 
-        auto rerunconsensus = [this, message, offset, from]() {
+        auto rerunconsensus = [this, message, offset, from, startByte]() {
           RemoveDSMicroBlock();  // Remove DS microblock from my list of
                                  // microblocks
           PrepareRunConsensusOnFinalBlockNormal();
-          if (!m_mediator.GetIsVacuousEpoch()) {
-            m_mediator.m_node->ProcessTransactionWhenShardBackup(
-                m_microBlockGasLimit);
-          }
-          ProcessFinalBlockConsensusCore(message, offset, from);
+          ProcessFinalBlockConsensusCore(message, offset, from, startByte);
         };
         DetachedFunction(1, rerunconsensus);
         return true;
@@ -621,12 +628,10 @@ bool DirectoryService::ProcessFinalBlockConsensusCore(
         m_consensusObject->RecoveryAndProcessFromANewState(
             ConsensusCommon::INITIAL);
 
-        auto reprocessconsensus = [this, message, offset, from]() {
+        auto reprocessconsensus = [this, message, offset, from, startByte]() {
           RemoveDSMicroBlock();  // Remove DS microblock from my list of
                                  // microblocks
-          m_mediator.m_node->ProcessTransactionWhenShardBackup(
-              m_microBlockGasLimit);
-          ProcessFinalBlockConsensusCore(message, offset, from);
+          ProcessFinalBlockConsensusCore(message, offset, from, startByte);
         };
         DetachedFunction(1, reprocessconsensus);
         return true;

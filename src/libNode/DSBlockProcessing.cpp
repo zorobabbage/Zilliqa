@@ -99,23 +99,24 @@ void Node::StoreDSBlockToDisk(const DSBlock& dsblock) {
 }
 
 void Node::UpdateDSCommitteeComposition(DequeOfNode& dsComm,
-                                        const DSBlock& dsblock) {
-  // Update the DS committee composition.
-  LOG_MARKER();
+                                        const DSBlock& dsblock,
+                                        const bool showLogs) {
+  if (showLogs) {
+    LOG_MARKER();
+  }
 
   MinerInfoDSComm dummy;
   UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm, dsblock,
-                                   dummy);
+                                   dummy, showLogs);
 }
 
 void Node::UpdateDSCommitteeComposition(DequeOfNode& dsComm,
                                         const DSBlock& dsblock,
                                         MinerInfoDSComm& minerInfo) {
-  // Update the DS committee composition.
   LOG_MARKER();
 
   UpdateDSCommitteeCompositionCore(m_mediator.m_selfKey.second, dsComm, dsblock,
-                                   minerInfo);
+                                   minerInfo, true);
 }
 
 bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
@@ -169,6 +170,22 @@ bool Node::VerifyDSBlockCoSignature(const DSBlock& dsblock) {
   }
 
   return true;
+}
+
+void Node ::UpdateGovProposalRemainingVoteInfo() {
+  LOG_MARKER();
+  lock_guard<mutex> g(m_mutexGovProposal);
+  if (m_govProposalInfo.isGovProposalActive) {
+    uint64_t curDSEpochNo =
+        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
+    if (curDSEpochNo >= m_govProposalInfo.startDSEpoch &&
+        curDSEpochNo <= m_govProposalInfo.endDSEpoch &&
+        m_govProposalInfo.remainingVoteCount > 1) {
+      --m_govProposalInfo.remainingVoteCount;
+    } else {
+      m_govProposalInfo.reset();
+    }
+  }
 }
 
 void Node::LogReceivedDSBlockDetails([[gnu::unused]] const DSBlock& dsblock) {
@@ -252,6 +269,7 @@ void Node::StartFirstTxEpoch(bool fbWaitState) {
 
   LOG_MARKER();
   m_requestedForDSGuardNetworkInfoUpdate = false;
+  m_versionChecked = false;
   ResetConsensusId();
   // blacklist pop for shard nodes
   {
@@ -260,10 +278,11 @@ void Node::StartFirstTxEpoch(bool fbWaitState) {
         *m_mediator.m_DSCommittee);
   }
   m_mediator.m_lookup->RemoveSeedNodesFromBlackList();
-  Blacklist::GetInstance().Pop(BLACKLIST_NUM_TO_POP);
+  Blacklist::GetInstance().Clear();
   P2PComm::ClearPeerConnectionCount();
 
   CleanWhitelistReqs();
+  m_mediator.m_ds->m_dsEpochAfterUpgrade = false;
 
   uint16_t lastBlockHash = 0;
   if (m_mediator.m_currentEpochNum > 1) {
@@ -320,8 +339,6 @@ void Node::StartFirstTxEpoch(bool fbWaitState) {
     }
   }
 
-  m_justDidFallback = false;
-
   if (BROADCAST_GOSSIP_MODE && !LOOKUP_NODE_MODE) {
     VectorOfNode peers;
     std::vector<PubKey> pubKeys;
@@ -331,8 +348,8 @@ void Node::StartFirstTxEpoch(bool fbWaitState) {
     P2PComm::GetInstance().InitializeRumorManager(peers, pubKeys);
   }
 
-  CommitTxnPacketBuffer();
-
+  // CommitTxnPacketBuffer();
+  m_txn_distribute_window_open = true;
   if (fbWaitState) {
     SetState(WAITING_FINALBLOCK);
     CleanMicroblockConsensusBuffer();
@@ -340,18 +357,16 @@ void Node::StartFirstTxEpoch(bool fbWaitState) {
     auto main_func3 = [this]() mutable -> void { RunConsensusOnMicroBlock(); };
     DetachedFunction(1, main_func3);
   }
-
-  FallbackTimerLaunch();
-  FallbackTimerPulse();
 }
 
 void Node::ResetConsensusId() {
   m_mediator.m_consensusID = m_mediator.m_currentEpochNum == 1 ? 1 : 0;
 }
 
-bool Node::ProcessVCDSBlocksMessage(const bytes& message,
-                                    unsigned int cur_offset,
-                                    [[gnu::unused]] const Peer& from) {
+bool Node::ProcessVCDSBlocksMessage(
+    const bytes& message, unsigned int cur_offset,
+    [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   unsigned int oldNumShards = m_mediator.m_ds->GetNumShards();
@@ -510,6 +525,9 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
     if (m_fromNewProcess) {
       m_fromNewProcess = false;
     }
+  } else if (m_mediator.m_lookup->m_startedPoW) {  // Safer to always signal
+                                                   // that dsblock is received
+    m_mediator.m_lookup->cv_waitJoined.notify_all();
   }
 
   {
@@ -549,6 +567,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
 
   // Add to block chain and Store the DS block to disk.
   StoreDSBlockToDisk(dsblock);
+
+  m_mediator.m_lookup->m_confirmedLatestDSBlock = false;
 
   if (!BlockStorage::GetBlockStorage().ResetDB(BlockStorage::STATE_DELTA)) {
     LOG_GENERAL(WARNING, "BlockStorage::ResetDB failed");
@@ -663,6 +683,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
                     "I am now DS backup for the next round");
         }
       }
+      // reset governance proposal and vote if DS member
+      UpdateGovProposalRemainingVoteInfo();
 
       m_mediator.m_ds->StartFirstTxEpoch();
     } else {
@@ -688,6 +710,8 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
           SendDSBlockToOtherShardNodes(message2);
         }
       }
+      // reset governance proposal and vote if shard member
+      UpdateGovProposalRemainingVoteInfo();
 
       // Finally, start as a shard node
       StartFirstTxEpoch();
@@ -703,18 +727,9 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
 
     m_mediator.m_node->CleanWhitelistReqs();
 
-    // Clear GetStartPow requesting peer list
-    {
-      lock_guard<mutex> g(m_mediator.m_lookup->m_mutexGetStartPoWPeerSet);
-      m_mediator.m_lookup->m_getStartPoWPeerSet.clear();
-    }
-
     if (m_mediator.m_lookup->GetIsServer() && !ARCHIVAL_LOOKUP) {
-      m_mediator.m_lookup->SenderTxnBatchThread(oldNumShards);
+      m_mediator.m_lookup->SenderTxnBatchThread(oldNumShards, true);
     }
-
-    FallbackTimerLaunch();
-    FallbackTimerPulse();
   }
 
   if (!BlockStorage::GetBlockStorage().PutDSCommittee(
@@ -751,6 +766,12 @@ bool Node::ProcessVCDSBlocksMessage(const bytes& message,
       m_mediator.m_lookup->cv_vcDsBlockProcessed.notify_all();
     }
   }
+
+  if (LOOKUP_NODE_MODE) {
+    lock_guard<mutex> g(m_mutexPendingTxnListsThisEpoch);
+    m_pendingTxnListsThisEpoch.clear();
+  }
+
   if (LOOKUP_NODE_MODE) {
     if (!BlockStorage::GetBlockStorage().PutMinerInfoDSComm(
             dsblock.GetHeader().GetBlockNum(), minerInfoDSComm)) {

@@ -29,14 +29,18 @@ import argparse
 from urllib import request, parse
 import logging
 from logging import handlers
+import requests
+import xml.etree.ElementTree as ET
 
 PERSISTENCE_SNAPSHOT_NAME='incremental'
 STATEDELTA_DIFF_NAME='statedelta'
 BUCKET_NAME='BUCKET_NAME'
-NUM_TXBLOCK = 2
+NUM_TXBLOCK = 4
 NUM_DSBLOCK= "PUT_INCRDB_DSNUMS_WITH_STATEDELTAS_HERE"
 NUM_FINAL_BLOCK_PER_POW= "PUT_NUM_FINAL_BLOCK_PER_POW_HERE"
 TESTNET_NAME= "TEST_NET_NAME"
+AWS_BLOCKCHAINDATA_FOLDERNAME= "blockchain-data/"+TESTNET_NAME+"/"
+AWS_S3_URL= "http://"+BUCKET_NAME+".s3.amazonaws.com"
 SYNC_INTERVAL = 1
 
 FORMATTER = logging.Formatter(
@@ -76,7 +80,10 @@ def getBucketString(subFolder):
 	return "s3://"+BUCKET_NAME+"/"+subFolder+"/"+TESTNET_NAME
 
 def CreateTempPersistence():
-	bashCommand = "rsync --recursive --delete -a persistence temp"
+	static_folders = GetStaticFoldersFromS3(AWS_S3_URL, AWS_BLOCKCHAINDATA_FOLDERNAME)
+	exclusion_string = ' '.join(['--exclude ' + s for s in static_folders])
+	bashCommand = "rsync --recursive --inplace --delete -a " + exclusion_string + " persistence temp"
+	logging.info("Command = " + bashCommand)	
 	process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
 	output, error = process.communicate()
 	logging.info("Copied local persistence to temporary")
@@ -142,44 +149,59 @@ def SyncLocalToS3Persistence(blockNum,lastBlockNum):
 			CleanS3PersistenceDiffs()
 	elif (result == 0):
 		# we still need to sync persistence except for state, stateroot, contractCode, contractStateData, contractStateIndex so that next time for next blocknum we can get statedelta diff and persistence diff correctly
-		bashCommand = "aws s3 sync --delete temp/persistence "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/persistence --exclude '*' --include 'microBlocks/*' --include 'dsBlocks/*' --include 'minerInfoDSComm/*' --include 'minerInfoShards/*' --include 'dsCommittee/*' --include 'shardStructure/*' --include 'txBlocks/*' --include 'VCBlocks/*' --include 'blockLinks/*' --include 'fallbackBlocks/*' --include 'metaData/*' --include 'stateDelta/*' --include 'txBodies/*' --include 'extSeedPubKeys/*' "
-		process = subprocess.Popen(bashCommand, universal_newlines=True, shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		str_diff_output, error = process.communicate()
-		logging.info("Remote S3 bucket: "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/persistence is Synced without state/stateRoot/contractCode/contractStateData/contractStateIndex")
-
-		if re.match(r'^\s*$', str_diff_output): # if output of sync command is either empty or just whitespaces
-			print("No persistence diff, interesting...")
-			tf = tarfile.open("diff_persistence_"+str(blockNum)+".tar.gz", mode="w:gz")
-			t = tarfile.TarInfo("diff_persistence_"+str(blockNum))
-			t.type = tarfile.DIRTYPE
-			tf.addfile(t)
-			tf.close()
-			bashCommand = "aws s3 cp diff_persistence_"+str(blockNum)+".tar.gz "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/diff_persistence_"+str(blockNum)+".tar.gz"
-			process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
-			output, error = process.communicate()
-			logging.info("DUMMY upload: persistence Diff for new txBlk :" + str(blockNum) + ") in Remote S3 bucket: "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+" is Synced")
-			os.remove("diff_persistence_"+str(blockNum)+".tar.gz")
-		else:
-			str_diff_output = str_diff_output.strip()
-			splitted = str_diff_output.split('\n')
-			result=[]
-			if(len(splitted) > 0):
-				for x in splitted:
-					tok = x.split(' ')
-					# skip deleted files
-					if(len(tok) >= 3 and tok[0] == "upload:"):
-						result.append(tok[1])
-
-			tf = tarfile.open("diff_persistence_"+str(blockNum)+".tar.gz", mode="w:gz")
-			for x in result:
-				print(x)
-				tf.add(x,arcname="diff_persistence_"+str(blockNum)+"/"+ x.split("persistence/",1)[1]) 
-			tf.close()
-			bashCommand = "aws s3 cp diff_persistence_"+str(blockNum)+".tar.gz "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/diff_persistence_"+str(blockNum)+".tar.gz"
-			process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
-			output, error = process.communicate()
-			logging.info("Persistence Diff for new txBlk :" + str(blockNum) + ") in Remote S3 bucket: "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+" is Synced without state/stateroot/contractCode/contractStateData/contractStateIndex")
-			os.remove("diff_persistence_"+str(blockNum)+".tar.gz")
+		bashCommand = "aws s3 sync --delete temp/persistence "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/persistence --exclude '*' --include 'microBlockKeys/*' --include 'microBlocks*' --include 'dsBlocks/*' --include 'minerInfoDSComm/*' --include 'minerInfoShards/*' --include 'dsCommittee/*' --include 'shardStructure/*' --include 'txBlocks/*' --include 'VCBlocks/*' --include 'blockLinks/*' --include 'metaData/*' --include 'stateDelta/*' --include 'txEpochs/*' --include 'txBodies*' --include 'extSeedPubKeys/*' "
+		retry = 3
+		while (retry):
+			try:
+				process = subprocess.Popen(bashCommand, universal_newlines=True, shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+				str_diff_output, error = process.communicate()
+				if error:
+					retry = retry -1
+					logging.info("Some error!!")
+					time.sleep(SYNC_INTERVAL)
+					continue
+				logging.info("Remote S3 bucket: "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/persistence is Synced without state/stateRoot/contractCode/contractStateData/contractStateIndex")
+				logging.info("str_diff_output: "+str_diff_output)
+				if re.match(r'^\s*$', str_diff_output): # if output of sync command is either empty or just whitespaces
+					print("No persistence diff, interesting...")
+					tf = tarfile.open("diff_persistence_"+str(blockNum)+".tar.gz", mode="w:gz")
+					t = tarfile.TarInfo("diff_persistence_"+str(blockNum))
+					t.type = tarfile.DIRTYPE
+					tf.addfile(t)
+					tf.close()
+					bashCommand = "aws s3 cp diff_persistence_"+str(blockNum)+".tar.gz "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/diff_persistence_"+str(blockNum)+".tar.gz"
+					process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
+					output, error = process.communicate()
+					logging.info("DUMMY upload: persistence Diff for new txBlk :" + str(blockNum) + ") in Remote S3 bucket: "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+" is Synced")
+					os.remove("diff_persistence_"+str(blockNum)+".tar.gz")
+				else:
+					str_diff_output = str_diff_output.strip()
+					splitted = str_diff_output.split('\n')
+					result=[]
+					if(len(splitted) > 0):
+						for x in splitted:
+							tok = x.split(' ')
+							# skip deleted files
+							if(len(tok) >= 3 and tok[0] == "upload:"):
+								result.append(tok[1])
+					if (len(result) > 0):
+						tf = tarfile.open("diff_persistence_"+str(blockNum)+".tar.gz", mode="w:gz")
+						for x in result:
+							#print(x)
+							tf.add(x,arcname="diff_persistence_"+str(blockNum)+"/"+ x.split("persistence/",1)[1]) 
+						tf.close()
+						bashCommand = "aws s3 cp diff_persistence_"+str(blockNum)+".tar.gz "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+"/diff_persistence_"+str(blockNum)+".tar.gz"
+						process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
+						output, error = process.communicate()
+						logging.info("Persistence Diff for new txBlk :" + str(blockNum) + ") in Remote S3 bucket: "+getBucketString(PERSISTENCE_SNAPSHOT_NAME)+" is Synced without state/stateroot/contractCode/contractStateData/contractStateIndex")
+						os.remove("diff_persistence_"+str(blockNum)+".tar.gz")
+				break
+			except Exception as e:
+				retry = retry -1
+				logging.warning(e)
+				time.sleep(SYNC_INTERVAL)
+				pass
+		
 	else:
 		logging.info("Not supposed to upload state now!")
 
@@ -244,6 +266,31 @@ def GetAndUploadStateDeltaDiff(blockNum, lastBlockNum):
 		start = (int)(time.time()) # reset inactive start time - delta was uploaded
 		return 0 #success
 	return 1
+
+def GetStaticFoldersFromS3(url, folderName):
+    list_of_folders = []
+    MARKER = ""
+    # Try get the entire persistence keys.
+    # S3 limitation to get only max 1000 keys. so work around using marker.
+    while True:
+        response = requests.get(url, params={"prefix":folderName, "max-keys":1000, "marker":MARKER, "delimiter":"/"})
+        tree = ET.fromstring(response.text)
+        if(tree[6:] == []):
+            print("Empty response")
+            break
+        lastkey = ''
+        for key in tree[6:]:
+            key_url = key[0].text.split(folderName,1)[1].replace('/', '')
+            if key_url != '':
+                list_of_folders.append(key_url)
+            lastkey = key[0].text
+        istruncated=tree[5].text
+        if istruncated == 'true':
+            MARKER=lastkey
+            print(istruncated)
+        else:
+            break
+    return list_of_folders
 
 def CleanupDir(folderName):
         if os.path.exists("./"+folderName):
@@ -391,10 +438,6 @@ def shallStart():
 def main():
 	isVacaous = False
 	lastBlockNum = 0
-	# clear the entire incremental bucket now.
-	CleanS3EntirePersistence()
-	# clear the state-delta bucket now.
-	CleanS3StateDeltas()
 	shallStartFlag = False
 	blockNum = -1
 	global start
@@ -408,6 +451,10 @@ def main():
 					time.sleep(1)
 					continue
 				start = (int)(time.time()) # reset inactive start time since shall start is signaled
+				# clear the entire incremental bucket now.
+				CleanS3EntirePersistence()
+				# clear the state-delta bucket now.
+				CleanS3StateDeltas()
 			else:
 				blockNum = GetCurrentTxBlockNum()
 				if (blockNum == -1):

@@ -84,8 +84,8 @@ bool DirectoryService::SendPoWPacketSubmissionToOtherDSComm() {
 }
 
 bool DirectoryService::ProcessPoWPacketSubmission(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(
@@ -128,10 +128,15 @@ bool DirectoryService::ProcessPoWPacketSubmission(
   return true;
 }
 
-bool DirectoryService::ProcessPoWSubmission(const bytes& message,
-                                            unsigned int offset,
-                                            const Peer& from) {
+bool DirectoryService::ProcessPoWSubmission(
+    const bytes& message, unsigned int offset, const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
+
+  static const string EXPECTED_VERSION =
+      (POW_SUBMISSION_VERSION_TAG == "" ? VERSION_TAG
+                                        : POW_SUBMISSION_VERSION_TAG);
+
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::ProcessPoWSubmission not expected to be "
@@ -146,6 +151,12 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
     return true;
   }
 
+  if (m_powSubmissionWindowExpired) {
+    LOG_GENERAL(INFO, "Submission recvd too late from "
+                          << from.GetPrintableIPAddress());
+    return true;
+  }
+
   uint64_t blockNumber;
   uint8_t difficultyLevel;
   Peer submitterPeer;
@@ -156,12 +167,27 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
   uint32_t lookupId;
   uint128_t gasPrice;
   Signature signature;
-  if (!Messenger::GetDSPoWSubmission(message, offset, blockNumber,
-                                     difficultyLevel, submitterPeer,
-                                     submitterKey, nonce, resultingHash,
-                                     mixHash, signature, lookupId, gasPrice)) {
+  uint32_t govProposalId;
+  uint32_t govVoteValue;
+  string version;
+  if (!Messenger::GetDSPoWSubmission(
+          message, offset, blockNumber, difficultyLevel, submitterPeer,
+          submitterKey, nonce, resultingHash, mixHash, signature, lookupId,
+          gasPrice, govProposalId, govVoteValue, version)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "DirectoryService::ProcessPowSubmission failed.");
+    return false;
+  }
+
+  if (version != EXPECTED_VERSION) {
+    LOG_CHECK_FAIL("Version", version, EXPECTED_VERSION);
+    return false;
+  }
+
+  uint64_t expectedBlockNum =
+      m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() + 1;
+  if (blockNumber != expectedBlockNum) {
+    LOG_CHECK_FAIL("BlockNumber", blockNumber, expectedBlockNum);
     return false;
   }
 
@@ -205,7 +231,8 @@ bool DirectoryService::ProcessPoWSubmission(const bytes& message,
 
   DSPowSolution powSoln(blockNumber, difficultyLevel, submitterPeer,
                         submitterKey, nonce, resultingHash, mixHash, lookupId,
-                        gasPrice, signature);
+                        gasPrice, std::make_pair(govProposalId, govVoteValue),
+                        signature);
 
   if (VerifyPoWSubmission(powSoln)) {
     std::unique_lock<std::mutex> lk(m_mutexPowSolution);
@@ -261,6 +288,8 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   const string& mixHash = sol.GetMixHash();
   uint32_t lookupId = sol.GetLookupId();
   const uint128_t& gasPrice = sol.GetGasPrice();
+  const uint32_t& govProposalId = sol.GetGovProposalId();
+  const uint32_t& govVoteValue = sol.GetGovVoteValue();
 
   // Check block number
   if (!CheckWhetherDSBlockIsFresh(blockNumber)) {
@@ -283,9 +312,11 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
   }
 
   // Log all values
-  LOG_GENERAL(INFO, "Key   = " << submitterPubKey);
-  LOG_GENERAL(INFO, "Peer  = " << submitterPeer);
-  LOG_GENERAL(INFO, "Diff  = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "Key            = " << submitterPubKey);
+  LOG_GENERAL(INFO, "Peer           = " << submitterPeer);
+  LOG_GENERAL(INFO, "Diff           = " << to_string(difficultyLevel));
+  LOG_GENERAL(INFO, "GovProposalId  = " << to_string(govProposalId));
+  LOG_GENERAL(INFO, "GovVoteValue   = " << to_string(govVoteValue));
 
   if (CheckPoWSubmissionExceedsLimitsForNode(submitterPubKey)) {
     LOG_GENERAL(WARNING, "Max PoW sent");
@@ -362,7 +393,8 @@ bool DirectoryService::VerifyPoWSubmission(const DSPowSolution& sol) {
       array<uint8_t, 32> resultingHashArr{}, mixHashArr{};
       DataConversion::HexStrToStdArray(resultingHash, resultingHashArr);
       DataConversion::HexStrToStdArray(mixHash, mixHashArr);
-      PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice);
+      PoWSolution soln(nonce, resultingHashArr, mixHashArr, lookupId, gasPrice,
+                       std::make_pair(govProposalId, govVoteValue));
 
       m_allPoWConns.emplace(submitterPubKey, submitterPeer);
       if (m_allPoWs.find(submitterPubKey) == m_allPoWs.end()) {
@@ -510,7 +542,7 @@ void DirectoryService::ClearReputationOfNodeWithoutPoW() {
   }
 }
 
-void DirectoryService::ClearReputationOfNodeFailToJoin(
+void DirectoryService::RemoveReputationOfNodeFailToJoin(
     const DequeOfShard& shards, std::map<PubKey, uint16_t>& mapNodeReputation) {
   std::set<PubKey> allShardNodePubKey;
   for (const auto& shard : shards) {
@@ -519,42 +551,125 @@ void DirectoryService::ClearReputationOfNodeFailToJoin(
     }
   }
 
-  for (auto& kv : mapNodeReputation) {
-    if (allShardNodePubKey.find(kv.first) == allShardNodePubKey.end()) {
-      kv.second = 0;
+  for (auto iter = mapNodeReputation.begin();
+       iter != mapNodeReputation.end();) {
+    if (allShardNodePubKey.find(iter->first) == allShardNodePubKey.end()) {
+      iter = mapNodeReputation.erase(iter);
+    } else {
+      ++iter;
     }
   }
 }
 
 std::set<PubKey> DirectoryService::FindTopPriorityNodes(
     uint8_t& lowestPriority) {
-  std::vector<std::pair<PubKey, uint8_t>> vecNodePriority;
-  vecNodePriority.reserve(m_allPoWs.size());
+  LOG_MARKER();
+
+  std::list<std::pair<PubKey, uint8_t>> listLeftOverGuards;
+  std::list<std::pair<PubKey, uint8_t>> listNodePriority;
+  std::list<std::pair<PubKey, uint8_t>> listNewNodes;
+
+  const auto size =
+      std::min(MAX_SHARD_NODE_NUM, (unsigned int)m_allPoWs.size());
+  const auto maxPriority = CalculateNodePriority(MAX_REPUTATION);
+
+  // maxShardGuards will be >= to trimmedGuardCount in SortPoWSoln
+  // But trimming in SortPoWSoln ensures there will be no more than
+  // SHARD_GUARD_TOL percent of shard guards
+  auto maxShardGuards = std::ceil(SHARD_GUARD_TOL * size);
+  uint32_t guardCounts = 0;
+
+  // Iterate PoWs based on key ordering in the map
   for (const auto& kv : m_allPoWs) {
     const auto& pubKey = kv.first;
-    auto reputation = m_mapNodeReputation[pubKey];
-    auto priority = CalculateNodePriority(reputation);
-    vecNodePriority.emplace_back(pubKey, priority);
-    LOG_GENERAL(INFO, "Node " << pubKey << " reputation " << reputation
-                              << " priority " << std::to_string(priority));
+
+    if (GUARD_MODE && Guard::GetInstance().IsNodeInShardGuardList(pubKey)) {
+      if (guardCounts >= maxShardGuards) {
+        LOG_GENERAL(INFO, "Enough shard guards, skipping " << pubKey);
+        listLeftOverGuards.emplace_back(pubKey, maxPriority);
+        continue;
+      }
+      LOG_GENERAL(INFO, "Node=" << pubKey << " Reputation=(shard guard)");
+      listNodePriority.emplace_back(pubKey, maxPriority);
+      ++guardCounts;
+
+    } else {
+      auto reputation = m_mapNodeReputation.find(pubKey);
+      if (reputation != m_mapNodeReputation.end()) {
+        uint8_t priority = CalculateNodePriority(reputation->second);
+        LOG_GENERAL(INFO, "Node=" << pubKey
+                                  << " Reputation=" << reputation->second
+                                  << " Priority=" << std::to_string(priority));
+        // listNodePriority is now ordered by key and contains only entries in
+        // m_allPoWs with reputation in m_mapNodeReputation
+        listNodePriority.emplace_back(pubKey, priority);
+      } else {
+        // listNewNodes is now ordered by key and contains only entries in
+        // m_allPoWs with no reputation (i.e., new miners)
+        listNewNodes.emplace_back(pubKey, MIN_NODE_REPUTATION_PRIORITY);
+        LOG_GENERAL(INFO, "Node=" << pubKey << " Reputation=(none)");
+      }
+    }
   }
 
-  std::sort(vecNodePriority.begin(), vecNodePriority.end(),
-            [](const std::pair<PubKey, uint8_t>& kv1,
-               const std::pair<PubKey, uint8_t>& kv2) {
-              return kv1.second > kv2.second;
-            });
+  // In case when there is not enough nodes, shard guards will fill up the slots
+  // listLeftOverGuards only have something during guard mode
+  auto selectedCount = listNodePriority.size() + listNewNodes.size();
+  if (selectedCount < EXPECTED_SHARD_NODE_NUM) {
+    auto slotLeft = EXPECTED_SHARD_NODE_NUM - selectedCount;
+    auto toAddCount = min(listLeftOverGuards.size(), slotLeft);
 
+    if (toAddCount > 0) {
+      for (const auto& kv : listLeftOverGuards) {
+        LOG_GENERAL(INFO, "Adding Leftover Guard Node="
+                              << kv.first << " Reputation=(shard guard)");
+        listNodePriority.emplace_back(kv.first, kv.second);
+        --toAddCount;
+        if (toAddCount == 0) break;
+      }
+    }
+  }
+
+  // listNodePriority is now ordered by priority (descending), then by key (for
+  // those with same priority)
+  listNodePriority.sort([](const std::pair<PubKey, uint8_t>& kv1,
+                           const std::pair<PubKey, uint8_t>& kv2) {
+    return kv1.second > kv2.second;
+  });
+
+  // Find the first node with priority < MIN_NODE_REPUTATION_PRIORITY
+  auto cutoffNode =
+      std::find_if(listNodePriority.begin(), listNodePriority.end(),
+                   [](const std::pair<PubKey, uint8_t>& kv) {
+                     return kv.second < MIN_NODE_REPUTATION_PRIORITY;
+                   });
+  const unsigned int numLoPriorityNodes =
+      std::distance(cutoffNode, listNodePriority.end());
+  const unsigned int numHiPriorityNodes =
+      listNodePriority.size() - numLoPriorityNodes;
+
+  LOG_GENERAL(INFO, "PoW count = " << m_allPoWs.size());
+  LOG_GENERAL(INFO, "Nodes with hi rep = " << numHiPriorityNodes);
+  LOG_GENERAL(INFO, "Nodes with lo rep = " << numLoPriorityNodes);
+  LOG_GENERAL(INFO, "Nodes with no rep = " << listNewNodes.size());
+
+  // Insert the new miners ahead of the low-priority nodes
+  // List order is now:
+  // (1) Existing miners with priority >= MIN_NODE_REPUTATION_PRIORITY
+  // (2) New miners with dummy priority = MIN_NODE_REPUTATION_PRIORITY
+  // (3) Existing miners with priority < MIN_NODE_REPUTATION_PRIORITY
+  listNodePriority.splice(cutoffNode, listNewNodes);
+
+  // Convert the list into set and reduce to MAX_SHARD_NODE_NUM
   std::set<PubKey> setTopPriorityNodes;
-  for (size_t i = 0; i < MAX_SHARD_NODE_NUM && i < vecNodePriority.size();
-       ++i) {
-    setTopPriorityNodes.insert(vecNodePriority[i].first);
-    lowestPriority = vecNodePriority[i].second;
+  auto iterCopyEnd = listNodePriority.begin();
+  std::advance(iterCopyEnd, listNodePriority.size() > MAX_SHARD_NODE_NUM
+                                ? MAX_SHARD_NODE_NUM
+                                : listNodePriority.size());
+  for (auto iter = listNodePriority.begin(); iter != iterCopyEnd; iter++) {
+    setTopPriorityNodes.insert(iter->first);
+    lowestPriority = iter->second;
   }
 
-  // Because the oldest DS commitee member still need to keep in the network as
-  // shard node even it didn't do PoW, so also put it into the priority node
-  // list.
-  setTopPriorityNodes.insert(m_mediator.m_DSCommittee->back().first);
   return setTopPriorityNodes;
 }

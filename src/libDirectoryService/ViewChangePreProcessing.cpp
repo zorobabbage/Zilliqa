@@ -274,7 +274,12 @@ void DirectoryService::RunConsensusOnViewChange() {
                   "[RDS]Failed the vc precheck. Node is lagging behind the "
                   "whole network.");
       CleanUpViewChange(true);
-      RejoinAsDS();
+      if (m_vcPreCheckDSBlocks.size() == 0)  // Still in same ds epoch
+      {
+        RejoinAsDS(true, true);  // syncing from upperseed
+      } else {
+        RejoinAsDS();
+      }
       return;
     }
   }
@@ -661,7 +666,7 @@ bool DirectoryService::RunConsensusOnViewChangeWhenCandidateLeader(
         *m_pendingVCBlock, messageToCosign);
   };
 
-  cl->StartConsensus(announcementGeneratorFunc, BROADCAST_GOSSIP_MODE);
+  cl->StartConsensus(announcementGeneratorFunc, nullptr, BROADCAST_GOSSIP_MODE);
 
   return true;
 }
@@ -744,8 +749,8 @@ bytes DirectoryService::ComposeVCGetDSTxBlockMessage() {
 }
 
 bool DirectoryService::ProcessVCPushLatestDSTxBlock(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   LOG_MARKER();
 
   if (LOOKUP_NODE_MODE) {

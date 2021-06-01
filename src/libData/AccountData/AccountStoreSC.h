@@ -47,10 +47,10 @@ class AccountStoreAtomic
   GetAddressToAccount();
 };
 
+enum INVOKE_TYPE { CHECKER, RUNNER_CREATE, RUNNER_CALL, DISAMBIGUATE };
+
 template <class MAP>
 class AccountStoreSC : public AccountStoreBase<MAP> {
-  enum INVOKE_TYPE { CHECKER, RUNNER_CREATE, RUNNER_CALL };
-
   /// the amount transfers happened within the current txn will only commit when
   /// the txn is successful
   std::unique_ptr<AccountStoreAtomic<MAP>> m_accountStoreAtomic;
@@ -67,6 +67,9 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
   /// the current sender address for each hop of invoking
   Address m_curSenderAddr;
 
+  /// the address of transaction sender
+  Address m_originAddr;
+
   /// the transfer amount while executing each txn
   uint128_t m_curAmount{0};
 
@@ -74,7 +77,7 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
   uint64_t m_curGasLimit{0};
 
   /// the gas price while executing each txn
-  uint128_t m_curGasPrice{GAS_PRICE_MIN_VALUE};
+  uint128_t m_curGasPrice{0};
 
   /// the gas price while executing each txn will be used in calculating the
   /// shard allocation of sender/recipient during chain call
@@ -174,13 +177,9 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
                              const uint128_t& delta);
   /// commit the existing transfers in m_accountStoreAtomic to update the
   /// balance of accounts
-  void CommitTransferAtomic();
+  void CommitAtomics();
   /// discard the existing transfers in m_accountStoreAtomic
-  void DiscardTransferAtomic();
-
-  bool PopulateExtlibsExports(
-      uint32_t scilla_version, const std::vector<Address>& extlibs,
-      std::map<Address, std::pair<std::string, std::string>>& extlibs_exports);
+  void DiscardAtomics();
 
  protected:
   AccountStoreSC();
@@ -199,18 +198,29 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
                          const boost::multiprecision::uint128_t& balance,
                          bool& ret, TransactionReceipt& receipt);
 
+  void InvokeDisambiguation(const uint32_t& version, bool is_library,
+                            const uint64_t& available_gas,
+                            const boost::multiprecision::uint128_t& balance,
+                            bool& ret, TransactionReceipt& receipt);
+
   /// verify the return from scilla_checker for deployment is valid
   /// expose in protected for using by data migration
-  bool ParseContractCheckerOutput(const std::string& checkerPrint,
+  bool ParseContractCheckerOutput(const Address& addr,
+                                  const std::string& checkerPrint,
                                   TransactionReceipt& receipt,
-                                  std::string& llvm_ir, bytes& map_depth_data,
+								  std::string &llvm_ir,
+                                  std::map<std::string, bytes>& metadata,
                                   uint64_t& gasRemained,
                                   bool is_library = false);
 
   /// external interface for processing txn
   bool UpdateAccounts(const uint64_t& blockNum, const unsigned int& numShards,
                       const bool& isDS, const Transaction& transaction,
-                      TransactionReceipt& receipt, ErrTxnStatus& error_code);
+                      TransactionReceipt& receipt, TxnStatus& error_code);
+
+  bool PopulateExtlibsExports(
+      uint32_t scilla_version, const std::vector<Address>& extlibs,
+      std::map<Address, std::pair<std::string, std::string>>& extlibs_exports);
 
  public:
   /// Initialize the class
@@ -231,6 +241,9 @@ class AccountStoreSC : public AccountStoreBase<MAP> {
 
   /// Clean cache of newly created contracts in this epoch
   void CleanNewLibrariesCache();
+
+  // Get value from atomic accountstore
+  Account* GetAccountAtomic(const dev::h160& addr);
 };
 
 #include "AccountStoreAtomic.tpp"

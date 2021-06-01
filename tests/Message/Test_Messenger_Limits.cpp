@@ -114,8 +114,7 @@ BOOST_AUTO_TEST_CASE(test_GetLookupSetDirectoryBlocksFromSeed) {
 
   // Get the approximate size each DSBlock adds to a SETDIRBLOCKSFROMSEED
   // message
-  vector<boost::variant<DSBlock, VCBlock, FallbackBlockWShardingStructure>>
-      directoryBlocks;
+  vector<boost::variant<DSBlock, VCBlock>> directoryBlocks;
   directoryBlocks.emplace_back(dsBlock);
   BOOST_CHECK(Messenger::SetLookupSetDirectoryBlocksFromSeed(
       dst, offset, shardingStructureVersion, directoryBlocks, indexNum,
@@ -150,8 +149,7 @@ BOOST_AUTO_TEST_CASE(test_GetLookupSetDirectoryBlocksFromSeed) {
   uint32_t dummyShardingStructureVersionDeserialized = 0;  // Unchecked
   uint64_t indexNumDeserialized = 0;
   PubKey lookupPubKeyDeserialized;
-  vector<boost::variant<DSBlock, VCBlock, FallbackBlockWShardingStructure>>
-      directoryBlocksDeserialized;
+  vector<boost::variant<DSBlock, VCBlock>> directoryBlocksDeserialized;
   BOOST_CHECK(Messenger::GetLookupSetDirectoryBlocksFromSeed(
       dst, offset, dummyShardingStructureVersionDeserialized,
       directoryBlocksDeserialized, indexNumDeserialized,
@@ -176,70 +174,6 @@ BOOST_AUTO_TEST_CASE(test_GetLookupSetDirectoryBlocksFromSeed) {
       dst, offset, dummyShardingStructureVersionDeserialized,
       directoryBlocksDeserialized, indexNumDeserialized,
       lookupPubKeyDeserialized));
-}
-
-BOOST_AUTO_TEST_CASE(test_GetLookupSetStateFromSeed) {
-  bytes dst;
-  const unsigned int offset = 0;
-  const PairOfKey lookupKey = TestUtils::GenerateRandomKeyPair();
-  unsigned int addressCounter = 1;
-
-  AccountStore::GetInstance().Init();
-  // Get the approximate size each account adds to a SETSTATEFROMSEED message
-  AccountStore::GetInstance().AddAccount(Address(addressCounter++),
-                                         Account(0, 0));
-  AccountStore::GetInstance().UpdateStateTrieAll();
-  BOOST_CHECK(Messenger::SetLookupSetStateFromSeed(
-      dst, offset, lookupKey, AccountStore::GetInstance()));
-
-  const unsigned int sizeWithOneAccount = dst.size();
-  dst.clear();
-  AccountStore::GetInstance().AddAccount(Address(addressCounter++),
-                                         Account(0, 0));
-  AccountStore::GetInstance().UpdateStateTrieAll();
-  BOOST_CHECK(Messenger::SetLookupSetStateFromSeed(
-      dst, offset, lookupKey, AccountStore::GetInstance()));
-
-  const unsigned int sizeWithTwoAccounts = dst.size();
-  dst.clear();
-  const unsigned int sizePerAccount = sizeWithTwoAccounts - sizeWithOneAccount;
-
-  // Compute how much to reach the limit MAX_READ_WATERMARK_IN_BYTES
-  unsigned int numAccountsToReachLimit =
-      (MAX_READ_WATERMARK_IN_BYTES - sizeWithTwoAccounts) / sizePerAccount;
-  if (sizeWithTwoAccounts + (numAccountsToReachLimit * sizePerAccount) >=
-      MAX_READ_WATERMARK_IN_BYTES) {
-    numAccountsToReachLimit--;
-  }
-
-  // Add the accounts to the list
-  for (unsigned int i = 0; i < numAccountsToReachLimit; i++) {
-    AccountStore::GetInstance().AddAccount(Address(addressCounter++),
-                                           Account(0, 0));
-  }
-  AccountStore::GetInstance().UpdateStateTrieAll();
-
-  // Test for just below the limit
-  BOOST_CHECK(Messenger::SetLookupSetStateFromSeed(
-      dst, offset, lookupKey, AccountStore::GetInstance()));
-  PubKey lookupPubKeyDeserialized;
-  bytes dummyAccountStoreBytes;  // unchecked
-  BOOST_CHECK(Messenger::GetLookupSetStateFromSeed(
-      dst, offset, lookupPubKeyDeserialized, dummyAccountStoreBytes));
-  BOOST_CHECK(lookupKey.second == lookupPubKeyDeserialized);
-
-  // Test for above the limit. Let's add a few just to be sure.
-  for (unsigned int i = 0; i < 10; i++) {
-    AccountStore::GetInstance().AddAccount(Address(addressCounter++),
-                                           Account(0, 0));
-  }
-  AccountStore::GetInstance().UpdateStateTrieAll();
-  dst.clear();
-  BOOST_CHECK(Messenger::SetLookupSetStateFromSeed(
-      dst, offset, lookupKey, AccountStore::GetInstance()));
-  PubKey lookupPubKeyDeserialized2;
-  BOOST_CHECK(!Messenger::GetLookupSetStateFromSeed(
-      dst, offset, lookupPubKeyDeserialized2, dummyAccountStoreBytes));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

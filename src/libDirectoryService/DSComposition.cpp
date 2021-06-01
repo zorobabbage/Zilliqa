@@ -16,6 +16,7 @@
  */
 
 #include "DSComposition.h"
+#include "libNetwork/Blacklist.h"
 
 using namespace std;
 
@@ -29,8 +30,11 @@ void UpdateDSCommitteeCompositionCore(const PubKey& selfKeyPub,
 void UpdateDSCommitteeCompositionCore(const PubKey& selfKeyPub,
                                       DequeOfNode& dsComm,
                                       const DSBlock& dsblock,
-                                      MinerInfoDSComm& minerInfo) {
-  LOG_MARKER();
+                                      MinerInfoDSComm& minerInfo,
+                                      const bool showLogs) {
+  if (showLogs) {
+    LOG_MARKER();
+  }
 
   // Get the map of all pow winners from the DS Block
   const auto& NewDSMembers = dsblock.GetHeader().GetDSPoWWinners();
@@ -56,10 +60,12 @@ void UpdateDSCommitteeCompositionCore(const PubKey& selfKeyPub,
       continue;
     }
 
-    LOG_GENERAL(
-        INFO,
-        "Shuffling non-performant node to the back of the DS Composition: "
-            << RemovedNode);
+    if (showLogs) {
+      LOG_GENERAL(
+          DEBUG,
+          "Shuffling non-performant node to the back of the DS Composition: "
+              << RemovedNode);
+    }
 
     // Move the candidate to the back of the committee and continue processing
     // other candidates. Only reorders the Committee. The size is not changed.
@@ -103,9 +109,11 @@ void UpdateDSCommitteeCompositionCore(const PubKey& selfKeyPub,
   // Print some statistics.
   unsigned int NumLosers = removeDSNodePubkeys.size();
   unsigned int NumExpiring = NumWinners - NumLosers;
-  LOG_GENERAL(INFO, "Total winners inserted: " << NumWinners);
-  LOG_GENERAL(INFO, "Total non-performant nodes re-shuffled: " << NumLosers);
-  LOG_GENERAL(INFO, "Nodes expiring due to old age: " << NumExpiring);
+  if (showLogs) {
+    LOG_GENERAL(INFO, "Total winners inserted: " << NumWinners);
+    LOG_GENERAL(INFO, "Total non-performant nodes re-shuffled: " << NumLosers);
+    LOG_GENERAL(INFO, "Nodes expiring due to old age: " << NumExpiring);
+  }
 
   const bool bStoreDSCommittee =
       (dsblock.GetHeader().GetBlockNum() % STORE_DS_COMMITTEE_INTERVAL) == 0;
@@ -118,13 +126,18 @@ void UpdateDSCommitteeCompositionCore(const PubKey& selfKeyPub,
   for (uint32_t i = 0; i < NumWinners; ++i) {
     // One item is always removed every winner, with removal priority given to
     // 'loser' candidates before expiring nodes.
-    LOG_GENERAL(INFO,
-                "Node dropped from DS Committee: " << dsComm.back().first);
+    if (showLogs) {
+      LOG_GENERAL(DEBUG,
+                  "Node dropped from DS Committee: " << dsComm.back().first);
+    }
 
     if (LOOKUP_NODE_MODE && !bStoreDSCommittee) {
       minerInfo.m_dsNodesEjected.emplace_back(dsComm.back().first);
     }
 
+    // Remove this node from blacklist if it exists
+    Peer& p = dsComm.back().second;
+    Blacklist::GetInstance().Remove(p.GetIpAddress());
     dsComm.pop_back();
   }
 

@@ -361,16 +361,11 @@ void DirectoryService::StartNextTxEpoch() {
 
   m_mediator.m_node->CleanWhitelistReqs();
 
+  m_dsEpochAfterUpgrade = false;
+
   ClearDSPoWSolns();
   ResetPoWSubmissionCounter();
   m_viewChangeCounter = 0;
-
-  {
-    std::lock_guard<mutex> lock(m_mutexMicroBlocks);
-    m_microBlocks.clear();
-    m_missingMicroBlocks.clear();
-    m_microBlockStateDeltas.clear();
-  }
 
   // update my shardmembers ( dsCommittee since this is ds node)
   {
@@ -412,7 +407,6 @@ void DirectoryService::StartNextTxEpoch() {
   }
 
   m_mediator.m_node->m_myshardId = m_shards.size();
-  m_mediator.m_node->m_justDidFallback = false;
   m_stateDeltaFromShards.clear();
 
   // if this happens to be first tx epoch of current ds epoch after ds syncing.
@@ -425,7 +419,7 @@ void DirectoryService::StartNextTxEpoch() {
   SetState(MICROBLOCK_SUBMISSION);
 
   auto func1 = [this]() mutable -> void {
-    m_mediator.m_node->CommitTxnPacketBuffer();
+    m_mediator.m_node->CommitTxnPacketBuffer(true);
   };
   DetachedFunction(1, func1);
 
@@ -446,7 +440,7 @@ void DirectoryService::StartNextTxEpoch() {
     // ReInitialize RumorManager for this epoch.
     P2PComm::GetInstance().InitializeRumorManager(peers, pubKeys);
   }
-  if (m_mediator.m_node->m_myshardId == 0) {
+  if (m_mediator.m_node->m_myshardId == 0 || m_dsEpochAfterUpgrade) {
     LOG_GENERAL(
         INFO,
         "No other shards. So no other microblocks expected to be received");
@@ -458,8 +452,14 @@ void DirectoryService::StartNextTxEpoch() {
       // Check for state change. If it get stuck at microblock submission for
       // too long, move on to finalblock without the microblock
       std::unique_lock<std::mutex> cv_lk(m_MutexScheduleDSMicroBlockConsensus);
+      // Check timestamp with extra time added for first txepoch for tx
+      // distribution in shard
+      auto extra_time =
+          (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW != 0)
+              ? 0
+              : EXTRA_TX_DISTRIBUTE_TIME_IN_MS;
       if (cv_scheduleDSMicroBlockConsensus.wait_for(
-              cv_lk, std::chrono::seconds(MICROBLOCK_TIMEOUT)) ==
+              cv_lk, std::chrono::seconds(MICROBLOCK_TIMEOUT + extra_time)) ==
           std::cv_status::timeout) {
         LOG_GENERAL(WARNING,
                     "Timeout: Didn't receive all Microblock. Proceeds "
@@ -479,6 +479,8 @@ void DirectoryService::StartNextTxEpoch() {
       }
     };
     DetachedFunction(1, func);
+
+    CommitMBSubmissionMsgBuffer();
   }
 }
 
@@ -508,6 +510,8 @@ void DirectoryService::StartFirstTxEpoch() {
   P2PComm::ClearPeerConnectionCount();
 
   m_mediator.m_node->CleanWhitelistReqs();
+
+  m_dsEpochAfterUpgrade = false;
 
   ClearDSPoWSolns();
   ResetPoWSubmissionCounter();
@@ -560,7 +564,6 @@ void DirectoryService::StartFirstTxEpoch() {
 
     // m_mediator.m_node->m_myshardId = std::numeric_limits<uint32_t>::max();
     m_mediator.m_node->m_myshardId = m_shards.size();
-    m_mediator.m_node->m_justDidFallback = false;
     m_stateDeltaFromShards.clear();
 
     // Start sharding work
@@ -602,8 +605,14 @@ void DirectoryService::StartFirstTxEpoch() {
         // too long, move on to finalblock without the microblock
         std::unique_lock<std::mutex> cv_lk(
             m_MutexScheduleDSMicroBlockConsensus);
+        // Check timestamp with extra time added for first txepoch for tx
+        // distribution in shard
+        auto extra_time =
+            (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW != 0)
+                ? 0
+                : EXTRA_TX_DISTRIBUTE_TIME_IN_MS;
         if (cv_scheduleDSMicroBlockConsensus.wait_for(
-                cv_lk, std::chrono::seconds(MICROBLOCK_TIMEOUT)) ==
+                cv_lk, std::chrono::seconds(MICROBLOCK_TIMEOUT + extra_time)) ==
             std::cv_status::timeout) {
           LOG_GENERAL(WARNING,
                       "Timeout: Didn't receive all Microblock. Proceeds "
@@ -738,7 +747,7 @@ void DirectoryService::ProcessDSBlockConsensusWhenDone() {
     m_publicKeyToshardIdMap = move(m_tempPublicKeyToshardIdMap);
     m_mapNodeReputation = move(m_tempMapNodeReputation);
   } else if (m_mode == PRIMARY_DS) {
-    ClearReputationOfNodeFailToJoin(m_shards, m_mapNodeReputation);
+    RemoveReputationOfNodeFailToJoin(m_shards, m_mapNodeReputation);
   }
 
   m_mediator.m_node->m_myshardId = m_shards.size();
@@ -831,8 +840,8 @@ void DirectoryService::ProcessDSBlockConsensusWhenDone() {
 }
 
 bool DirectoryService::ProcessDSBlockConsensus(
-    const bytes& message, unsigned int offset,
-    [[gnu::unused]] const Peer& from) {
+    const bytes& message, unsigned int offset, [[gnu::unused]] const Peer& from,
+    [[gnu::unused]] const unsigned char& startByte) {
   if (LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "DirectoryService::ProcessDSBlockConsensus not expected to "

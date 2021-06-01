@@ -30,11 +30,14 @@ class Retriever {
  public:
   Retriever(Mediator& mediator);
 
-  bool RetrieveTxBlocks(bool trimIncompletedBlocks);
-  bool RetrieveBlockLink(bool trimIncompletedBlocks);
+  bool RetrieveTxBlocks();
+  bool RetrieveBlockLink();
   bool RetrieveStates();
   bool ValidateStates();
-  bool CleanExtraTxBodies();
+  bool MigrateContractStates(
+      bool ignore_checker, bool disambiguation,
+      const std::string& contract_address_output_filename,
+      const std::string& normal_address_output_filename);
   void CleanAll();
 
  private:
