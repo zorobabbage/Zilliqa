@@ -530,7 +530,7 @@ class Lookup : public Executable {
   std::mutex m_mutexCvSetRejoinRecovery;
   std::condition_variable cv_setRejoinRecovery;
 
-  bool m_rejoinInProgress = false;
+  std::atomic<bool> m_rejoinInProgress{false};
 
   bool InitMining();
 

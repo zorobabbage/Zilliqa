@@ -2935,7 +2935,9 @@ bool Lookup::ProcessSetTxBlockFromSeed(
 
   if (AlreadyJoinedNetwork()) {
     cv_setTxBlockFromSeed.notify_all();
-    cv_setRejoinRecovery.notify_all();
+    if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
+      cv_setRejoinRecovery.notify_all();
+    }
     return true;
   }
 
@@ -3351,9 +3353,12 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       if (!m_currDSExpired) {
         if (ARCHIVAL_LOOKUP || (!ARCHIVAL_LOOKUP && FinishRejoinAsLookup())) {
           SetSyncType(SyncType::NO_SYNC);
-          LOG_GENERAL(INFO,
-                      "NodeRejoin: m_rejoinInProgress=" << m_rejoinInProgress);
+          LOG_GENERAL(
+              INFO,
+              "NodeRejoin: Release rejoinrecovery mutex m_rejoinInProgress="
+                  << m_rejoinInProgress);
           m_rejoinInProgress = false;
+          cv_setRejoinRecovery.notify_all();
           if (m_lookupServer) {
             if (m_lookupServer->StartListening()) {
               LOG_GENERAL(INFO, "API Server started to listen again");
@@ -3435,7 +3440,6 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
 
   cv_setTxBlockFromSeed.notify_all();
   cv_waitJoined.notify_all();
-  cv_setRejoinRecovery.notify_all();
   return true;
 }
 
