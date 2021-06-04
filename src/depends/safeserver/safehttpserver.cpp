@@ -12,7 +12,7 @@
 #include <sstream>
 #include <iostream>
 #include "jsonrpccpp/common/specificationparser.h"
-
+#include "libUtils/Logger.h"
 
 using namespace jsonrpc;
 using namespace std;
@@ -40,21 +40,26 @@ SafeHttpServer::SafeHttpServer(int port, const std::string &sslcert, const std::
 
 IClientConnectionHandler *SafeHttpServer::GetHandler(const std::string &url)
 {
+    LOG_MARKER();
     if (AbstractServerConnector::GetHandler() != NULL)
         return AbstractServerConnector::GetHandler();
     map<string, IClientConnectionHandler*>::iterator it = this->urlhandler.find(url);
     if (it != this->urlhandler.end())
         return it->second;
+    LOG_GENERAL(INFO, "Should not come here " << url);
     return NULL;
 }
 
 bool SafeHttpServer::StartListening()
 {
+    LOG_MARKER();
     if(!this->running)
     {
         if (this->path_sslcert != "" && this->path_sslkey != "")
         {
             try {
+                LOG_GENERAL(INFO, "StartListening");
+
                 SpecificationParser::GetFileContent(this->path_sslcert, this->sslcert);
                 SpecificationParser::GetFileContent(this->path_sslkey, this->sslkey);
 
@@ -67,6 +72,7 @@ bool SafeHttpServer::StartListening()
         }
         else
         {
+            LOG_GENERAL(INFO, "StartListening without ssl key or cert");
             this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, this->port, NULL, NULL, SafeHttpServer::callback, this,   MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
         }
         if (this->daemon != NULL)
@@ -78,8 +84,10 @@ bool SafeHttpServer::StartListening()
 
 bool SafeHttpServer::StopListening()
 {
+    LOG_MARKER();
     if(this->running)
     {
+        LOG_GENERAL(INFO, "SafeHttpServer::StopListening");
         MHD_stop_daemon(this->daemon);
         this->running = false;
     }
@@ -90,6 +98,8 @@ bool SafeHttpServer::SendResponse(const string& response, void* addInfo)
 {
     struct mhd_coninfo* client_connection = static_cast<struct mhd_coninfo*>(addInfo);
     struct MHD_Response *result = MHD_create_response_from_buffer(response.size(),(void *) response.c_str(), MHD_RESPMEM_MUST_COPY);
+    
+    LOG_GENERAL(INFO, "Response for: " << client_connection->request.str() << ", " << response);
 
     MHD_add_response_header(result, "Content-Type", "application/json");
     MHD_add_response_header(result, "Access-Control-Allow-Origin", "*");
@@ -122,6 +132,10 @@ void SafeHttpServer::SetUrlHandler(const string &url, IClientConnectionHandler *
 
 int SafeHttpServer::callback(void *cls, MHD_Connection *connection, const char *url, const char *method, const char *version, const char *upload_data, size_t *upload_data_size, void **con_cls)
 {
+    LOG_MARKER();
+
+    LOG_GENERAL(INFO, "Callback started for url: " << url);
+
     (void)version;
     if (*con_cls == NULL)
     {
@@ -132,6 +146,7 @@ int SafeHttpServer::callback(void *cls, MHD_Connection *connection, const char *
         return MHD_YES;
     }
     struct mhd_coninfo* client_connection = static_cast<struct mhd_coninfo*>(*con_cls);
+    LOG_GENERAL(INFO, "Callback for: " << client_connection->request.str());
     try{
     if (string("POST") == method)
     {
