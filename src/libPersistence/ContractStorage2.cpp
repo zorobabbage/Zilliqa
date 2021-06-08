@@ -199,14 +199,17 @@ bool ContractStorage2::FetchStateValue(
     const dev::h160& addr, const ScillaVM::ScillaParams::StateQuery& query,
     boost::any& dst, bool& foundVal, bool getType, string& type) {
   if (LOG_SC) {
-    LOG_GENERAL(INFO, "query for fetch: " << query.Name);
+    LOG_MARKER();
   }
 
   lock_guard<mutex> g(m_stateDataMutex);
 
-  // The default is not found.
-  foundVal = false;
+  foundVal = true;
 
+  if (LOG_SC) {
+    LOG_GENERAL(INFO, "query for fetch: Name=" << query.Name << ", IgnoreVal="
+                                               << query.IgnoreVal);
+  }
   if (IsReservedVName(query.Name)) {
     LOG_GENERAL(WARNING, "invalid query: " << query.Name);
     return false;
@@ -251,6 +254,7 @@ bool ContractStorage2::FetchStateValue(
   if (d_found != t_indexToBeDeleted.end()) {
     // ignore the deleted empty placeholder
     if (query.Indices.size() == (size_t)query.MapDepth) {
+      foundVal = false;
       return true;
     }
   }
@@ -260,29 +264,30 @@ bool ContractStorage2::FetchStateValue(
       t_stateDataMap.find(key) == t_stateDataMap.end()) {
     // ignore the deleted empty placeholder
     if (query.Indices.size() == (size_t)query.MapDepth) {
+      foundVal = false;
       return true;
     }
   }
 
-  if ((int)query.Indices.size() == query.MapDepth) {
+  if (query.Indices.size() == (size_t)query.MapDepth) {
     // result will not be a map and can be just fetched into the store
     bytes bval;
+    bool found = false;
 
     const auto& t_found = t_stateDataMap.find(key);
     if (t_found != t_stateDataMap.end()) {
       bval = t_found->second;
-      foundVal = true;
+      found = true;
     }
-    if (!foundVal) {
+    if (!found) {
       const auto& m_found = m_stateDataMap.find(key);
       if (m_found != m_stateDataMap.end()) {
         bval = m_found->second;
-        foundVal = true;
+        found = true;
       }
     }
-    if (!foundVal) {
+    if (!found) {
       if (m_stateDataDB.Exists(key)) {
-        foundVal = true;
         if (query.IgnoreVal) {
           return true;
         }
@@ -337,6 +342,7 @@ bool ContractStorage2::FetchStateValue(
   if (!it->Valid() || it->key().ToString().compare(0, key.size(), key) != 0) {
     // no entry
     if (entries.empty()) {
+      foundVal = false;
       /// if querying the var without indices but still failed
       /// maybe trying to fetching an invalid vname
       /// as empty map will always have
@@ -405,11 +411,11 @@ bool ContractStorage2::FetchStateValue(
       t_value = &(t_map[index]);
     }
     if (query.Indices.size() + indices.size() < (size_t)query.MapDepth) {
-      // Assert that we have a protobuf encoded empty map.
-      if (!entry.second.empty()) {
+      ProtoScillaVal emap;
+      emap.ParseFromArray(entry.second.data(), entry.second.size());
+      if (!emap.has_mval() || !emap.mval().m().empty()) {
         LOG_GENERAL(WARNING,
-                    "Expected empty string (representing empty map) since "
-                    "entry has fewer "
+                    "Expected protobuf encoded empty map since entry has fewer "
                     "keys than mapdepth");
         return false;
       }

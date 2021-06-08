@@ -383,6 +383,7 @@ extern const unsigned int MAX_IPCHANGE_REQUEST_LIMIT;
 // Smart contract constants
 extern const bool ENABLE_SC;
 extern const std::string SCILLA_ROOT;
+extern const std::string SCILLA_LLVM_ROOT;
 extern const std::string SCILLA_CHECKER;
 extern const std::string SCILLA_BINARY;
 extern const std::string SCILLA_FILES;

@@ -27,7 +27,7 @@ using namespace boost::multiprecision;
 
 bool ScillaUtils::PrepareRootPathWVersion(const uint32_t& scilla_version,
                                           string& root_w_version) {
-  root_w_version = SCILLA_ROOT;
+  root_w_version = SCILLA_VM_DEV ? SCILLA_LLVM_ROOT : SCILLA_ROOT;
   if (ENABLE_SCILLA_MULTI_VERSION) {
     root_w_version += '/' + to_string(scilla_version);
   }

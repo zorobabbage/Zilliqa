@@ -534,6 +534,12 @@ const string SCILLA_ROOT{
     scilla_root_raw.back() == '/'
         ? scilla_root_raw.substr(0, scilla_root_raw.size() - 1)
         : scilla_root_raw};
+string scilla_llvm_root_raw{
+    ReadConstantString("SCILLA_LLVM_ROOT", "node.smart_contract.")};
+const string SCILLA_LLVM_ROOT{
+    scilla_llvm_root_raw.back() == '/'
+        ? scilla_llvm_root_raw.substr(0, scilla_llvm_root_raw.size() - 1)
+        : scilla_llvm_root_raw};
 const string SCILLA_CHECKER{
     ReadConstantString("SCILLA_CHECKER", "node.smart_contract.")};
 const string SCILLA_BINARY{
