@@ -137,8 +137,10 @@ void Lookup::InitSync() {
       if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
               cv_lk, std::chrono::seconds(INIT_SYNC_INTERVAL)) !=
           std::cv_status::timeout) {
-        break;
-      }  // TODO Keep this interval large.Confirm Should wait for how long ??
+        if (m_rejoinInProgress) {
+          break;
+        }
+      }
     }
     if (!m_rejoinInProgress) {
       // Ask for the sharding structure from lookup
@@ -3022,11 +3024,9 @@ bool Lookup::ProcessSetTxBlockFromSeed(
       return false;
     } else if (latestSynBlockNum > lowBlockNum) {
       LOG_GENERAL(INFO,
-                  "Seems we have received all or few of txblocks "
-                  "previously. "
-                  "so ignoring these txblocks!");
-      // cv_setRejoinRecovery.notify_all(); //TODO : Check with @Sandip if we
-      // need to continue loop
+                  "We already received all or few of txblocks from incoming "
+                  "range previously. So ignoring these txblocks!");
+      cv_setRejoinRecovery.notify_all();
       return false;
     }
     auto res = m_mediator.m_validator->CheckTxBlocks(
@@ -3403,6 +3403,11 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
           DetachedFunction(1, func);  // main thread pulling data forever
         }
       }
+    } else {
+      LOG_GENERAL(INFO, "GetDsInfo is failed.RejoinNetwork now");
+      m_rejoinInProgress = true;
+      cv_setRejoinRecovery.notify_all();
+      RejoinNetwork();
     }
   }
 
@@ -3510,7 +3515,7 @@ bool Lookup::ProcessSetStateDeltasFromSeed(
     cv_setStateDeltasFromSeed.notify_all();
     return true;
   }
-  unique_lock<mutex> lock(m_mutexSetStateDeltasFromSeed);
+  unique_lock<std::mutex> lock(m_mutexSetStateDeltasFromSeed);
 
   uint64_t lowBlockNum = 0;
   uint64_t highBlockNum = 0;
@@ -4271,6 +4276,49 @@ void Lookup::StartSynchronization() {
   DetachedFunction(1, func);
 }
 
+void Lookup::StartSynchronizationNewLookup() {
+  if (!LOOKUP_NODE_MODE || !ARCHIVAL_LOOKUP) {
+    LOG_GENERAL(
+        WARNING,
+        "Lookup::StartSynchronizationNewLookup not expected to be called "
+        "from other than the New LookUp node.");
+    return;
+  }
+
+  LOG_MARKER();
+
+  auto func = [this]() -> void {
+    while (GetSyncType() != SyncType::NO_SYNC) {
+      ComposeAndSendGetDirectoryBlocksFromSeed(
+          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, ARCHIVAL_LOOKUP,
+          LOOKUP_NODE_MODE);
+      GetTxBlockFromSeedNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
+      std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
+      if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
+              cv_lk, std::chrono::seconds(INIT_SYNC_INTERVAL)) !=
+          std::cv_status::timeout) {
+        if (m_rejoinInProgress) {
+          break;
+        }
+      }
+    }
+    // Ask for the sharding structure from lookup (may have got new ds block
+    // with new sharding struct)
+    if (!m_rejoinInProgress) {
+      ComposeAndSendGetShardingStructureFromSeed();
+      std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
+      if (cv_shardStruct.wait_for(
+              cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
+          std::cv_status::timeout) {
+        LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
+      } else {
+        ProcessEntireShardingStructure();
+      }
+    }
+  };
+  DetachedFunction(1, func);
+}
+
 bool Lookup::GetDSInfoLoop() {
   unsigned int counter = 0;
   // Allow over-writing ds committee because of corner case where node rejoined
@@ -4471,7 +4519,9 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
     if (fromLookup && MULTIPLIER_SYNC_MODE) {  // level2lookups and seed nodes
                                                // syncing via multiplier
       LOG_GENERAL(INFO, "Syncing from lookup ...");
-      auto func2 = [this]() mutable -> void { StartSynchronization(); };
+      auto func2 = [this]() mutable -> void {
+        StartSynchronizationNewLookup();
+      };
       DetachedFunction(1, func2);
     } else {
       LOG_GENERAL(INFO, "Syncing from S3 ...");
