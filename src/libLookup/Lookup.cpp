@@ -3014,7 +3014,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(
 
   uint64_t latestSynBlockNum =
       m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum() + 1;
-  LOG_GENERAL(INFO, "NodeRejoin: latestSynBlockNum="<<latestSynBlockNum);
+  LOG_GENERAL(INFO, "NodeRejoin: latestSynBlockNum=" << latestSynBlockNum);
 
   if (latestSynBlockNum > highBlockNum) {
     // TODO: We should get blocks from n nodes.
