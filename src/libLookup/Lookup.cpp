@@ -95,6 +95,7 @@ Lookup::~Lookup() {}
 void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
+        LOG_GENERAL(INFO, "###### NodeRejoin: InitSync started thread ######");
     uint64_t dsBlockNum = 0;
     uint64_t txBlockNum = 0;
 
@@ -121,6 +122,7 @@ void Lookup::InitSync() {
     }
 
     while (GetSyncType() != SyncType::NO_SYNC) {
+      LOG_GENERAL(INFO, "NodeRejoin: Inside InitSync while loop");
       if (m_mediator.m_dsBlockChain.GetBlockCount() != 1) {
         dsBlockNum = m_mediator.m_dsBlockChain.GetBlockCount();
       }
@@ -137,10 +139,18 @@ void Lookup::InitSync() {
       if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
               cv_lk, std::chrono::seconds(INIT_SYNC_INTERVAL)) !=
           std::cv_status::timeout) {
-        break;
-      }  // TODO Keep this interval large.Confirm Should wait for how long ??
+        if (m_rejoinInProgress) {
+          LOG_GENERAL(INFO, "NodeRejoin: Breaking from the InitSync loop");
+          break;
+        }
+      }
+      LOG_GENERAL(INFO,
+                  "NodeRejoin: Try syncing again. SyncType=" << GetSyncType());
     }
+    LOG_GENERAL(INFO, "NodeRejoin: SyncType outside while loop of initsync="
+                          << GetSyncType());
     if (!m_rejoinInProgress) {
+            LOG_GENERAL(INFO, "NodeRejoin: GetSharding structure");
       // Ask for the sharding structure from lookup
       ComposeAndSendGetShardingStructureFromSeed();
       std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
@@ -152,6 +162,7 @@ void Lookup::InitSync() {
         ProcessEntireShardingStructure();
       }
     }
+    LOG_GENERAL(INFO, "###### NodeRejoin: InitSync end thread ######");
   };
   DetachedFunction(1, func);
 }
@@ -3036,6 +3047,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(
       LOG_GENERAL(INFO,
                   "We already received all or few of txblocks from incoming "
                   "range previously. So ignoring these txblocks!");
+      cv_setRejoinRecovery.notify_all(); 
       return false;
     }
     auto res = m_mediator.m_validator->CheckTxBlocks(
@@ -3052,6 +3064,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(
         }
 #endif  // SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
         if (!CommitTxBlocks(txBlocks)) {
+                      LOG_GENERAL(INFO, "NodeRejoin: CommitTxBlocks failed.Now Rejoining")
           if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
             m_rejoinInProgress = true;
             cv_setRejoinRecovery.notify_all();
@@ -3139,7 +3152,9 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
     while (retry <= RETRY_GETSTATEDELTAS_COUNT) {
       // Get the state-delta for all txBlocks from random lookup nodes
       GetStateDeltasFromSeedNodes(lowBlockNum, highBlockNum);
+      LOG_GENERAL(INFO, "NodeRejoin: Waiting 1");
       std::unique_lock<std::mutex> cv_lk(m_mutexSetStateDeltasFromSeed);
+      LOG_GENERAL(INFO, "NodeRejoin: Waiting 2");
       if (cv_setStateDeltasFromSeed.wait_for(
               cv_lk, std::chrono::seconds(GETSTATEDELTAS_TIMEOUT_IN_SECONDS)) ==
           std::cv_status::timeout) {
@@ -3161,12 +3176,28 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
     }
 
     // Check StateRootHash and One in last TxBlk
+    /*
     if (m_prevStateRootHashTemp !=
         txBlocks.back().GetHeader().GetStateRootHash()) {
       LOG_CHECK_FAIL("State root hash",
                      txBlocks.back().GetHeader().GetStateRootHash(),
                      m_prevStateRootHashTemp);
       return false;  // Rejoin in case state root hash failed
+    }
+    */
+    if (!m_stateRootMismatchFlag ||
+        m_prevStateRootHashTemp !=
+            txBlocks.back().GetHeader().GetStateRootHash()) {
+      LOG_CHECK_FAIL("State root hash",
+                     txBlocks.back().GetHeader().GetStateRootHash(),
+                     m_prevStateRootHashTemp);
+      static int mismatch_max_count = 0;
+      mismatch_max_count++;
+      LOG_GENERAL(INFO, "Rejoin: mismatch_max_count=" << mismatch_max_count);
+      if (mismatch_max_count >= 1) {
+        m_stateRootMismatchFlag = true;
+      }
+      return false;  // Rejoin incase StateRootHash failed
     }
   }
 
@@ -3338,6 +3369,10 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
       if (!m_currDSExpired) {
         if (ARCHIVAL_LOOKUP || (!ARCHIVAL_LOOKUP && FinishRejoinAsLookup())) {
           SetSyncType(SyncType::NO_SYNC);
+          LOG_GENERAL(
+              INFO,
+              "NodeRejoin: Release rejoinrecovery mutex m_rejoinInProgress="
+                  << m_rejoinInProgress);
           m_rejoinInProgress = false;
           cv_setRejoinRecovery.notify_all();
           if (m_lookupServer) {
@@ -3416,6 +3451,11 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
           DetachedFunction(1, func);  // main thread pulling data forever
         }
       }
+    } else {
+      LOG_GENERAL(INFO, "GetDsInfo is failed.RejoinNetwork now");
+      m_rejoinInProgress = true;
+      cv_setRejoinRecovery.notify_all();
+      RejoinNetwork();
     }
   }
 
@@ -3520,10 +3560,13 @@ bool Lookup::ProcessSetStateDeltasFromSeed(
   LOG_MARKER();
 
   if (AlreadyJoinedNetwork()) {
+    LOG_GENERAL(INFO, "Waiting Notified 2");
     cv_setStateDeltasFromSeed.notify_all();
     return true;
   }
-  unique_lock<mutex> lock(m_mutexSetStateDeltasFromSeed);
+  LOG_GENERAL(INFO, "NodeRejoin: lock 1");
+  unique_lock<std::mutex> lock(m_mutexSetStateDeltasFromSeed);
+  LOG_GENERAL(INFO, "NodeRejoin: lock 2");
 
   uint64_t lowBlockNum = 0;
   uint64_t highBlockNum = 0;
@@ -3593,6 +3636,7 @@ bool Lookup::ProcessSetStateDeltasFromSeed(
   }
 
   cv_setStateDeltasFromSeed.notify_all();
+  LOG_GENERAL(INFO, "NodeRejoin: Waiting Notified 1");
   return true;
 }
 
@@ -3611,6 +3655,9 @@ void Lookup::RejoinNetwork() {
       this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
       m_mediator.m_lookup->RejoinAsNewLookup(false);
       m_rejoinNetworkAttempts++;
+      LOG_GENERAL(INFO, "NodeRejoin: Rejoining attempt="
+                            << m_rejoinNetworkAttempts
+                            << " m_syncType=" << m_syncType);
     } else {
       LOG_GENERAL(WARNING,
                   "Unhandled rejoin scenario. SyncType=" << m_syncType);
@@ -4288,6 +4335,49 @@ void Lookup::StartSynchronization() {
   DetachedFunction(1, func);
 }
 
+void Lookup::StartSynchronizationNewLookup() {
+  if (!LOOKUP_NODE_MODE || !ARCHIVAL_LOOKUP) {
+    LOG_GENERAL(WARNING,
+                "Lookup::StartSynchronization not expected to be called "
+                "from other than the New LookUp node.");
+    return;
+  }
+
+  LOG_MARKER();
+
+  auto func = [this]() -> void {
+    while (GetSyncType() != SyncType::NO_SYNC) {
+      ComposeAndSendGetDirectoryBlocksFromSeed(
+          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, ARCHIVAL_LOOKUP,
+          LOOKUP_NODE_MODE);
+      GetTxBlockFromSeedNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
+      std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
+      if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
+              cv_lk, std::chrono::seconds(INIT_SYNC_INTERVAL)) !=
+          std::cv_status::timeout) {
+        if (m_rejoinInProgress) {
+          LOG_GENERAL(INFO, "NodeRejoin: Breaking from the InitSync loop");
+          break;
+        }
+      }
+    }
+    // Ask for the sharding structure from lookup (may have got new ds block
+    // with new sharding struct)
+    if (!m_rejoinInProgress) {
+      ComposeAndSendGetShardingStructureFromSeed();
+      std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
+      if (cv_shardStruct.wait_for(
+              cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
+          std::cv_status::timeout) {
+        LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
+      } else {
+        ProcessEntireShardingStructure();
+      }
+    }
+  };
+  DetachedFunction(1, func);
+}
+
 bool Lookup::GetDSInfoLoop() {
   unsigned int counter = 0;
   // Allow over-writing ds committee because of corner case where node rejoined
@@ -4488,7 +4578,9 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
     if (fromLookup && MULTIPLIER_SYNC_MODE) {  // level2lookups and seed nodes
                                                // syncing via multiplier
       LOG_GENERAL(INFO, "Syncing from lookup ...");
-      auto func2 = [this]() mutable -> void { StartSynchronization(); };
+      auto func2 = [this]() mutable -> void {
+        StartSynchronizationNewLookup();
+      };
       DetachedFunction(1, func2);
     } else {
       LOG_GENERAL(INFO, "Syncing from S3 ...");

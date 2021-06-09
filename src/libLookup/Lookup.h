@@ -291,6 +291,8 @@ class Lookup : public Executable {
   // Start synchronization with other lookup nodes as a lookup node
   void StartSynchronization();
 
+  void StartSynchronizationNewLookup();
+
   // Set my lookup ip offline in other lookup nodes
   bool GetMyLookupOffline();
 
@@ -572,6 +574,7 @@ class Lookup : public Executable {
   std::mutex m_mutexVCFinalBlockProcessed;
   std::condition_variable cv_vcFinalBlockProcessed;
   bool m_vcFinalBlockProcessed = false;
+  int m_stateRootMismatchFlag{false};
 
   // exit trigger
   std::atomic<bool> m_exitPullThread{};
