@@ -95,7 +95,7 @@ Lookup::~Lookup() {}
 void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
-        LOG_GENERAL(INFO, "###### NodeRejoin: InitSync started thread ######");
+    LOG_GENERAL(INFO, "###### NodeRejoin: InitSync started thread ######");
     uint64_t dsBlockNum = 0;
     uint64_t txBlockNum = 0;
 
@@ -150,7 +150,7 @@ void Lookup::InitSync() {
     LOG_GENERAL(INFO, "NodeRejoin: SyncType outside while loop of initsync="
                           << GetSyncType());
     if (!m_rejoinInProgress) {
-            LOG_GENERAL(INFO, "NodeRejoin: GetSharding structure");
+      LOG_GENERAL(INFO, "NodeRejoin: GetSharding structure");
       // Ask for the sharding structure from lookup
       ComposeAndSendGetShardingStructureFromSeed();
       std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
@@ -3014,6 +3014,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(
 
   uint64_t latestSynBlockNum =
       m_mediator.m_txBlockChain.GetLastBlock().GetHeader().GetBlockNum() + 1;
+  LOG_GENERAL(INFO, "NodeRejoin: latestSynBlockNum="<<latestSynBlockNum);
 
   if (latestSynBlockNum > highBlockNum) {
     // TODO: We should get blocks from n nodes.
@@ -3043,11 +3044,11 @@ bool Lookup::ProcessSetTxBlockFromSeed(
         RejoinNetwork();
       }
       return false;
-    } else if (latestSynBlockNum >= lowBlockNum) {
+    } else if (latestSynBlockNum > lowBlockNum) {
       LOG_GENERAL(INFO,
                   "We already received all or few of txblocks from incoming "
                   "range previously. So ignoring these txblocks!");
-      cv_setRejoinRecovery.notify_all(); 
+      cv_setRejoinRecovery.notify_all();
       return false;
     }
     auto res = m_mediator.m_validator->CheckTxBlocks(
@@ -3064,7 +3065,7 @@ bool Lookup::ProcessSetTxBlockFromSeed(
         }
 #endif  // SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
         if (!CommitTxBlocks(txBlocks)) {
-                      LOG_GENERAL(INFO, "NodeRejoin: CommitTxBlocks failed.Now Rejoining")
+          LOG_GENERAL(INFO, "NodeRejoin: CommitTxBlocks failed.Now Rejoining")
           if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP) {
             m_rejoinInProgress = true;
             cv_setRejoinRecovery.notify_all();
