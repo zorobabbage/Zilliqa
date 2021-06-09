@@ -574,7 +574,6 @@ class Lookup : public Executable {
   std::mutex m_mutexVCFinalBlockProcessed;
   std::condition_variable cv_vcFinalBlockProcessed;
   bool m_vcFinalBlockProcessed = false;
-  int m_stateRootMismatchFlag{false};
 
   // exit trigger
   std::atomic<bool> m_exitPullThread{};

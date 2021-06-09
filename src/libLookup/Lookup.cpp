@@ -3177,28 +3177,12 @@ bool Lookup::CommitTxBlocks(const vector<TxBlock>& txBlocks) {
     }
 
     // Check StateRootHash and One in last TxBlk
-    /*
     if (m_prevStateRootHashTemp !=
         txBlocks.back().GetHeader().GetStateRootHash()) {
       LOG_CHECK_FAIL("State root hash",
                      txBlocks.back().GetHeader().GetStateRootHash(),
                      m_prevStateRootHashTemp);
       return false;  // Rejoin in case state root hash failed
-    }
-    */
-    if (!m_stateRootMismatchFlag ||
-        m_prevStateRootHashTemp !=
-            txBlocks.back().GetHeader().GetStateRootHash()) {
-      LOG_CHECK_FAIL("State root hash",
-                     txBlocks.back().GetHeader().GetStateRootHash(),
-                     m_prevStateRootHashTemp);
-      static int mismatch_max_count = 0;
-      mismatch_max_count++;
-      LOG_GENERAL(INFO, "Rejoin: mismatch_max_count=" << mismatch_max_count);
-      if (mismatch_max_count >= 1) {
-        m_stateRootMismatchFlag = true;
-      }
-      return false;  // Rejoin incase StateRootHash failed
     }
   }
 
