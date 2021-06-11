@@ -96,47 +96,53 @@ void Lookup::GetInitialBlocksAndShardingStructure() {
   LOG_MARKER();
   uint64_t dsBlockNum = 0;
   uint64_t txBlockNum = 0;
-    while (GetSyncType() != SyncType::NO_SYNC) {
-      LOG_GENERAL(INFO, "NodeRejoin: Inside GetInitialBlocksAndShardingStructure while loop");
-      if (m_mediator.m_dsBlockChain.GetBlockCount() != 1) {
-        dsBlockNum = m_mediator.m_dsBlockChain.GetBlockCount();
-      }
-      if (m_mediator.m_txBlockChain.GetBlockCount() != 1) {
-        txBlockNum = m_mediator.m_txBlockChain.GetBlockCount();
-      }
-      LOG_GENERAL(INFO,
-                  "TxBlockNum " << txBlockNum << " DSBlockNum: " << dsBlockNum);
-      ComposeAndSendGetDirectoryBlocksFromSeed(
-          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, true,
-          LOOKUP_NODE_MODE);
-      GetTxBlockFromSeedNodes(txBlockNum, 0);
-      std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
-      if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
-              cv_lk, std::chrono::seconds(NEW_NODE_SYNC_INTERVAL)) !=
-          std::cv_status::timeout) {
-        if (m_rejoinInProgress) {
-          LOG_GENERAL(INFO, "NodeRejoin: Breaking from the  GetInitialBlocksAndShardingStructure loop");
-          break;
-        }
-      }
-      LOG_GENERAL(INFO,
-                  "NodeRejoin: Try syncing again. SyncType=" << GetSyncType());
+  while (GetSyncType() != SyncType::NO_SYNC) {
+    LOG_GENERAL(
+        INFO,
+        "NodeRejoin: Inside GetInitialBlocksAndShardingStructure while loop");
+    if (m_mediator.m_dsBlockChain.GetBlockCount() != 1) {
+      dsBlockNum = m_mediator.m_dsBlockChain.GetBlockCount();
     }
-    LOG_GENERAL(INFO, "NodeRejoin: SyncType outside while loop ofGetInitialBlocksAndShardingStructure="
-                          << GetSyncType());
-    if (!m_rejoinInProgress) {
-      LOG_GENERAL(INFO, "NodeRejoin: GetSharding structure");
-      // Ask for the sharding structure from lookup
-      ComposeAndSendGetShardingStructureFromSeed();
-      std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
-      if (cv_shardStruct.wait_for(
-              cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
-          std::cv_status::timeout) {
-        LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
-      } else {
-        ProcessEntireShardingStructure();
+    if (m_mediator.m_txBlockChain.GetBlockCount() != 1) {
+      txBlockNum = m_mediator.m_txBlockChain.GetBlockCount();
+    }
+    LOG_GENERAL(INFO,
+                "TxBlockNum " << txBlockNum << " DSBlockNum: " << dsBlockNum);
+    ComposeAndSendGetDirectoryBlocksFromSeed(
+        m_mediator.m_blocklinkchain.GetLatestIndex() + 1, true,
+        LOOKUP_NODE_MODE);
+    GetTxBlockFromSeedNodes(txBlockNum, 0);
+    std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
+    if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
+            cv_lk, std::chrono::seconds(NEW_NODE_SYNC_INTERVAL)) !=
+        std::cv_status::timeout) {
+      if (m_rejoinInProgress) {
+        LOG_GENERAL(INFO,
+                    "NodeRejoin: Breaking from the  "
+                    "GetInitialBlocksAndShardingStructure loop");
+        break;
       }
     }
+    LOG_GENERAL(INFO,
+                "NodeRejoin: Try syncing again. SyncType=" << GetSyncType());
+  }
+  LOG_GENERAL(INFO,
+              "NodeRejoin: SyncType outside while loop "
+              "ofGetInitialBlocksAndShardingStructure="
+                  << GetSyncType());
+  if (!m_rejoinInProgress) {
+    LOG_GENERAL(INFO, "NodeRejoin: GetSharding structure");
+    // Ask for the sharding structure from lookup
+    ComposeAndSendGetShardingStructureFromSeed();
+    std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
+    if (cv_shardStruct.wait_for(
+            cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
+        std::cv_status::timeout) {
+      LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
+    } else {
+      ProcessEntireShardingStructure();
+    }
+  }
 }
 
 void Lookup::InitSync() {

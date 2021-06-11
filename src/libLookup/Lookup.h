@@ -163,7 +163,8 @@ class Lookup : public Executable {
                         uint64_t& highBlockNum, bool partialRetrieve = false);
   void RetrieveTxBlocks(std::vector<TxBlock>& txBlocks, uint64_t& lowBlockNum,
                         uint64_t& highBlockNum);
-       void GetInitialBlocksAndShardingStructure();
+  void GetInitialBlocksAndShardingStructure();
+
  public:
   /// Constructor.
   Lookup(Mediator& mediator, SyncType syncType, bool multiplierSyncMode = true,
