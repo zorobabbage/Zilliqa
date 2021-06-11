@@ -143,8 +143,6 @@ void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
     LOG_GENERAL(INFO, "###### NodeRejoin: InitSync started thread ######");
-    uint64_t dsBlockNum = 0;
-    uint64_t txBlockNum = 0;
 
     // Hack to allow seed server to be restarted so as to get my newlookup ip
     // and register me with multiplier.
