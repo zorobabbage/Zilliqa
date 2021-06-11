@@ -229,8 +229,6 @@ const unsigned int MICROBLOCK_TIMEOUT{
     ReadConstantNumeric("MICROBLOCK_TIMEOUT", "node.epoch_timing.")};
 const unsigned int NEW_NODE_SYNC_INTERVAL{
     ReadConstantNumeric("NEW_NODE_SYNC_INTERVAL", "node.epoch_timing.")};
-const unsigned int INIT_SYNC_INTERVAL{
-    ReadConstantNumeric("INIT_SYNC_INTERVAL", "node.epoch_timing.")};
 const unsigned int POW_SUBMISSION_TIMEOUT{
     ReadConstantNumeric("POW_SUBMISSION_TIMEOUT", "node.epoch_timing.")};
 const unsigned int POW_WINDOW_IN_SECONDS{

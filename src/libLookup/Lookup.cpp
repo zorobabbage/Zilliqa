@@ -92,12 +92,57 @@ Lookup::Lookup(Mediator& mediator, SyncType syncType, bool multiplierSyncMode,
 
 Lookup::~Lookup() {}
 
+void Lookup::GetInitialBlocksAndShardingStructure() {
+  LOG_MARKER();
+  uint64_t dsBlockNum = 0;
+  uint64_t txBlockNum = 0;
+    while (GetSyncType() != SyncType::NO_SYNC) {
+      LOG_GENERAL(INFO, "NodeRejoin: Inside GetInitialBlocksAndShardingStructure while loop");
+      if (m_mediator.m_dsBlockChain.GetBlockCount() != 1) {
+        dsBlockNum = m_mediator.m_dsBlockChain.GetBlockCount();
+      }
+      if (m_mediator.m_txBlockChain.GetBlockCount() != 1) {
+        txBlockNum = m_mediator.m_txBlockChain.GetBlockCount();
+      }
+      LOG_GENERAL(INFO,
+                  "TxBlockNum " << txBlockNum << " DSBlockNum: " << dsBlockNum);
+      ComposeAndSendGetDirectoryBlocksFromSeed(
+          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, true,
+          LOOKUP_NODE_MODE);
+      GetTxBlockFromSeedNodes(txBlockNum, 0);
+      std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
+      if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
+              cv_lk, std::chrono::seconds(NEW_NODE_SYNC_INTERVAL)) !=
+          std::cv_status::timeout) {
+        if (m_rejoinInProgress) {
+          LOG_GENERAL(INFO, "NodeRejoin: Breaking from the  GetInitialBlocksAndShardingStructure loop");
+          break;
+        }
+      }
+      LOG_GENERAL(INFO,
+                  "NodeRejoin: Try syncing again. SyncType=" << GetSyncType());
+    }
+    LOG_GENERAL(INFO, "NodeRejoin: SyncType outside while loop ofGetInitialBlocksAndShardingStructure="
+                          << GetSyncType());
+    if (!m_rejoinInProgress) {
+      LOG_GENERAL(INFO, "NodeRejoin: GetSharding structure");
+      // Ask for the sharding structure from lookup
+      ComposeAndSendGetShardingStructureFromSeed();
+      std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
+      if (cv_shardStruct.wait_for(
+              cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
+          std::cv_status::timeout) {
+        LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
+      } else {
+        ProcessEntireShardingStructure();
+      }
+    }
+}
+
 void Lookup::InitSync() {
   LOG_MARKER();
   auto func = [this]() -> void {
-    uint64_t dsBlockNum = 0;
-    uint64_t txBlockNum = 0;
-
+    LOG_GENERAL(INFO, "###### NodeRejoin: InitSync started thread ######");
     // Hack to allow seed server to be restarted so as to get my newlookup ip
     // and register me with multiplier.
     this_thread::sleep_for(chrono::seconds(NEW_LOOKUP_SYNC_DELAY_IN_SECONDS));
@@ -119,41 +164,8 @@ void Lookup::InitSync() {
       this_thread::sleep_for(
           chrono::seconds(REMOVENODEFROMBLACKLIST_DELAY_IN_SECONDS));
     }
-
-    while (GetSyncType() != SyncType::NO_SYNC) {
-      if (m_mediator.m_dsBlockChain.GetBlockCount() != 1) {
-        dsBlockNum = m_mediator.m_dsBlockChain.GetBlockCount();
-      }
-      if (m_mediator.m_txBlockChain.GetBlockCount() != 1) {
-        txBlockNum = m_mediator.m_txBlockChain.GetBlockCount();
-      }
-      LOG_GENERAL(INFO,
-                  "TxBlockNum " << txBlockNum << " DSBlockNum: " << dsBlockNum);
-      ComposeAndSendGetDirectoryBlocksFromSeed(
-          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, true,
-          LOOKUP_NODE_MODE);
-      GetTxBlockFromSeedNodes(txBlockNum, 0);
-      std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
-      if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
-              cv_lk, std::chrono::seconds(INIT_SYNC_INTERVAL)) !=
-          std::cv_status::timeout) {
-        if (m_rejoinInProgress) {
-          break;
-        }
-      }
-    }
-    if (!m_rejoinInProgress) {
-      // Ask for the sharding structure from lookup
-      ComposeAndSendGetShardingStructureFromSeed();
-      std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
-      if (cv_shardStruct.wait_for(
-              cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
-          std::cv_status::timeout) {
-        LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
-      } else {
-        ProcessEntireShardingStructure();
-      }
-    }
+    GetInitialBlocksAndShardingStructure();
+    LOG_GENERAL(INFO, "###### NodeRejoin: InitSync end thread ######");
   };
   DetachedFunction(1, func);
 }
@@ -4276,49 +4288,6 @@ void Lookup::StartSynchronization() {
   DetachedFunction(1, func);
 }
 
-void Lookup::StartSynchronizationNewLookup() {
-  if (!LOOKUP_NODE_MODE || !ARCHIVAL_LOOKUP) {
-    LOG_GENERAL(
-        WARNING,
-        "Lookup::StartSynchronizationNewLookup not expected to be called "
-        "from other than the New LookUp node.");
-    return;
-  }
-
-  LOG_MARKER();
-
-  auto func = [this]() -> void {
-    while (GetSyncType() != SyncType::NO_SYNC) {
-      ComposeAndSendGetDirectoryBlocksFromSeed(
-          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, ARCHIVAL_LOOKUP,
-          LOOKUP_NODE_MODE);
-      GetTxBlockFromSeedNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
-      std::unique_lock<std::mutex> cv_lk(m_mutexCvSetRejoinRecovery);
-      if (m_mediator.m_lookup->cv_setRejoinRecovery.wait_for(
-              cv_lk, std::chrono::seconds(INIT_SYNC_INTERVAL)) !=
-          std::cv_status::timeout) {
-        if (m_rejoinInProgress) {
-          break;
-        }
-      }
-    }
-    // Ask for the sharding structure from lookup (may have got new ds block
-    // with new sharding struct)
-    if (!m_rejoinInProgress) {
-      ComposeAndSendGetShardingStructureFromSeed();
-      std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
-      if (cv_shardStruct.wait_for(
-              cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
-          std::cv_status::timeout) {
-        LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
-      } else {
-        ProcessEntireShardingStructure();
-      }
-    }
-  };
-  DetachedFunction(1, func);
-}
-
 bool Lookup::GetDSInfoLoop() {
   unsigned int counter = 0;
   // Allow over-writing ds committee because of corner case where node rejoined
@@ -4520,7 +4489,7 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
                                                // syncing via multiplier
       LOG_GENERAL(INFO, "Syncing from lookup ...");
       auto func2 = [this]() mutable -> void {
-        StartSynchronizationNewLookup();
+        GetInitialBlocksAndShardingStructure();
       };
       DetachedFunction(1, func2);
     } else {
